@@ -122,6 +122,19 @@
             d_flush("flush after replacement");
             d_drain();
             check_memory("memory image after replacement");
+            // one dirty line in every set, including the last one the flush
+            // walk visits : the FLUSH must not answer before that writeback
+            // has reached memory
+            // the modified word is the last one of the block, so it travels in
+            // the last beat of the writeback burst
+            for (int s = 0; s < DC_SETS; s++)
+                d_store($sformatf("dirty set %0d", s),
+                        a_mem(set_word(s, 0) + DC_BLOCK/8 - 1), 2'd3,
+                        64'h3000_0000_0000_0000 + 64'(s));
+            d_drain();
+            d_flush("flush every dirty line");
+            d_drain();
+            check_memory("memory image immediately after the flush");
             if (n_error == e0) ok("replacement, dirty writeback, re-fill");
         end
 
@@ -219,6 +232,37 @@
             d_drain();
             i_flush_all();
             i_push("fetch after fence.i", a_mem(410));
+            i_drain();
+            // fence.i while a fill is in progress : the line brought in by that
+            // fill must not become valid, so the next fetch has to go to memory
+            d_store("store word 420 (old)", a_mem(420), 2'd3, 64'h0000_0000_AAAA_AAAA);
+            d_flush("write word 420 back");
+            d_drain();
+            i_flush_all();                        // the next fetch of 420 misses
+            i_push("fetch that starts a fill", a_mem(420));
+            repeat (5) @(posedge clk);            // the fill is under way
+            i_flush_start();                      // fence.i during the fill
+            i_drain();                            // the fetch still returns the old word
+            i_flush_wait();
+            d_store("store word 420 (new)", a_mem(420), 2'd3, 64'h0000_0000_BBBB_BBBB);
+            d_flush("write word 420 back");
+            d_drain();
+            i_push("fetch after fence.i during a fill", a_mem(420));
+            i_drain();
+            // same, but fence.i is released again before the fill ends: the
+            // line must still not become valid (fill_flushed)
+            d_store("store word 430 (old)", a_mem(430), 2'd3, 64'h0000_0000_CCCC_CCCC);
+            d_flush("write word 430 back");
+            d_drain();
+            i_flush_all();                        // the next fetch of 430 misses
+            i_push("fetch that starts a fill (pulse)", a_mem(430));
+            i_wait_fill();                        // first beat of the fill
+            i_flush_pulse(2);                     // fence.i, released early
+            i_drain();
+            d_store("store word 430 (new)", a_mem(430), 2'd3, 64'h0000_0000_DDDD_DDDD);
+            d_flush("write word 430 back");
+            d_drain();
+            i_push("fetch after a fence.i pulse during a fill", a_mem(430));
             i_drain();
             if (n_error == e0) ok("FENCE, FLUSH, fence.i");
         end
@@ -343,7 +387,7 @@
         if (from_sec <= 11 && 11 <= to_sec) begin
             int n_ops;
             e0 = n_error;
-            n_ops = 4000;
+            if (!$value$plusargs("ops=%d", n_ops)) n_ops = 4000;
             for (int i = 0; i < n_ops; i++) begin
                 int r, sz, widx;
                 logic [PADDR_WIDTH-1:0] a;
@@ -352,19 +396,19 @@
                 widx = $urandom_range(0, 255);
                 a    = a_mem(widx) + PADDR_WIDTH'($urandom_range(0, 7) & ~((1 << sz) - 1));
                 if (r < 35) begin
-                    d_load("random load", a, 2'(sz));
+                    d_load($sformatf("random load @%010h sz%0d", a, sz), a, 2'(sz));
                 end else if (r < 65) begin
-                    d_store("random store", a, 2'(sz), {$urandom, $urandom});
+                    d_store($sformatf("random store @%010h sz%0d", a, sz), a, 2'(sz), {$urandom, $urandom});
                 end else if (r < 72) begin
                     // aligned atomics only
                     a = a_mem(widx);
-                    d_push("random AMO", 4'($urandom_range(4, 12)), a, 2'd3, {$urandom, $urandom});
+                    d_push($sformatf("random AMO @%010h", a), 4'($urandom_range(4, 12)), a, 2'd3, {$urandom, $urandom});
                 end else if (r < 76) begin
                     a = a_mem(widx);
-                    d_push("random LR", CMD_LR, a, 2'd3, 64'd0);
+                    d_push($sformatf("random LR @%010h", a), CMD_LR, a, 2'd3, 64'd0);
                 end else if (r < 80) begin
                     a = a_mem(widx);
-                    d_push("random SC", CMD_SC, a, 2'd3, {$urandom, $urandom});
+                    d_push($sformatf("random SC @%010h", a), CMD_SC, a, 2'd3, {$urandom, $urandom});
                 end else if (r < 84) begin
                     d_load("random uncached load", a_peri($urandom_range(0, 63)), 2'd3);
                 end else if (r < 88) begin

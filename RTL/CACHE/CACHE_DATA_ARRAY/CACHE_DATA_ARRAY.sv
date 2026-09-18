@@ -17,7 +17,8 @@ module CACHE_DATA_ARRAY
         parameter int WAYS        = 4,
         parameter int BLOCK_BYTES = 64,
         // derived; do not override
-        parameter int ADDR_BITS   = $clog2(SETS * BLOCK_BYTES / 8)
+        parameter int ADDR_BITS   = $clog2(SETS * BLOCK_BYTES / 8),
+        parameter int WAY_BITS    = (WAYS > 1) ? $clog2(WAYS) : 1
     )
     (
         input  logic                     clk,
@@ -27,7 +28,7 @@ module CACHE_DATA_ARRAY
         output logic [WAYS*64-1:0]       rd_data,
 
         input  logic                     wr_en,
-        input  logic [$clog2(WAYS)-1:0]  wr_way,
+        input  logic [WAY_BITS-1:0]  wr_way,
         input  logic [ADDR_BITS-1:0]     wr_addr,
         input  logic [63:0]              wr_data,
         input  logic [7:0]               wr_strb

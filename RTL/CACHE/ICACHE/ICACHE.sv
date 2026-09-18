@@ -78,7 +78,7 @@ module ICACHE
     localparam int WOFF_BITS       = $clog2(WORDS_PER_BLOCK);   // word offset in a block
     localparam int IDX_BITS        = $clog2(SETS);
     localparam int TAG_BITS        = PADDR_WIDTH - OFF_BITS - IDX_BITS;
-    localparam int WAY_BITS        = $clog2(WAYS);
+    localparam int WAY_BITS        = (WAYS > 1) ? $clog2(WAYS) : 1;
     localparam int DADDR_BITS      = $clog2(SETS * WORDS_PER_BLOCK);
 
     function automatic logic [TAG_BITS-1:0]  addr_tag  (input logic [PADDR_WIDTH-1:0] a);

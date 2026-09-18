@@ -5,6 +5,7 @@ LitexRocket/
 obj_dir/
 obj_*/
 bug_work/
+sweep_work/
 *.vvp
 *.vcd
 *.log
