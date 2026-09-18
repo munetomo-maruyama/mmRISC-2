@@ -59,6 +59,14 @@ module CACHE_TAG_ARRAY
     //-----------------------------------------------------------------
     logic [TAG_BITS-1:0] tag_mem [0:SETS*WAYS-1];
 
+    // start from a defined state (the FPGA block RAM does the same)
+    initial begin
+        rd_tag   = '0;
+        rd_valid = '0;
+        rd_dirty = '0;
+        for (int i = 0; i < SETS*WAYS; i++) tag_mem[i] = '0;
+    end
+
     always_ff @(posedge clk) begin
         if (wr_en)
             tag_mem[int'(wr_index) * WAYS + int'(wr_way)] <= wr_tag;

@@ -40,6 +40,7 @@ module CACHE_DATA_ARRAY
     logic [63:0] mem [0:WAYS-1][0:WORDS-1];
 
     initial begin
+        rd_data = '0;
         for (int w = 0; w < WAYS; w++)
             for (int i = 0; i < WORDS; i++)
                 mem[w][i] = 64'd0;

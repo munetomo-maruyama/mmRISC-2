@@ -10,6 +10,8 @@
 #   make clean
 #
 #   Plusargs: +from=<n> +to=<n> run only test sections n..m
+#             +ops=<n>            number of random operations (section 11)
+#             +hb=<cycles>        print a progress line every <cycles>
 #   Parameters can be overridden, e.g.  make PARAMS="-GDC_WAYS=1 -GDC_BLOCK=16"
 #---------------------------------------------------------------------------
 
