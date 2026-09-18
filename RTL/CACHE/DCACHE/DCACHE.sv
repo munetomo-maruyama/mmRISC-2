@@ -128,7 +128,7 @@ module DCACHE
     localparam int WOFF_BITS       = $clog2(WORDS_PER_BLOCK);
     localparam int IDX_BITS        = $clog2(SETS);
     localparam int TAG_BITS        = PADDR_WIDTH - OFF_BITS - IDX_BITS;
-    localparam int WAY_BITS        = $clog2(WAYS);
+    localparam int WAY_BITS        = (WAYS > 1) ? $clog2(WAYS) : 1;
     localparam int DADDR_BITS      = $clog2(SETS * WORDS_PER_BLOCK);
     localparam int ROB_BITS        = $clog2(ROB_DEPTH);
     localparam int MSHR_BITS       = (NUM_MSHR > 1) ? $clog2(NUM_MSHR) : 1;
@@ -204,6 +204,14 @@ module DCACHE
             4'd11:   return (o  < s)  ? o : s;
             default: return (o  < s)  ? s : o;
         endcase
+    endfunction
+
+    // queue pointer increment (the depth is not necessarily a power of two)
+    function automatic logic [MSHR_BITS-1:0] ms_next(input logic [MSHR_BITS-1:0] p);
+        return (int'(p) == NUM_MSHR-1) ? '0 : p + MSHR_BITS'(1);
+    endfunction
+    function automatic logic [WB_BITS-1:0] wb_next(input logic [WB_BITS-1:0] p);
+        return (int'(p) == NUM_WB-1) ? '0 : p + WB_BITS'(1);
     endfunction
 
     function automatic logic [WAY_BITS-1:0] onehot_to_bin(input logic [WAYS-1:0] oh);
@@ -386,6 +394,31 @@ module DCACHE
     logic [7:0]            fwd_strb;
 
     //=================================================================
+    // Tag forwarding
+    //   The tag array (and the valid / dirty bits) return the old value when
+    //   a write happens in the cycle the read is issued, so the last write is
+    //   merged into the lookup result of stage 1.
+    //=================================================================
+    logic                     tfwd_en, tfwd_valid, tfwd_dirty;
+    logic [IDX_BITS-1:0]      tfwd_index;
+    logic [WAY_BITS-1:0]      tfwd_way;
+    logic [TAG_BITS-1:0]      tfwd_tag;
+
+    logic [WAYS*TAG_BITS-1:0] eff_tag;
+    logic [WAYS-1:0]          eff_valid, eff_dirty;
+
+    always_comb begin
+        eff_tag   = tag_rd_tag;
+        eff_valid = tag_rd_valid;
+        eff_dirty = tag_rd_dirty;
+        if (tfwd_en && (tfwd_index == addr_index(s1_addr))) begin
+            eff_tag[tfwd_way*TAG_BITS +: TAG_BITS] = tfwd_tag;
+            eff_valid[tfwd_way]                    = tfwd_valid;
+            eff_dirty[tfwd_way]                    = tfwd_dirty;
+        end
+    end
+
+    //=================================================================
     // Lookup
     //=================================================================
     logic [WAYS-1:0]     hit_oh;
@@ -395,8 +428,8 @@ module DCACHE
 
     always_comb begin
         for (int w = 0; w < WAYS; w++)
-            hit_oh[w] = tag_rd_valid[w] &&
-                        (tag_rd_tag[w*TAG_BITS +: TAG_BITS] == addr_tag(s1_addr));
+            hit_oh[w] = eff_valid[w] &&
+                        (eff_tag[w*TAG_BITS +: TAG_BITS] == addr_tag(s1_addr));
         hit     = s1_valid & s1_cacheable & s1_data_ok & (|hit_oh);
         hit_way = onehot_to_bin(hit_oh);
         hit_word = dat_rd_data[hit_way*64 +: 64];
@@ -418,13 +451,19 @@ module DCACHE
             end
     end
 
+    // ways of this set that an in-flight MSHR is using: the tag still shows
+    // the victim line while its data is being copied out and overwritten, so
+    // an access that "hits" such a way has to wait for the fill
     logic [WAYS-1:0] busy_way;
+    logic            hit_busy;
     always_comb begin
         busy_way = '0;
         for (int m = 0; m < NUM_MSHR; m++)
             if (ms_valid[m] && (ms_line[m][IDX_BITS-1:0] == addr_index(s1_addr)))
                 busy_way[ms_way[m]] = 1'b1;
     end
+
+    assign hit_busy = hit && busy_way[hit_way];
 
     // victim : an invalid way first, otherwise a free way chosen by the LFSR
     logic [WAY_BITS-1:0] victim_way;
@@ -447,14 +486,14 @@ module DCACHE
         end
         // prefer an invalid way
         for (int w = WAYS-1; w >= 0; w--)
-            if (!tag_rd_valid[w] && !busy_way[w] && !found) begin
+            if (!eff_valid[w] && !busy_way[w] && !found) begin
                 victim_way   = WAY_BITS'(w);
                 victim_avail = 1'b1;
                 found        = 1'b1;
             end
-        victim_valid = tag_rd_valid[victim_way];
-        victim_dirty = tag_rd_valid[victim_way] & tag_rd_dirty[victim_way];
-        victim_tag   = tag_rd_tag[victim_way*TAG_BITS +: TAG_BITS];
+        victim_valid = eff_valid[victim_way];
+        victim_dirty = eff_valid[victim_way] & eff_dirty[victim_way];
+        victim_tag   = eff_tag[victim_way*TAG_BITS +: TAG_BITS];
     end
 
     //=================================================================
@@ -498,7 +537,7 @@ module DCACHE
                 s1_can_retire = (u_state == U_IDLE);
             end else if (hit) begin
                 // writing accesses need the array and the tag write port
-                s1_can_retire = !(s1_writes && (fill_beat_now || fl_busy));
+                s1_can_retire = !hit_busy && !(s1_writes && (fill_beat_now || fl_busy));
             end else if (s1_needs_line) begin
                 s1_can_retire = 1'b0;                 // wait for the fill, then retry
             end else if (ms_match) begin
@@ -650,6 +689,12 @@ module DCACHE
             fl_rob       <= '0;
             lfsr         <= 16'hBEEF;
             fwd_valid    <= 1'b0;
+            tfwd_en      <= 1'b0;
+            tfwd_index   <= '0;
+            tfwd_way     <= '0;
+            tfwd_tag     <= '0;
+            tfwd_valid   <= 1'b0;
+            tfwd_dirty   <= 1'b0;
             fwd_addr     <= '0;
             fwd_way      <= '0;
             fwd_data     <= '0;
@@ -689,7 +734,13 @@ module DCACHE
             ms_push  = 1'b0; ms_pop  = 1'b0;
             wb_push  = 1'b0; wb_pop  = 1'b0;
 
-            // write forwarding register
+            // write forwarding registers (data array and tag array)
+            tfwd_en    <= tag_wr_en;
+            tfwd_index <= tag_wr_index;
+            tfwd_way   <= tag_wr_way;
+            tfwd_tag   <= tag_wr_tag;
+            tfwd_valid <= tag_wr_valid;
+            tfwd_dirty <= tag_wr_dirty;
             fwd_valid <= dat_wr_en;
             fwd_addr  <= dat_wr_addr;
             fwd_way   <= dat_wr_way;
@@ -744,8 +795,12 @@ module DCACHE
                 !(d_req_valid && d_req_ready) && !s1_reread &&
                 (!s1_data_ok || (fill_beat_now && m_axi4_rlast)))
                 s1_reread <= 1'b1;
-            if (s1_reread)
-                s1_data_ok <= 1'b1;
+            // the re-read only happens when the read port is granted; an
+            // engine using the port keeps the request waiting
+            if (s1_reread) begin
+                if (array_rd_busy) s1_reread  <= 1'b1;
+                else               s1_data_ok <= 1'b1;
+            end
 
             //---------------------------------------------------------
             // stage 1 : execute
@@ -826,7 +881,7 @@ module DCACHE
                     ms_st_woff[ms_tail]    <= addr_woff(s1_addr);
                     ms_st_strb[ms_tail]    <= size_strb(s1_addr[2:0], s1_size);
                     ms_st_data[ms_tail]    <= align_wdata(s1_addr[2:0], s1_wdata);
-                    ms_tail                <= ms_tail + MSHR_BITS'(1);
+                    ms_tail                <= ms_next(ms_tail);
                     ms_push                = 1'b1;
                     if (s1_is_load) begin
                         rob_wait[s1_rob] <= 1'b1;
@@ -849,8 +904,11 @@ module DCACHE
             //   - load / store when the line is already being filled but its
             //     beat has passed, or the MSHR is locked by another store
             if (s1_valid && s1_data_ok && !s1_can_retire && s1_cacheable &&
-                !hit && !s1_wait_fill && !fl_busy &&
-                (s1_needs_line || ms_match)) begin
+                !s1_wait_fill && !fl_busy &&
+                (hit_busy || (!hit && (s1_needs_line || ms_match)))) begin
+                if (hit_busy) begin
+                    s1_wait_fill <= 1'b1;         // the way is being replaced
+                end else
                 if (ms_match) begin
                     s1_wait_fill <= 1'b1;
                 end else if (!ms_full && victim_avail && !(victim_dirty && wb_full)) begin
@@ -861,7 +919,7 @@ module DCACHE
                     ms_wb_tag[ms_tail]     <= victim_tag;
                     ms_locked[ms_tail]     <= 1'b1;
                     ms_st_pending[ms_tail] <= 1'b0;
-                    ms_tail                <= ms_tail + MSHR_BITS'(1);
+                    ms_tail                <= ms_next(ms_tail);
                     ms_push                = 1'b1;
                     s1_wait_fill           <= 1'b1;
                     if (victim_valid && res_valid &&
@@ -903,7 +961,7 @@ module DCACHE
                     wb_line[wb_tail]  <= {ms_wb_tag[ms_head], ms_line[ms_head][IDX_BITS-1:0]};
                     for (i = 0; i < WORDS_PER_BLOCK; i++)
                         wb_data[wb_tail][i] <= f_wb_buf[i];
-                    wb_tail        <= wb_tail + WB_BITS'(1);
+                    wb_tail        <= wb_next(wb_tail);
                     wb_push        = 1'b1;
                     m_axi4_araddr  <= {ms_line[ms_head], {OFF_BITS{1'b0}}};
                     m_axi4_arvalid <= 1'b1;
@@ -945,7 +1003,7 @@ module DCACHE
                             ms_valid[ms_head]      <= 1'b0;
                             ms_locked[ms_head]     <= 1'b0;
                             ms_st_pending[ms_head] <= 1'b0;
-                            ms_head                <= ms_head + MSHR_BITS'(1);
+                            ms_head                <= ms_next(ms_head);
                             ms_pop                  = 1'b1;
                             s1_wait_fill           <= 1'b0;
                             f_state                <= F_IDLE;
@@ -982,7 +1040,7 @@ module DCACHE
                 W_RESP: begin
                     if (m_axi4_bvalid) begin
                         wb_valid[wb_head] <= 1'b0;
-                        wb_head           <= wb_head + WB_BITS'(1);
+                        wb_head           <= wb_next(wb_head);
                         wb_pop             = 1'b1;
                         w_state           <= W_IDLE;
                     end
@@ -1065,7 +1123,7 @@ module DCACHE
                     wb_line[wb_tail]  <= {tag_rd_tag[fl_way*TAG_BITS +: TAG_BITS], fl_index};
                     for (i = 0; i < WORDS_PER_BLOCK; i++)
                         wb_data[wb_tail][i] <= fl_buf[i];
-                    wb_tail  <= wb_tail + WB_BITS'(1);
+                    wb_tail  <= wb_next(wb_tail);
                     wb_push  = 1'b1;
                     fl_state <= FL_INV;
                 end

@@ -20,7 +20,9 @@ module CACHE_TAG_ARRAY
     #(
         parameter int SETS     = 64,
         parameter int WAYS     = 4,
-        parameter int TAG_BITS = 20
+        parameter int TAG_BITS = 20,
+        // derived; do not override
+        parameter int WAY_BITS = (WAYS > 1) ? $clog2(WAYS) : 1
     )
     (
         input  logic                        clk,
@@ -36,7 +38,7 @@ module CACHE_TAG_ARRAY
         // write port
         input  logic                        wr_en,
         input  logic [$clog2(SETS)-1:0]     wr_index,
-        input  logic [$clog2(WAYS)-1:0]     wr_way,
+        input  logic [WAY_BITS-1:0]     wr_way,
         input  logic [TAG_BITS-1:0]         wr_tag,
         input  logic                        wr_valid,
         input  logic                        wr_dirty,
@@ -71,35 +73,34 @@ module CACHE_TAG_ARRAY
 
     //-----------------------------------------------------------------
     // Valid / dirty bits
+    //   Flat vectors (set * WAYS + way) so that reset and invalidate-all are
+    //   single assignments; a loop with non-blocking assignments to an array
+    //   is not supported by Verilator for large set counts.
     //-----------------------------------------------------------------
-    logic [WAYS-1:0] valid_bit [0:SETS-1];
-    logic [WAYS-1:0] dirty_bit [0:SETS-1];
+    logic [SETS*WAYS-1:0] valid_bit;
+    logic [SETS*WAYS-1:0] dirty_bit;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            for (int s = 0; s < SETS; s++) begin
-                valid_bit[s] <= '0;
-                dirty_bit[s] <= '0;
-            end
+            valid_bit <= '0;
+            dirty_bit <= '0;
         end else if (inv_all) begin
-            for (int s = 0; s < SETS; s++) begin
-                valid_bit[s] <= '0;
-                dirty_bit[s] <= '0;
-            end
+            valid_bit <= '0;
+            dirty_bit <= '0;
         end else if (wr_en) begin
-            valid_bit[wr_index][wr_way] <= wr_valid;
-            dirty_bit[wr_index][wr_way] <= wr_dirty;
+            valid_bit[int'(wr_index) * WAYS + int'(wr_way)] <= wr_valid;
+            dirty_bit[int'(wr_index) * WAYS + int'(wr_way)] <= wr_dirty;
         end
     end
 
     always_ff @(posedge clk) begin
         if (rd_en) begin
-            rd_valid <= valid_bit[rd_index];
-            rd_dirty <= dirty_bit[rd_index];
+            rd_valid <= valid_bit[int'(rd_index) * WAYS +: WAYS];
+            rd_dirty <= dirty_bit[int'(rd_index) * WAYS +: WAYS];
         end
     end
 
-    assign sc_valid = valid_bit[sc_index];
-    assign sc_dirty = dirty_bit[sc_index];
+    assign sc_valid = valid_bit[int'(sc_index) * WAYS +: WAYS];
+    assign sc_dirty = dirty_bit[int'(sc_index) * WAYS +: WAYS];
 
 endmodule : CACHE_TAG_ARRAY

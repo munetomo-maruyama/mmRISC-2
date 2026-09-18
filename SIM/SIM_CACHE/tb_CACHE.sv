@@ -41,10 +41,13 @@ module tb_CACHE;
     parameter int NUM_WB        = 2;
     parameter int REPLACE_RANDOM = 0;
 
+    // cacheable / uncached windows (enlarged by the parameter sweep so that
+    // the test addresses of big cache geometries still fit)
+    parameter int MEM_WORDS  = 8192;     // 64KiB cacheable window
+    parameter int PERI_WORDS = 512;      // 4KiB uncached window
+
     localparam logic [PADDR_WIDTH-1:0] MEM_BASE  = 40'h00_8000_0000;
     localparam logic [PADDR_WIDTH-1:0] PERI_BASE = 40'h00_1200_0000;
-    localparam int MEM_WORDS  = 8192;    // 64KiB cacheable window
-    localparam int PERI_WORDS = 512;     // 4KiB uncached window
     localparam logic [63:0] MEM_INIT  = 64'h0000_0000_0000_0000;
     localparam logic [63:0] PERI_INIT = 64'h1111_0000_0000_0000;
 
@@ -534,6 +537,68 @@ module tb_CACHE;
     int n_i_resp = 0;
 
     //=================================================================
+    // Request FIFOs and drivers
+    //   The tests enqueue requests; these processes drive the interfaces and
+    //   can issue one request per cycle, so back-to-back accesses (and the
+    //   array read/write hazards they create) are exercised.
+    //=================================================================
+    logic [3:0]             rq_cmd   [0:QDEPTH-1];
+    logic [PADDR_WIDTH-1:0] rq_addr  [0:QDEPTH-1];
+    logic [1:0]             rq_size  [0:QDEPTH-1];
+    logic [63:0]            rq_wdata [0:QDEPTH-1];
+    int rq_wr = 0, rq_rd = 0;
+
+    logic [PADDR_WIDTH-1:0] iq_addr_f [0:QDEPTH-1];
+    int iq_wr_f = 0, iq_rd_f = 0;
+
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            d_req_valid <= 1'b0;
+        end else if (!d_req_valid || d_req_ready) begin
+            if (rq_rd != rq_wr) begin
+                d_req_valid <= 1'b1;
+                d_req_cmd   <= rq_cmd[rq_rd];
+                d_req_addr  <= rq_addr[rq_rd];
+                d_req_size  <= rq_size[rq_rd];
+                d_req_wdata <= rq_wdata[rq_rd];
+                rq_rd       <= (rq_rd + 1) % QDEPTH;
+            end else begin
+                d_req_valid <= 1'b0;
+            end
+        end
+    end
+
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            i_req_valid <= 1'b0;
+        end else if (!i_req_valid || i_req_ready) begin
+            if (iq_rd_f != iq_wr_f) begin
+                i_req_valid <= 1'b1;
+                i_req_addr  <= iq_addr_f[iq_rd_f];
+                iq_rd_f     <= (iq_rd_f + 1) % QDEPTH;
+            end else begin
+                i_req_valid <= 1'b0;
+            end
+        end
+    end
+
+    task automatic rq_put(input logic [3:0] cmd, input logic [PADDR_WIDTH-1:0] addr,
+                          input logic [1:0] size, input logic [63:0] wdata);
+        while (((rq_wr + 1) % QDEPTH) == rq_rd) @(posedge clk);
+        rq_cmd[rq_wr]   = cmd;
+        rq_addr[rq_wr]  = addr;
+        rq_size[rq_wr]  = size;
+        rq_wdata[rq_wr] = wdata;
+        rq_wr           = (rq_wr + 1) % QDEPTH;
+    endtask
+
+    task automatic iq_put(input logic [PADDR_WIDTH-1:0] addr);
+        while (((iq_wr_f + 1) % QDEPTH) == iq_rd_f) @(posedge clk);
+        iq_addr_f[iq_wr_f] = addr;
+        iq_wr_f            = (iq_wr_f + 1) % QDEPTH;
+    endtask
+
+    //=================================================================
     // CPU BFM : data side
     //=================================================================
     task automatic d_push(input string name, input logic [3:0] cmd,
@@ -615,16 +680,14 @@ module tb_CACHE;
         dq_name[dq_wr]  = name;
         dq_wr           = (dq_wr + 1) % QDEPTH;
 
-        @(negedge clk);
-        d_req_valid = 1'b1;
-        d_req_cmd   = cmd;
-        d_req_addr  = addr;
-        d_req_size  = size;
-        d_req_wdata = wdata;
-        @(posedge clk);
-        while (d_req_ready !== 1'b1) @(posedge clk);
-        @(negedge clk);
-        d_req_valid = 1'b0;
+        rq_put(cmd, addr, size, wdata);
+
+        // The result of an SC is adaptive: the reference memory is updated by
+        // the response checker, not here. Wait for that update before the next
+        // request is pushed, otherwise a later access would compute its
+        // expected value from a reference memory that does not yet contain the
+        // store of this SC.
+        if (cmd == CMD_SC) d_drain();
     endtask
 
     // convenience wrappers
@@ -646,7 +709,7 @@ module tb_CACHE;
     task automatic d_drain();
         int guard;
         guard = 0;
-        while (dq_rd != dq_wr) begin
+        while ((dq_rd != dq_wr) || (rq_rd != rq_wr)) begin
             @(posedge clk);
             guard++;
             if (guard > 2_000_000) begin
@@ -671,16 +734,7 @@ module tb_CACHE;
         dq_name[dq_wr]  = name;
         dq_wr           = (dq_wr + 1) % QDEPTH;
 
-        @(negedge clk);
-        d_req_valid = 1'b1;
-        d_req_cmd   = cmd;
-        d_req_addr  = addr;
-        d_req_size  = size;
-        d_req_wdata = wdata;
-        @(posedge clk);
-        while (d_req_ready !== 1'b1) @(posedge clk);
-        @(negedge clk);
-        d_req_valid = 1'b0;
+        rq_put(cmd, addr, size, wdata);
     endtask
 
     //=================================================================
@@ -694,13 +748,7 @@ module tb_CACHE;
         iq_name[iq_wr] = name;
         iq_wr          = (iq_wr + 1) % QDEPTH;
 
-        @(negedge clk);
-        i_req_valid = 1'b1;
-        i_req_addr  = addr;
-        @(posedge clk);
-        while (i_req_ready !== 1'b1) @(posedge clk);
-        @(negedge clk);
-        i_req_valid = 1'b0;
+        iq_put(addr);
     endtask
 
     task automatic i_push_err(input string name, input logic [PADDR_WIDTH-1:0] addr);
@@ -709,19 +757,13 @@ module tb_CACHE;
         iq_name[iq_wr] = name;
         iq_wr          = (iq_wr + 1) % QDEPTH;
 
-        @(negedge clk);
-        i_req_valid = 1'b1;
-        i_req_addr  = addr;
-        @(posedge clk);
-        while (i_req_ready !== 1'b1) @(posedge clk);
-        @(negedge clk);
-        i_req_valid = 1'b0;
+        iq_put(addr);
     endtask
 
     task automatic i_drain();
         int guard;
         guard = 0;
-        while (iq_rd != iq_wr) begin
+        while ((iq_rd != iq_wr) || (iq_rd_f != iq_wr_f)) begin
             @(posedge clk);
             guard++;
             if (guard > 2_000_000) begin
@@ -732,8 +774,39 @@ module tb_CACHE;
     endtask
 
     task automatic i_flush_all();
+        i_flush_start();
+        i_flush_wait();
+    endtask
+
+    // assert fence.i without waiting (it may overlap a line fill)
+    task automatic i_flush_start();
         @(negedge clk);
         i_flush_valid = 1'b1;
+    endtask
+
+    // fence.i asserted for a few cycles only, without waiting for
+    // i_flush_done: a fill started before the pulse must not validate its line
+    task automatic i_flush_pulse(input int cycles);
+        @(negedge clk);
+        i_flush_valid = 1'b1;
+        repeat (cycles) @(posedge clk);
+        @(negedge clk);
+        i_flush_valid = 1'b0;
+    endtask
+    // wait for the first data beat of an instruction fill
+    task automatic i_wait_fill();
+        int guard;
+        guard = 0;
+        while (u_cache.u_icache.m_axi4_rvalid !== 1'b1) begin
+            @(posedge clk);
+            guard++;
+            if (guard > 10_000) begin
+                check("instruction fill did not start", 1'b0);
+                $finish;
+            end
+        end
+    endtask
+    task automatic i_flush_wait();
         @(posedge clk);
         while (i_flush_done !== 1'b1) @(posedge clk);
         @(negedge clk);
