@@ -3,7 +3,7 @@ LitexRocket/
 
 # simulation build artifacts
 obj_dir/
-obj_trace/
+obj_*/
 bug_work/
 *.vvp
 *.vcd
