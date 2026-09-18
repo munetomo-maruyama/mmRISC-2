@@ -1,0 +1,3 @@
+0 PH0:nTDI
+1 PH1:TMS
+2 PH2:TDO

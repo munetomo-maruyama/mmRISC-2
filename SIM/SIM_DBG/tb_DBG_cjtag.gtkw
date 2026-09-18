@@ -1,0 +1,564 @@
+[*] GTKWave Analyzer save file
+[*] mmRISC-2 debug logic : cJTAG online / activation and access (tb_DBG section 14)
+[*] marker : OScan1 online (32.9ms)   A : SW3 up (30.35ms)
+[*] B : selection escape detected -> ACTIVATION (31.8ms)
+[*] C : first SBA request over cJTAG   D : escape / re-activation tests
+[dumpfile] "/media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/tb_DBG_cjtag.vcd"
+[savefile] "/media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/tb_DBG_cjtag.gtkw"
+[timestart] 30200000
+[size] 1600 900
+[pos] -1 -1
+*-20.000000 32900000 30350000 31800000 9657670000 11189655000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] TOP.tb_DBG.
+[treeopen] TOP.tb_DBG.u_top.
+[treeopen] TOP.tb_DBG.u_top.u_cpu_top.
+[treeopen] TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.
+[sst_width] 300
+[signals_width] 360
+[sst_expanded] 1
+[sst_vpaned_height] 300
+@c00200
+-1. CLOCK / RESET
+@28
+TOP.tb_DBG.clk100
+TOP.tb_DBG.u_top.sys_clk
+@200
+-debug power-on reset (TCK / clk domains)
+@28
+TOP.tb_DBG.u_top.rst_dbg_n
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.t_por_n
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.tap_rst_n
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.s_por_n
+@200
+-system reset
+@28
+TOP.tb_DBG.u_top.rst_n
+TOP.tb_DBG.u_top.ndmreset
+TOP.tb_DBG.u_top.rst_bus_n
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.hart_rst
+@1401200
+-1. CLOCK / RESET
+@800
+-2. cJTAG PINS : TCKC / TMSC
+@28
+TOP.tb_DBG.ja_tck
+TOP.tb_DBG.ja_tms
+@200
+-TMSC drivers (host / target / keeper)
+@28
+TOP.tb_DBG.host_oe
+TOP.tb_DBG.host_tms
+TOP.tb_DBG.dut_oe
+TOP.tb_DBG.dut_o
+TOP.tb_DBG.keeper
+@24
+TOP.tb_DBG.tmsc_contention[31:0]
+@200
+-mode / status
+@28
+TOP.tb_DBG.sw3_cjtag
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.mode_c
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.online
+@1000
+-2. cJTAG PINS : TCKC / TMSC
+@800
+-3. cJTAG ESCAPE DETECTION (online / offline)
+@200
+-Gray counter clocked by TMSC rise (counts while TCKC=1)
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.esc_gray[4:0]
+@24
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.esc_bin[4:0]
+@200
+-snapshots at TCKC rise / fall
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.snap_rise[4:0]
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.snap_fall[4:0]
+@24
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.snap_rise_bin[4:0]
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.snap_fall_bin[4:0]
+@200
+-rises during last TCKC high : >=4 reset, 3 select, 2 deselect
+@24
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.esc_r[4:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.esc_reset
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.esc_select
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.esc_deselect
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.esc_any
+@1000
+-3. cJTAG ESCAPE DETECTION (online / offline)
+@800
+-4. cJTAG ACTIVATION (OAC/EC/CP) / OScan1
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/cj_state.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.c_state[1:0]
+@24
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.act_cnt[3:0]
+@28
+TOP.tb_DBG.ja_tms
+@200
+-OScan1 3-phase frame
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/cj_phase.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.phase[1:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.tdi_c
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.tms_c
+@200
+-TAP control (to DTM)
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.tap_ce
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.tap_tms
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.tap_tdi
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.tap_hold
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.dtm_tdo
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cjtag.tms_oe
+@1000
+-4. cJTAG ACTIVATION (OAC/EC/CP) / OScan1
+@800
+-5. DTM : TAP / IR / DR / dmi
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.tck
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.tap_ce
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.tap_tms
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.tap_tdi
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/tap_state.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.state[3:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/jtag_ir.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.ir[4:0]
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.ir_sr[4:0]
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.dr_sr[40:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.tdo
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.tdo_oe
+@200
+-dtmcs / dmi status
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/dmi_op.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.sticky[1:0]
+@24
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.errinfo[2:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/dmi_addr.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.last_addr[6:0]
+@200
+-DMI request (Update-DR)
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.dmi_start
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/dmi_addr.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.dmi_addr[6:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.dmi_wr
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.dmi_wdata[31:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.dmi_abort
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.dmi_busy
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dtm.dmi_rdata[31:0]
+@1000
+-5. DTM : TAP / IR / DR / dmi
+@c00200
+-6. CDC : DMI handshake
+@200
+-TCK domain
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.tck
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.pend
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.req
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.ack_s
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.t_complete
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/dmi_addr.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.q_addr[6:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.q_wr
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.q_wdata[31:0]
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.r_rdata[31:0]
+@200
+-system clock domain
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.clk
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.req_s
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/cdc_state.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.s_state[1:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.dmi_req
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/dmi_addr.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.dmi_addr[6:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.dmi_wr
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.dmi_wdata[31:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.dmi_ack
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.dmi_rdata[31:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_cdc.ack
+@1401200
+-6. CDC : DMI handshake
+@c00200
+-7. DEBUG MODULE
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.dmactive
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.authenticated
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.hartsel_r
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.haltreq_r
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.hart_resumereq
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.resumeack_r
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.havereset_r
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.resethaltreq_r
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.hartreset_r
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.ndmreset_r
+@200
+-abstract command
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.command_r[31:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/ab_state.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.ab_state[2:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/cmderr.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.cmderr_r[2:0]
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.autoexec_r[3:0]
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.data_r[0][31:0]
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.data_r[1][31:0]
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.data_r[2][31:0]
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.data_r[3][31:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.reg_busy
+@200
+-system bus access
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.sbaddress_r[39:0]
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.sbdata1_r[31:0]
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.sbdata0_r[31:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/sbaccess.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.sbaccess_r[2:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.sbautoincrement_r
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.sbreadonaddr_r
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.sbreadondata_r
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.sb_pend
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.sb_wait
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/sberror.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.sberror_r[2:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.sbbusyerror_r
+@200
+-bus master scheduling
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.bm_busy
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.bm_owner_sba
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_dm.bus_in_reset
+@1401200
+-7. DEBUG MODULE
+@c00200
+-8. DEBUG BUS MASTER (SBA)
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.bm_req
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.bm_wr
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.bm_addr[39:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/axsize.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.bm_size[1:0]
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.bm_wdata[63:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.bm_ack
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.bm_rdata[63:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/sberror.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.bm_err[2:0]
+@200
+-transaction
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/bm_state.txt
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.b_state[2:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.t_mem
+@22
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.t_addr[39:0]
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.t_wstrb[7:0]
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.t_wdata[63:0]
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.draining
+@24
+TOP.tb_DBG.u_top.u_cpu_top.u_cpu_dbg.u_busmst.tmo_cnt[17:0]
+@1401200
+-8. DEBUG BUS MASTER (SBA)
+@c00200
+-BUS ARBITER (debug / CPU_BFM)
+@200
+-AXI4 write / read grant (g1=1: CPU, 0: debug)
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_bus_arb.x4w_act
+TOP.tb_DBG.u_top.u_cpu_top.u_bus_arb.x4w_g1
+TOP.tb_DBG.u_top.u_cpu_top.u_bus_arb.x4r_act
+TOP.tb_DBG.u_top.u_cpu_top.u_bus_arb.x4r_g1
+@200
+-AXI4-Lite write / read grant
+@28
+TOP.tb_DBG.u_top.u_cpu_top.u_bus_arb.xlw_act
+TOP.tb_DBG.u_top.u_cpu_top.u_bus_arb.xlw_g1
+TOP.tb_DBG.u_top.u_cpu_top.u_bus_arb.xlr_act
+TOP.tb_DBG.u_top.u_cpu_top.u_bus_arb.xlr_g1
+@1401200
+-BUS ARBITER (debug / CPU_BFM)
+@800
+-MEMORY BUS  AXI4 40bit (CPU_TOP port)
+@200
+-write address
+@28
+TOP.tb_DBG.u_top.cpu_axi4_awvalid
+TOP.tb_DBG.u_top.cpu_axi4_awready
+@22
+TOP.tb_DBG.u_top.cpu_axi4_awid[3:0]
+TOP.tb_DBG.u_top.cpu_axi4_awaddr[39:0]
+@24
+TOP.tb_DBG.u_top.cpu_axi4_awlen[7:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/axsize.txt
+TOP.tb_DBG.u_top.cpu_axi4_awsize[2:0]
+@200
+-write data
+@28
+TOP.tb_DBG.u_top.cpu_axi4_wvalid
+TOP.tb_DBG.u_top.cpu_axi4_wready
+@22
+TOP.tb_DBG.u_top.cpu_axi4_wdata[63:0]
+TOP.tb_DBG.u_top.cpu_axi4_wstrb[7:0]
+@28
+TOP.tb_DBG.u_top.cpu_axi4_wlast
+@200
+-write response
+@28
+TOP.tb_DBG.u_top.cpu_axi4_bvalid
+TOP.tb_DBG.u_top.cpu_axi4_bready
+@22
+TOP.tb_DBG.u_top.cpu_axi4_bid[3:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/axi_resp.txt
+TOP.tb_DBG.u_top.cpu_axi4_bresp[1:0]
+@200
+-read address
+@28
+TOP.tb_DBG.u_top.cpu_axi4_arvalid
+TOP.tb_DBG.u_top.cpu_axi4_arready
+@22
+TOP.tb_DBG.u_top.cpu_axi4_arid[3:0]
+TOP.tb_DBG.u_top.cpu_axi4_araddr[39:0]
+@24
+TOP.tb_DBG.u_top.cpu_axi4_arlen[7:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/axsize.txt
+TOP.tb_DBG.u_top.cpu_axi4_arsize[2:0]
+@200
+-read data
+@28
+TOP.tb_DBG.u_top.cpu_axi4_rvalid
+TOP.tb_DBG.u_top.cpu_axi4_rready
+@22
+TOP.tb_DBG.u_top.cpu_axi4_rid[3:0]
+TOP.tb_DBG.u_top.cpu_axi4_rdata[63:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/axi_resp.txt
+TOP.tb_DBG.u_top.cpu_axi4_rresp[1:0]
+@28
+TOP.tb_DBG.u_top.cpu_axi4_rlast
+@1000
+-MEMORY BUS  AXI4 40bit (CPU_TOP port)
+@c00200
+-MEMORY RAM  AXI4 32bit @0x8000_0000 64KiB
+@200
+-write address
+@28
+TOP.tb_DBG.u_top.ram_axi4_awvalid
+TOP.tb_DBG.u_top.ram_axi4_awready
+@22
+TOP.tb_DBG.u_top.ram_axi4_awid[3:0]
+TOP.tb_DBG.u_top.ram_axi4_awaddr[31:0]
+@24
+TOP.tb_DBG.u_top.ram_axi4_awlen[7:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/axsize.txt
+TOP.tb_DBG.u_top.ram_axi4_awsize[2:0]
+@200
+-write data
+@28
+TOP.tb_DBG.u_top.ram_axi4_wvalid
+TOP.tb_DBG.u_top.ram_axi4_wready
+@22
+TOP.tb_DBG.u_top.ram_axi4_wdata[63:0]
+TOP.tb_DBG.u_top.ram_axi4_wstrb[7:0]
+@28
+TOP.tb_DBG.u_top.ram_axi4_wlast
+@200
+-write response
+@28
+TOP.tb_DBG.u_top.ram_axi4_bvalid
+TOP.tb_DBG.u_top.ram_axi4_bready
+@22
+TOP.tb_DBG.u_top.ram_axi4_bid[3:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/axi_resp.txt
+TOP.tb_DBG.u_top.ram_axi4_bresp[1:0]
+@200
+-read address
+@28
+TOP.tb_DBG.u_top.ram_axi4_arvalid
+TOP.tb_DBG.u_top.ram_axi4_arready
+@22
+TOP.tb_DBG.u_top.ram_axi4_arid[3:0]
+TOP.tb_DBG.u_top.ram_axi4_araddr[31:0]
+@24
+TOP.tb_DBG.u_top.ram_axi4_arlen[7:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/axsize.txt
+TOP.tb_DBG.u_top.ram_axi4_arsize[2:0]
+@200
+-read data
+@28
+TOP.tb_DBG.u_top.ram_axi4_rvalid
+TOP.tb_DBG.u_top.ram_axi4_rready
+@22
+TOP.tb_DBG.u_top.ram_axi4_rid[3:0]
+TOP.tb_DBG.u_top.ram_axi4_rdata[63:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/axi_resp.txt
+TOP.tb_DBG.u_top.ram_axi4_rresp[1:0]
+@28
+TOP.tb_DBG.u_top.ram_axi4_rlast
+@200
+-AXI4_ADDR_NARROW (40->32bit, DECERR)
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/nar_w.txt
+TOP.tb_DBG.u_top.u_narrow_axi4.wstate[2:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/nar_r.txt
+TOP.tb_DBG.u_top.u_narrow_axi4.rstate[1:0]
+@200
+-AXI4_RAM
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/ram_w.txt
+TOP.tb_DBG.u_top.u_ram_axi4.w_state[1:0]
+@22
+TOP.tb_DBG.u_top.u_ram_axi4.w_addr[31:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/ram_r.txt
+TOP.tb_DBG.u_top.u_ram_axi4.r_state[1:0]
+@22
+TOP.tb_DBG.u_top.u_ram_axi4.r_addr[31:0]
+@1401200
+-MEMORY RAM  AXI4 32bit @0x8000_0000 64KiB
+@c00200
+-PERIPHERAL BUS  AXI4-Lite 40bit (CPU_TOP port)
+@200
+-write address / data / response
+@28
+TOP.tb_DBG.u_top.cpu_axil_awvalid
+TOP.tb_DBG.u_top.cpu_axil_awready
+@22
+TOP.tb_DBG.u_top.cpu_axil_awaddr[39:0]
+@28
+TOP.tb_DBG.u_top.cpu_axil_wvalid
+TOP.tb_DBG.u_top.cpu_axil_wready
+@22
+TOP.tb_DBG.u_top.cpu_axil_wdata[63:0]
+TOP.tb_DBG.u_top.cpu_axil_wstrb[7:0]
+@28
+TOP.tb_DBG.u_top.cpu_axil_bvalid
+TOP.tb_DBG.u_top.cpu_axil_bready
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/axi_resp.txt
+TOP.tb_DBG.u_top.cpu_axil_bresp[1:0]
+@200
+-read address / data
+@28
+TOP.tb_DBG.u_top.cpu_axil_arvalid
+TOP.tb_DBG.u_top.cpu_axil_arready
+@22
+TOP.tb_DBG.u_top.cpu_axil_araddr[39:0]
+@28
+TOP.tb_DBG.u_top.cpu_axil_rvalid
+TOP.tb_DBG.u_top.cpu_axil_rready
+@22
+TOP.tb_DBG.u_top.cpu_axil_rdata[63:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/axi_resp.txt
+TOP.tb_DBG.u_top.cpu_axil_rresp[1:0]
+@1401200
+-PERIPHERAL BUS  AXI4-Lite 40bit (CPU_TOP port)
+@c00200
+-PERIPHERAL RAM  AXI4-Lite 32bit @0x1200_0000 4KiB
+@200
+-write address / data / response
+@28
+TOP.tb_DBG.u_top.ram_axil_awvalid
+TOP.tb_DBG.u_top.ram_axil_awready
+@22
+TOP.tb_DBG.u_top.ram_axil_awaddr[31:0]
+@28
+TOP.tb_DBG.u_top.ram_axil_wvalid
+TOP.tb_DBG.u_top.ram_axil_wready
+@22
+TOP.tb_DBG.u_top.ram_axil_wdata[63:0]
+TOP.tb_DBG.u_top.ram_axil_wstrb[7:0]
+@28
+TOP.tb_DBG.u_top.ram_axil_bvalid
+TOP.tb_DBG.u_top.ram_axil_bready
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/axi_resp.txt
+TOP.tb_DBG.u_top.ram_axil_bresp[1:0]
+@200
+-read address / data
+@28
+TOP.tb_DBG.u_top.ram_axil_arvalid
+TOP.tb_DBG.u_top.ram_axil_arready
+@22
+TOP.tb_DBG.u_top.ram_axil_araddr[31:0]
+@28
+TOP.tb_DBG.u_top.ram_axil_rvalid
+TOP.tb_DBG.u_top.ram_axil_rready
+@22
+TOP.tb_DBG.u_top.ram_axil_rdata[63:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/axi_resp.txt
+TOP.tb_DBG.u_top.ram_axil_rresp[1:0]
+@200
+-AXIL_ADDR_NARROW (40->32bit, DECERR)
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/nar_w.txt
+TOP.tb_DBG.u_top.u_narrow_axil.wstate[2:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_DBG/gtkw_filter/nar_r.txt
+TOP.tb_DBG.u_top.u_narrow_axil.rstate[1:0]
+@1401200
+-PERIPHERAL RAM  AXI4-Lite 32bit @0x1200_0000 4KiB
+@800
+-TESTBENCH
+@24
+TOP.tb_DBG.n_error[31:0]
+TOP.tb_DBG.n_busy[31:0]
+TOP.tb_DBG.idle_cycles[31:0]
+@28
+TOP.tb_DBG.cjtag
+TOP.tb_DBG.align_worst
+@24
+TOP.tb_DBG.tmsc_contention[31:0]
+@1000
+-TESTBENCH

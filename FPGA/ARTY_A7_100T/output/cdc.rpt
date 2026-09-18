@@ -1,0 +1,215 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
+| Date         : Thu Sep 17 21:35:02 2026
+| Host         : ARM-Windows running 64-bit major release  (build 9200)
+| Command      : report_cdc -details -file ./output/cdc.rpt
+| Design       : TOP
+| Device       : 7a100t-csg324
+| Speed File   : -1  PRODUCTION 1.23 2018-06-13
+| Design State : Routed
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+CDC Report
+
+ID      Severity  Count  Description
+------  --------  -----  -------------------------------------------------------
+CDC-1   Critical     19  1-bit unknown CDC circuitry
+CDC-3   Info          4  1-bit synchronized with ASYNC_REG property
+CDC-4   Critical      2  Multi-bit unknown CDC circuitry
+CDC-7   Critical      5  Asynchronous reset unknown CDC circuitry
+CDC-9   Info          3  Asynchronous reset synchronized with ASYNC_REG property
+CDC-10  Critical      1  Combinational logic detected before a synchronizer
+CDC-15  Warning     108  Clock enable controlled CDC structure detected
+
+Source Clock: input port clock
+Destination Clock: g_clk_mmcm.clk_out
+CDC Type: No Common Primary Clock
+
+Row  ID     Severity  Description                                              Depth  Exception   Source (From)  Destination (To)
+---  -----  --------  -------------------------------------------------------  -----  ----------  -------------  -----------------------------------------------
+  1  CDC-3  Info      1-bit synchronized with ASYNC_REG property                   2  False Path  SW2            u_cpu_top/u_cpu_dbg/u_sync_auth_en/ff1_reg[0]/D
+  2  CDC-9  Info      Asynchronous reset synchronized with ASYNC_REG property      2  False Path  JA_SRSTN       u_rst_sys/ff1_reg/CLR
+
+Source Clock: jtag_tck
+Destination Clock: g_clk_mmcm.clk_out
+CDC Type: No Common Primary Clock
+
+Row  ID      Severity  Description                                     Depth  Exception            Source (From)                                Destination (To)
+---  ------  --------  ----------------------------------------------  -----  -------------------  -------------------------------------------  -------------------------------------------------
+  1  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_addr_reg[0]/C    u_cpu_top/u_cpu_dbg/u_cdc/dmi_addr_reg[0]/D
+  2  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_addr_reg[1]/C    u_cpu_top/u_cpu_dbg/u_cdc/dmi_addr_reg[1]/D
+  3  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_addr_reg[2]/C    u_cpu_top/u_cpu_dbg/u_cdc/dmi_addr_reg[2]/D
+  4  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_addr_reg[3]/C    u_cpu_top/u_cpu_dbg/u_cdc/dmi_addr_reg[3]/D
+  5  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_addr_reg[4]/C    u_cpu_top/u_cpu_dbg/u_cdc/dmi_addr_reg[4]/D
+  6  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_addr_reg[5]/C    u_cpu_top/u_cpu_dbg/u_cdc/dmi_addr_reg[5]/D
+  7  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_addr_reg[6]/C    u_cpu_top/u_cpu_dbg/u_cdc/dmi_addr_reg[6]/D
+  8  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[0]/C   u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[0]/D
+  9  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[1]/C   u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[1]/D
+ 10  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[2]/C   u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[2]/D
+ 11  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[3]/C   u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[3]/D
+ 12  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[4]/C   u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[4]/D
+ 13  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[5]/C   u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[5]/D
+ 14  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[6]/C   u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[6]/D
+ 15  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[7]/C   u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[7]/D
+ 16  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[8]/C   u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[8]/D
+ 17  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[9]/C   u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[9]/D
+ 18  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[10]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[10]/D
+ 19  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[11]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[11]/D
+ 20  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[12]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[12]/D
+ 21  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[13]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[13]/D
+ 22  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[14]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[14]/D
+ 23  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[15]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[15]/D
+ 24  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[16]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[16]/D
+ 25  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[17]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[17]/D
+ 26  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[18]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[18]/D
+ 27  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[19]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[19]/D
+ 28  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[20]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[20]/D
+ 29  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[21]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[21]/D
+ 30  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[22]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[22]/D
+ 31  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[23]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[23]/D
+ 32  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[24]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[24]/D
+ 33  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[25]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[25]/D
+ 34  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[26]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[26]/D
+ 35  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[27]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[27]/D
+ 36  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[28]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[28]/D
+ 37  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[29]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[29]/D
+ 38  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[30]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[30]/D
+ 39  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wdata_reg[31]/C  u_cpu_top/u_cpu_dbg/u_cdc/dmi_wdata_reg[31]/D
+ 40  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/q_wr_reg/C         u_cpu_top/u_cpu_dbg/u_cdc/dmi_wr_reg/D
+ 41  CDC-3   Info      1-bit synchronized with ASYNC_REG property          2  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/req_reg/C          u_cpu_top/u_cpu_dbg/u_cdc/u_sync_req/ff1_reg[0]/D
+
+Source Clock: g_clk_mmcm.clk_out
+Destination Clock: jtag_tck
+CDC Type: No Common Primary Clock
+
+Row  ID      Severity  Description                                              Depth  Exception            Source (From)                                Destination (To)
+---  ------  --------  -------------------------------------------------------  -----  -------------------  -------------------------------------------  -------------------------------------------------
+  1  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[0]/C   u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[0]/D
+  2  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[1]/C   u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[1]/D
+  3  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[2]/C   u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[2]/D
+  4  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[3]/C   u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[3]/D
+  5  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[4]/C   u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[4]/D
+  6  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[5]/C   u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[5]/D
+  7  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[6]/C   u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[6]/D
+  8  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[7]/C   u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[7]/D
+  9  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[8]/C   u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[8]/D
+ 10  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[9]/C   u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[9]/D
+ 11  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[10]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[10]/D
+ 12  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[11]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[11]/D
+ 13  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[12]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[12]/D
+ 14  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[13]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[13]/D
+ 15  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[14]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[14]/D
+ 16  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[15]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[15]/D
+ 17  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[16]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[16]/D
+ 18  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[17]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[17]/D
+ 19  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[18]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[18]/D
+ 20  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[19]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[19]/D
+ 21  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[20]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[20]/D
+ 22  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[21]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[21]/D
+ 23  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[22]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[22]/D
+ 24  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[23]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[23]/D
+ 25  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[24]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[24]/D
+ 26  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[25]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[25]/D
+ 27  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[26]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[26]/D
+ 28  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[27]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[27]/D
+ 29  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[28]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[28]/D
+ 30  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[29]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[29]/D
+ 31  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[30]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[30]/D
+ 32  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[31]/C  u_cpu_top/u_cpu_dbg/u_cdc/r_rdata_reg[31]/D
+ 33  CDC-3   Info      1-bit synchronized with ASYNC_REG property                   2  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/ack_reg/C          u_cpu_top/u_cpu_dbg/u_cdc/u_sync_ack/ff1_reg[0]/D
+ 34  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[0]/C   u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[2]/D
+ 35  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[1]/C   u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[3]/D
+ 36  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[2]/C   u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[4]/D
+ 37  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[3]/C   u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[5]/D
+ 38  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[4]/C   u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[6]/D
+ 39  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[5]/C   u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[7]/D
+ 40  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[6]/C   u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[8]/D
+ 41  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[7]/C   u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[9]/D
+ 42  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[8]/C   u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[10]/D
+ 43  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[9]/C   u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[11]/D
+ 44  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[10]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[12]/D
+ 45  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[11]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[13]/D
+ 46  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[12]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[14]/D
+ 47  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[13]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[15]/D
+ 48  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[14]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[16]/D
+ 49  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[15]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[17]/D
+ 50  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[16]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[18]/D
+ 51  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[17]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[19]/D
+ 52  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[18]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[20]/D
+ 53  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[19]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[21]/D
+ 54  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[20]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[22]/D
+ 55  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[21]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[23]/D
+ 56  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[22]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[24]/D
+ 57  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[23]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[25]/D
+ 58  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[24]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[26]/D
+ 59  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[25]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[27]/D
+ 60  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[26]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[28]/D
+ 61  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[27]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[29]/D
+ 62  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[28]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[30]/D
+ 63  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[29]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[31]/D
+ 64  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[30]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[32]/D
+ 65  CDC-15  Warning   Clock enable controlled CDC structure detected               0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cdc/s_rdata_reg[31]/C  u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[33]/D
+ 66  CDC-9   Info      Asynchronous reset synchronized with ASYNC_REG property      2  Asynch Clock Groups  por_cnt_reg[15]/C                            u_cpu_top/u_cpu_dbg/u_rst_t_por/ff1_reg/CLR
+ 67  CDC-10  Critical  Combinational logic detected before a synchronizer           2  Asynch Clock Groups  por_cnt_reg[15]/C                            u_cpu_top/u_cpu_dbg/u_rst_tap/ff1_reg/CLR
+
+Source Clock: input port clock
+Destination Clock: jtag_tck
+CDC Type: No Common Primary Clock
+
+Row  ID     Severity  Description                                              Depth  Exception   Source (From)  Destination (To)
+---  -----  --------  -------------------------------------------------------  -----  ----------  -------------  ----------------------------------------------------
+  1  CDC-3  Info      1-bit synchronized with ASYNC_REG property                   2  False Path  SW3            u_cpu_top/u_cpu_dbg/u_cjtag/u_sync_mode/ff1_reg[0]/D
+  2  CDC-1  Critical  1-bit unknown CDC circuitry                                  0  False Path  JA_TDI         u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[0]/D
+  3  CDC-1  Critical  1-bit unknown CDC circuitry                                  0  False Path  JA_TDI         u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[31]/D
+  4  CDC-1  Critical  1-bit unknown CDC circuitry                                  0  False Path  JA_TDI         u_cpu_top/u_cpu_dbg/u_dtm/dr_sr_reg[40]/D
+  5  CDC-1  Critical  1-bit unknown CDC circuitry                                  0  False Path  JA_TDI         u_cpu_top/u_cpu_dbg/u_dtm/ir_sr_reg[4]/D
+  6  CDC-9  Info      Asynchronous reset synchronized with ASYNC_REG property      2  False Path  JA_TRSTN       u_cpu_top/u_cpu_dbg/u_rst_tap/ff1_reg/CLR
+
+Source Clock: jtag_tmsc
+Destination Clock: jtag_tck
+CDC Type: No Common Primary Clock
+
+Row  ID      Severity  Description                                     Depth  Exception            Source (From)                                    Destination (To)
+---  ------  --------  ----------------------------------------------  -----  -------------------  -----------------------------------------------  -------------------------------------------------------
+  1  CDC-1   Critical  1-bit unknown CDC circuitry                         0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_cjtag/act_cnt_reg[0]/CE
+  2  CDC-1   Critical  1-bit unknown CDC circuitry                         0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_cjtag/act_cnt_reg[1]/CE
+  3  CDC-1   Critical  1-bit unknown CDC circuitry                         0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_cjtag/act_cnt_reg[2]/CE
+  4  CDC-1   Critical  1-bit unknown CDC circuitry                         0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_cjtag/act_cnt_reg[3]/CE
+  5  CDC-1   Critical  1-bit unknown CDC circuitry                         0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_cjtag/c_state_reg[0]/D
+  6  CDC-1   Critical  1-bit unknown CDC circuitry                         0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_cjtag/c_state_reg[1]/D
+  7  CDC-1   Critical  1-bit unknown CDC circuitry                         0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_cjtag/phase_reg[0]/D
+  8  CDC-1   Critical  1-bit unknown CDC circuitry                         0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_cjtag/phase_reg[1]/D
+  9  CDC-4   Critical  Multi-bit unknown CDC circuitry                     0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cjtag/esc_gray_reg[4:0]/C  u_cpu_top/u_cpu_dbg/u_cjtag/snap_fall_reg[4:0]/D
+ 10  CDC-4   Critical  Multi-bit unknown CDC circuitry                     0  Asynch Clock Groups  u_cpu_top/u_cpu_dbg/u_cjtag/esc_gray_reg[4:0]/C  u_cpu_top/u_cpu_dbg/u_cjtag/snap_rise_reg[4:0]/D
+ 11  CDC-1   Critical  1-bit unknown CDC circuitry                         0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_cjtag/tdi_c_reg/D
+ 12  CDC-1   Critical  1-bit unknown CDC circuitry                         0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_cjtag/tms_c_reg/D
+ 13  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_dtm/FSM_sequential_state_reg[0]/D
+ 14  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_dtm/FSM_sequential_state_reg[1]/D
+ 15  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_dtm/FSM_sequential_state_reg[2]/D
+ 16  CDC-15  Warning   Clock enable controlled CDC structure detected      0  Asynch Clock Groups  JA_TMS                                           u_cpu_top/u_cpu_dbg/u_dtm/FSM_sequential_state_reg[3]/D
+
+Source Clock: g_clk_mmcm.clk_out
+Destination Clock: jtag_tmsc
+CDC Type: No Common Primary Clock
+
+Row  ID     Severity  Description                               Depth  Exception            Source (From)      Destination (To)
+---  -----  --------  ----------------------------------------  -----  -------------------  -----------------  -----------------------------------------------
+  1  CDC-7  Critical  Asynchronous reset unknown CDC circuitry      0  Asynch Clock Groups  por_cnt_reg[15]/C  u_cpu_top/u_cpu_dbg/u_cjtag/esc_gray_reg[0]/CLR
+  2  CDC-7  Critical  Asynchronous reset unknown CDC circuitry      0  Asynch Clock Groups  por_cnt_reg[15]/C  u_cpu_top/u_cpu_dbg/u_cjtag/esc_gray_reg[1]/CLR
+  3  CDC-7  Critical  Asynchronous reset unknown CDC circuitry      0  Asynch Clock Groups  por_cnt_reg[15]/C  u_cpu_top/u_cpu_dbg/u_cjtag/esc_gray_reg[2]/CLR
+  4  CDC-7  Critical  Asynchronous reset unknown CDC circuitry      0  Asynch Clock Groups  por_cnt_reg[15]/C  u_cpu_top/u_cpu_dbg/u_cjtag/esc_gray_reg[3]/CLR
+  5  CDC-7  Critical  Asynchronous reset unknown CDC circuitry      0  Asynch Clock Groups  por_cnt_reg[15]/C  u_cpu_top/u_cpu_dbg/u_cjtag/esc_gray_reg[4]/CLR
+
+Source Clock: jtag_tck
+Destination Clock: jtag_tmsc
+CDC Type: No Common Primary Clock
+
+Row  ID     Severity  Description                  Depth  Exception            Source (From)  Destination (To)
+---  -----  --------  ---------------------------  -----  -------------------  -------------  ----------------------------------------------
+  1  CDC-1  Critical  1-bit unknown CDC circuitry      0  Asynch Clock Groups  JA_TCK         u_cpu_top/u_cpu_dbg/u_cjtag/esc_gray_reg[0]/CE
+  2  CDC-1  Critical  1-bit unknown CDC circuitry      0  Asynch Clock Groups  JA_TCK         u_cpu_top/u_cpu_dbg/u_cjtag/esc_gray_reg[1]/CE
+  3  CDC-1  Critical  1-bit unknown CDC circuitry      0  Asynch Clock Groups  JA_TCK         u_cpu_top/u_cpu_dbg/u_cjtag/esc_gray_reg[2]/CE
+  4  CDC-1  Critical  1-bit unknown CDC circuitry      0  Asynch Clock Groups  JA_TCK         u_cpu_top/u_cpu_dbg/u_cjtag/esc_gray_reg[3]/CE
+  5  CDC-1  Critical  1-bit unknown CDC circuitry      0  Asynch Clock Groups  JA_TCK         u_cpu_top/u_cpu_dbg/u_cjtag/esc_gray_reg[4]/CE
+

@@ -1,0 +1,3 @@
+0 W_IDLE
+1 W_DATA
+2 W_RESP

@@ -1,0 +1,3 @@
+0 S_IDLE
+1 S_WAIT
+2 S_ACK
