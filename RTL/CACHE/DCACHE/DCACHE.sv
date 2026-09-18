@@ -24,6 +24,13 @@
 //   write : fill beat  > store / AMO / SC in stage 1
 // A write in the cycle a read is issued is forwarded to stage 1 (fwd_*),
 // because the arrays return the old value in that case.
+//
+//   Note on coding style: the combinational blocks are written as
+//   "always @(*)" instead of "always_comb". Icarus Verilog re-triggers an
+//   always_comb process on every assignment to a variable that is read with a
+//   variable index inside the same process, which makes the combinational
+//   network of this module loop forever at one simulation time. "always @(*)"
+//   uses value-change semantics and behaves identically in synthesis.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -352,7 +359,7 @@ module DCACHE
     assign array_rd_busy = fl_rd_busy | f_rd_busy;
     assign fl_busy       = (fl_state != FL_IDLE);
 
-    always_comb begin
+    always @(*) begin
         if (fl_rd_busy) begin
             dat_rd_en   = 1'b1;
             dat_rd_addr = {fl_index, fl_word};
@@ -368,7 +375,7 @@ module DCACHE
         end
     end
 
-    always_comb begin
+    always @(*) begin
         if (fl_state == FL_TAG) begin
             tag_rd_en    = 1'b1;
             tag_rd_index = fl_index;
@@ -407,7 +414,7 @@ module DCACHE
     logic [WAYS*TAG_BITS-1:0] eff_tag;
     logic [WAYS-1:0]          eff_valid, eff_dirty;
 
-    always_comb begin
+    always @(*) begin
         eff_tag   = tag_rd_tag;
         eff_valid = tag_rd_valid;
         eff_dirty = tag_rd_dirty;
@@ -426,7 +433,7 @@ module DCACHE
     logic [WAY_BITS-1:0] hit_way;
     logic [63:0]         hit_word;
 
-    always_comb begin
+    always @(*) begin
         for (int w = 0; w < WAYS; w++)
             hit_oh[w] = eff_valid[w] &&
                         (eff_tag[w*TAG_BITS +: TAG_BITS] == addr_tag(s1_addr));
@@ -441,7 +448,7 @@ module DCACHE
     logic                 ms_match;
     logic [MSHR_BITS-1:0] ms_match_id;
     logic                 ms_attach_ok;   // the beat of this word is still ahead
-    always_comb begin
+    always @(*) begin
         ms_match    = 1'b0;
         ms_match_id = '0;
         for (int m = 0; m < NUM_MSHR; m++)
@@ -456,7 +463,7 @@ module DCACHE
     // an access that "hits" such a way has to wait for the fill
     logic [WAYS-1:0] busy_way;
     logic            hit_busy;
-    always_comb begin
+    always @(*) begin
         busy_way = '0;
         for (int m = 0; m < NUM_MSHR; m++)
             if (ms_valid[m] && (ms_line[m][IDX_BITS-1:0] == addr_index(s1_addr)))
@@ -470,7 +477,7 @@ module DCACHE
     logic                victim_valid, victim_dirty, victim_avail;
     logic [TAG_BITS-1:0] victim_tag;
 
-    always_comb begin
+    always @(*) begin
         logic found;
         found        = 1'b0;
         victim_way   = '0;
@@ -526,7 +533,7 @@ module DCACHE
 
     logic s1_can_retire, s1_busy;
 
-    always_comb begin
+    always @(*) begin
         s1_can_retire = 1'b0;
         if (s1_valid && s1_data_ok) begin
             if (s1_is_fence) begin
@@ -563,7 +570,7 @@ module DCACHE
 
     assign amo_result = amo_calc(s1_cmd, s1_size, extract(hit_word, s1_addr[2:0], s1_size), s1_wdata);
 
-    always_comb begin
+    always @(*) begin
         s1_store_hit = 1'b0;
         s1_wr_way    = hit_way;
         s1_wr_addr   = {addr_index(s1_addr), addr_woff(s1_addr)};
@@ -578,7 +585,7 @@ module DCACHE
     //=================================================================
     // Data array write port (fill beat > stage 1)
     //=================================================================
-    always_comb begin
+    always @(*) begin
         if (fill_wr_en) begin
             dat_wr_en   = 1'b1;
             dat_wr_way  = ms_way[ms_head];
@@ -599,7 +606,7 @@ module DCACHE
     //=================================================================
     // Tag write port (fill completion > flush invalidate > store hit)
     //=================================================================
-    always_comb begin
+    always @(*) begin
         tag_wr_en    = 1'b0;
         tag_wr_index = addr_index(s1_addr);
         tag_wr_way   = hit_way;

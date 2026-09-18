@@ -786,6 +786,17 @@ module tb_CACHE;
 
     // fence.i asserted for a few cycles only, without waiting for
     // i_flush_done: a fill started before the pulse must not validate its line
+    // progress heartbeat, +hb=<cycles> (an Icarus run takes a long time)
+    initial begin : heartbeat
+        int hb;
+        if ($value$plusargs("hb=%d", hb) && (hb > 0)) begin
+            forever begin
+                repeat (hb) @(posedge clk);
+                $display("[%0t] ... %0d checks, %0d errors", $time, n_check, n_error);
+            end
+        end
+    end
+
     task automatic i_flush_pulse(input int cycles);
         @(negedge clk);
         i_flush_valid = 1'b1;

@@ -15,6 +15,13 @@
 //   - i_kill drops the response of the request in flight.
 //   - A bus error (SLVERR/DECERR) is reported with i_resp_error and the line
 //     is not cached.
+//
+//   Note on coding style: the combinational blocks are written as
+//   "always @(*)" instead of "always_comb". Icarus Verilog re-triggers an
+//   always_comb process on every assignment to a variable that is read with a
+//   variable index inside the same process, which makes the combinational
+//   network of this module loop forever at one simulation time. "always @(*)"
+//   uses value-change semantics and behaves identically in synthesis.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -137,14 +144,25 @@ module ICACHE
     logic [WAYS-1:0]     rr_way;      // round robin when not random
 
     always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            lfsr   <= 16'hACE1;
-            rr_way <= {{(WAYS-1){1'b0}}, 1'b1};
-        end else begin
-            lfsr <= {lfsr[14:0], lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10]};
-            if (tag_wr_en) rr_way <= {rr_way[WAYS-2:0], rr_way[WAYS-1]};
-        end
+        if (!rst_n) lfsr <= 16'hACE1;
+        else        lfsr <= {lfsr[14:0], lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10]};
     end
+
+    // round robin pointer, rotated by one on every fill. A direct mapped
+    // cache has a single way, and the part select [WAYS-2:0] does not exist
+    // then, so the two cases are separate.
+    generate
+        if (WAYS == 1) begin : g_rr_one_way
+            always_ff @(posedge clk or negedge rst_n) begin
+                if (!rst_n) rr_way <= 1'b1;
+            end
+        end else begin : g_rr_rotate
+            always_ff @(posedge clk or negedge rst_n) begin
+                if (!rst_n)        rr_way <= {{(WAYS-1){1'b0}}, 1'b1};
+                else if (tag_wr_en) rr_way <= {rr_way[WAYS-2:0], rr_way[WAYS-1]};
+            end
+        end
+    endgenerate
 
     function automatic logic [WAY_BITS-1:0] onehot_to_bin(input logic [WAYS-1:0] oh);
         logic [WAY_BITS-1:0] r;
@@ -167,7 +185,7 @@ module ICACHE
     logic                    hit;
     logic [WAY_BITS-1:0]     hit_way;
 
-    always_comb begin
+    always @(*) begin
         for (int w = 0; w < WAYS; w++)
             hit_way_oh[w] = tag_rd_valid[w] &&
                             (tag_rd_tag[w*TAG_BITS +: TAG_BITS] == addr_tag(s1_addr));
@@ -198,7 +216,7 @@ module ICACHE
 
     // response of a hit (the data array output is already registered)
     logic [63:0] hit_data;
-    always_comb begin
+    always @(*) begin
         hit_data = dat_rd_data[hit_way*64 +: 64];
     end
 
