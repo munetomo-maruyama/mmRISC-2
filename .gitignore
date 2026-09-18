@@ -1,1 +1,16 @@
+# reference only (not pushed)
 LitexRocket/
+
+# simulation build artifacts
+obj_dir/
+obj_trace/
+bug_work/
+*.vvp
+*.vcd
+*.log
+*.jou
+
+# Vivado implementation artifacts
+# (TOP.bit / TOP.bin and the *.rpt reports are kept)
+FPGA/*/output/*.dcp
+FPGA/*/output/*.backup.*
