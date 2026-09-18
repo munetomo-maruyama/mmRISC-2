@@ -1,0 +1,195 @@
+# mmRISC-2 L1 キャッシュ 仕様書
+
+- 版: Rev-1 (2026-09-19)
+- 対象: `RTL/CACHE/`(L1 命令/データキャッシュ)、`SIM/SIM_CACHE`(検証)
+- 既定値は LiteX の Rocket `linux` 構成(`LitexConfig_linux_1_1`)と同等とし、
+  セット数・ウェイ数・ブロックサイズ・命令/データ別をパラメータ化する。
+
+---
+
+## 1. 位置づけ
+
+```
+            CPU コア(未実装、いまは SIM_CACHE の CPU BFM)
+              │ 命令フェッチ            │ ロード/ストア/AMO
+              ▼                         ▼
+        ┌───────────┐            ┌───────────┐
+        │  ICACHE   │            │  DCACHE   │  ← 本仕様
+        └─────┬─────┘            └─────┬─────┘
+              │ AXI4 (fill)            │ AXI4 (fill / writeback)
+              └──────────┬─────────────┘
+                    BUS_ARB(2マスタ)
+                         │ メモリバス AXI4        周辺バス AXI4-Lite
+                         ▼                        ▼(非キャッシュ)
+                    CPU_TOP のポート
+```
+
+- MMU は本フェーズでは扱わない。キャッシュは**物理アドレス**を受け取る
+  (PIPT: physically indexed, physically tagged)。MMU 実装後は、TLB 出力の
+  物理アドレスをそのまま渡せばよい。
+- アドレスのビット幅は CPU 側の設定に合わせる(`PADDR_WIDTH`、既定 40)。
+  タグ幅はここから index/offset を引いた残りになる。
+
+---
+
+## 2. パラメータ
+
+### 2.1 共通
+
+| パラメータ | 既定 | 内容 |
+|---|---|---|
+| `PADDR_WIDTH` | 40 | CPU から受け取る物理アドレス幅。CPU_TOP の `AXI4_ADDR_WIDTH` と合わせる |
+| `XLEN` | 64 | データ幅。AXI4 のデータ幅と同じ |
+| `MEM_BASE` | `0x00_8000_0000` | これ以上がキャッシュ対象(メモリバス)。未満は非キャッシュ(周辺バス) |
+| `AXI4_ID_WIDTH` | 4 | メモリバスの ID 幅 |
+
+### 2.2 ICACHE
+
+| パラメータ | 既定 | 内容 |
+|---|---|---|
+| `SETS` | 64 | セット数(2のべき乗) |
+| `WAYS` | 4 | ウェイ数(2のべき乗)。1 は直接写像 |
+| `BLOCK_BYTES` | 64 | ブロックサイズ(2のべき乗、8以上) |
+| `FETCH_WIDTH` | 64 | CPU へ返すフェッチ幅(bit)。RV64GC の圧縮命令の切り出しは CPU 側 |
+| `AXI4_ID` | 2 | fill に使う AXI ID |
+
+既定値は 64×4×64B = **16 KiB**(Rocket `linux` と同じ)。
+
+### 2.3 DCACHE
+
+| パラメータ | 既定 | 内容 |
+|---|---|---|
+| `SETS` | 64 | セット数 |
+| `WAYS` | 4 | ウェイ数 |
+| `BLOCK_BYTES` | 64 | ブロックサイズ |
+| `NUM_MSHR` | 2 | 未完了ミスの保持数(1以上) |
+| `NUM_WB` | 2 | 書き戻しバッファの段数 |
+| `AXI4_ID_FILL` | 3 | fill に使う AXI ID |
+| `AXI4_ID_WB` | 4 | 書き戻しに使う AXI ID |
+
+既定値は 64×4×64B = **16 KiB**。
+
+### 2.4 方式(共通、パラメータ外)
+
+| 項目 | 方式 |
+|---|---|
+| 索引/タグ | 物理アドレス(PIPT) |
+| 置き換え | 疑似 LRU(ツリー)。`REPLACE_RANDOM=1` で LFSR 乱数に切り替え |
+| 書き込み方式 | ライトバック + ライトアロケート(DCACHE) |
+| fill バースト | AXI4 INCR、`ARSIZE=3`(8バイト)、`ARLEN = BLOCK_BYTES/8-1`、ブロック先頭から |
+| 早期応答 | 要求語のビートが届いた時点で CPU へ返す(残りのビートは裏で格納) |
+| 書き戻し | ブロック全体を INCR バーストで書く。`AWLEN = BLOCK_BYTES/8-1` |
+| エラー | fill/書き戻しで SLVERR/DECERR を受けたらそのラインはキャッシュせず、CPU にエラー応答を返す |
+
+---
+
+## 3. CPU 側インタフェース
+
+すべて同期式、`valid`/`ready` ハンドシェイク。応答は**要求と同じ順**で返す。
+
+### 3.1 ICACHE
+
+| 信号 | 方向 | 内容 |
+|---|---|---|
+| `i_req_valid` / `i_req_ready` | in / out | フェッチ要求 |
+| `i_req_addr[PADDR_WIDTH-1:0]` | in | フェッチアドレス(`FETCH_WIDTH/8` バイト境界) |
+| `i_resp_valid` | out | 応答 |
+| `i_resp_data[FETCH_WIDTH-1:0]` | out | フェッチデータ |
+| `i_resp_error` | out | バスエラー |
+| `i_flush_valid` / `i_flush_done` | in / out | 全ライン無効化(`fence.i`) |
+| `i_kill` | in | 未完了の要求を捨てる(分岐予測ミス時)。fill は完了させるが応答は返さない |
+
+### 3.2 DCACHE
+
+| 信号 | 方向 | 内容 |
+|---|---|---|
+| `d_req_valid` / `d_req_ready` | in / out | 要求 |
+| `d_req_addr[PADDR_WIDTH-1:0]` | in | アドレス(アクセスサイズに整列していること) |
+| `d_req_size[1:0]` | in | 0:1byte 1:2byte 2:4byte 3:8byte |
+| `d_req_cmd[3:0]` | in | 3.3 の表 |
+| `d_req_wdata[XLEN-1:0]` | in | 書き込み/AMO データ(下詰め) |
+| `d_resp_valid` | out | 応答 |
+| `d_resp_data[XLEN-1:0]` | out | 読み出しデータ(下詰め、ゼロ拡張)。SC は 0:成功 1:失敗 |
+| `d_resp_error` | out | バスエラー、または非対応操作 |
+
+符号拡張は CPU 側で行う。
+
+### 3.3 コマンド
+
+| 値 | 名前 | 内容 |
+|---|---|---|
+| 0 | `LOAD` | 読み出し |
+| 1 | `STORE` | 書き込み |
+| 2 | `LR` | Load Reserved。予約を張る |
+| 3 | `SC` | Store Conditional。成功で 0、失敗で 1 を返す |
+| 4–12 | `AMOSWAP`,`AMOADD`,`AMOXOR`,`AMOAND`,`AMOOR`,`AMOMIN`,`AMOMAX`,`AMOMINU`,`AMOMAXU` | 32/64bit のみ(`d_req_size` は 2 か 3) |
+| 13 | `FENCE` | 未完了のバスアクセスの完了を待つ |
+| 14 | `FLUSH` | 全ラインを書き戻して無効化する |
+
+### 3.4 LR/SC の規則
+
+- 予約の単位はブロック(`BLOCK_BYTES`)。1ハート分の予約レジスタを1つ持つ。
+- 予約が消える条件:
+  - SC を実行したとき(成功・失敗いずれも)
+  - 同じブロックへの `STORE` / `AMO`(自ハート)
+  - 予約したラインが置き換え・無効化されたとき
+  - `FLUSH`、リセット
+- SC はアドレスが予約と同じブロックで、かつ予約が有効なときだけ成功する。
+
+### 3.5 非キャッシュ領域(`MEM_BASE` 未満)
+
+- `LOAD`/`STORE` は配列を通さず周辺バス(AXI4-Lite)へ出す。
+- `LR`/`SC`/`AMO` は非対応。`d_resp_error` を返す。
+- ICACHE も `MEM_BASE` 未満は配列を通さず、周辺バスから読む(LiteX の ROM 0x1000_0000 を実行するため)。
+
+---
+
+## 4. 内部構成
+
+| モジュール | 置き場所 | 内容 |
+|---|---|---|
+| `CACHE_TAG_ARRAY` | `RTL/CACHE/CACHE_TAG_ARRAY/` | タグ + 有効 + ダーティ。ウェイ数分を並列に読む |
+| `CACHE_DATA_ARRAY` | `RTL/CACHE/CACHE_DATA_ARRAY/` | データ。64bit 単位、バイトイネーブル付き |
+| `ICACHE` | `RTL/CACHE/ICACHE/` | 命令キャッシュ |
+| `DCACHE` | `RTL/CACHE/DCACHE/` | データキャッシュ(MSHR、書き戻し、AMO/LR-SC) |
+| `CPU_CACHE` | `RTL/CACHE/CPU_CACHE/` | 上記のまとめ。`BUS_ARB` で 2 つの AXI4 を 1 本にする |
+
+配列は FPGA の Block RAM 推論を前提とする(同期読み出し、1サイクル遅れ)。
+
+---
+
+## 5. 検証(`SIM/SIM_CACHE`)
+
+| 部品 | 内容 |
+|---|---|
+| CPU BFM | 命令フェッチ / ロード / ストア / AMO / LR / SC / FENCE / FLUSH を発行 |
+| 参照モデル | キャッシュを持たないメモリ像。期待値を計算して比較する |
+| AXI4 スレーブモデル | バースト、遅延、ランダムストール、エラー応答 |
+| AXI4-Lite スレーブモデル | 非キャッシュ領域用 |
+
+検証項目:
+1. ヒット / ミス / 置き換え / ダーティ行の書き戻し
+2. バイト単位の書き込み(1/2/4/8 バイト、全オフセット)
+3. AMO 全種(32bit / 64bit)、符号つき比較の境界値
+4. LR/SC の成功・失敗(別アドレス、置き換え、介在ストア、FLUSH)
+5. `fence.i`(I$ 無効化)、`FENCE`、`FLUSH`
+6. 非キャッシュ領域の読み書き、AMO のエラー応答
+7. バスエラー(SLVERR/DECERR)の扱い
+8. MSHR: 別ラインへの連続ミス、同一ラインへの後続ミスの併合
+9. ランダム試験を参照モデルと突き合わせ(I$/D$ 同時)
+10. パラメータ掃引(セット数・ウェイ数・ブロックサイズ・MSHR 数)
+11. 意図的バグ注入で検証の有効性を確認
+
+---
+
+## 6. 決定事項
+
+| # | 項目 | 決定 |
+|---|---|---|
+| 1 | 既定構成 | Rocket `linux` と同等(I$ / D$ とも 16KiB = 64 セット × 4 ウェイ × 64B) |
+| 2 | アドレス幅 | CPU 設定に合わせる(`PADDR_WIDTH`、既定 40) |
+| 3 | I$ フェッチ幅 | 64bit |
+| 4 | D$ MSHR | 既定 2、パラメータ化 |
+| 5 | 非キャッシュ領域 | `MEM_BASE` 未満は周辺バス(AXI4-Lite)へ。AMO/LR/SC は非対応 |
+| 6 | 置き換え | 疑似 LRU(既定)。パラメータで乱数に切り替え |
+| 7 | 書き込み | ライトバック + ライトアロケート |
