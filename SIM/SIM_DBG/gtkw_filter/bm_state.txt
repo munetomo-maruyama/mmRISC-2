@@ -1,0 +1,5 @@
+0 B_IDLE
+1 B_W_AW_W
+2 B_W_B
+3 B_R_AR
+4 B_R_R

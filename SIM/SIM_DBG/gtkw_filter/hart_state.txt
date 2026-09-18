@@ -1,0 +1,4 @@
+0 H_RESET
+1 H_RUN
+2 H_HALT
+3 H_STEP
