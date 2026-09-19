@@ -2,7 +2,7 @@
 // CPU_CACHE.sv
 //
 // mmRISC-2 L1 cache subsystem : instruction cache + data cache + bus
-// arbitration (RTL/CACHE/CACHE_SPEC.md).
+// arbitration (RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md).
 //
 //   CPU ─ i_* ─> ICACHE ─┐
 //                        ├─ BUS_ARB ─> memory bus AXI4 / peripheral bus AXI4-Lite

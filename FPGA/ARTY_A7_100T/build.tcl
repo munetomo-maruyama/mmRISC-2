@@ -19,13 +19,13 @@ file mkdir $outdir
 set_part $part
 
 read_verilog -sv [list \
-    $rtl/CPU_DBG/DBG_CDC/DBG_CDC.sv \
-    $rtl/CPU_DBG/DBG_CJTAG/DBG_CJTAG.sv \
-    $rtl/CPU_DBG/DBG_DTM/DBG_DTM.sv \
-    $rtl/CPU_DBG/DBG_DM/DBG_DM.sv \
-    $rtl/CPU_DBG/DBG_HART_STUB/DBG_HART_STUB.sv \
-    $rtl/CPU_DBG/DBG_BUSMST/DBG_BUSMST.sv \
-    $rtl/CPU_DBG/CPU_DBG/CPU_DBG.sv \
+    $rtl/CPU/CPU_DBG/DBG_CDC/DBG_CDC.sv \
+    $rtl/CPU/CPU_DBG/DBG_CJTAG/DBG_CJTAG.sv \
+    $rtl/CPU/CPU_DBG/DBG_DTM/DBG_DTM.sv \
+    $rtl/CPU/CPU_DBG/DBG_DM/DBG_DM.sv \
+    $rtl/CPU/CPU_DBG/DBG_HART_STUB/DBG_HART_STUB.sv \
+    $rtl/CPU/CPU_DBG/DBG_BUSMST/DBG_BUSMST.sv \
+    $rtl/CPU/CPU_DBG/CPU_DBG/CPU_DBG.sv \
     $rtl/BUS/BUS_ARB/BUS_ARB.sv \
     $rtl/BUS/AXI4_ADDR_NARROW/AXI4_ADDR_NARROW.sv \
     $rtl/BUS/AXIL_ADDR_NARROW/AXIL_ADDR_NARROW.sv \

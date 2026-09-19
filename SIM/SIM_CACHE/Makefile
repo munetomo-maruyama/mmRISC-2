@@ -1,5 +1,5 @@
 #---------------------------------------------------------------------------
-# Makefile : L1 cache verification (RTL/CACHE)
+# Makefile : L1 cache verification (RTL/CPU/CPU_CACHE)
 #
 #   make            : run with Verilator
 #   make wave       : run with Verilator and dump tb_CACHE.vcd
@@ -20,11 +20,11 @@ RTL_DIR  := ../../RTL
 SIM_CPU  := ../SIM_CPU
 
 RTL_SRCS := \
-	$(RTL_DIR)/CACHE/CACHE_TAG_ARRAY/CACHE_TAG_ARRAY.sv \
-	$(RTL_DIR)/CACHE/CACHE_DATA_ARRAY/CACHE_DATA_ARRAY.sv \
-	$(RTL_DIR)/CACHE/ICACHE/ICACHE.sv \
-	$(RTL_DIR)/CACHE/DCACHE/DCACHE.sv \
-	$(RTL_DIR)/CACHE/CPU_CACHE/CPU_CACHE.sv \
+	$(RTL_DIR)/CPU/CPU_CACHE/CACHE_TAG_ARRAY/CACHE_TAG_ARRAY.sv \
+	$(RTL_DIR)/CPU/CPU_CACHE/CACHE_DATA_ARRAY/CACHE_DATA_ARRAY.sv \
+	$(RTL_DIR)/CPU/CPU_CACHE/ICACHE/ICACHE.sv \
+	$(RTL_DIR)/CPU/CPU_CACHE/DCACHE/DCACHE.sv \
+	$(RTL_DIR)/CPU/CPU_CACHE/CPU_CACHE/CPU_CACHE.sv \
 	$(RTL_DIR)/BUS/BUS_ARB/BUS_ARB.sv \
 	$(RTL_DIR)/BUS/AXI4_ADDR_NARROW/AXI4_ADDR_NARROW.sv \
 	$(RTL_DIR)/BUS/AXIL_ADDR_NARROW/AXIL_ADDR_NARROW.sv

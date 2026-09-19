@@ -1,7 +1,7 @@
 //---------------------------------------------------------------------------
 // tb_CACHE.sv
 //
-// Verification environment for the mmRISC-2 L1 caches (RTL/CACHE).
+// Verification environment for the mmRISC-2 L1 caches (RTL/CPU/CPU_CACHE).
 //
 //   tb_CACHE ── CPU BFM (instruction fetch / load / store / AMO / LR / SC)
 //            ── reference model (cache-less memory image + expected results)
@@ -51,7 +51,7 @@ module tb_CACHE;
     localparam logic [63:0] MEM_INIT  = 64'h0000_0000_0000_0000;
     localparam logic [63:0] PERI_INIT = 64'h1111_0000_0000_0000;
 
-    // commands (RTL/CACHE/CACHE_SPEC.md 3.3)
+    // commands (RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md 3.3)
     localparam logic [3:0] CMD_LOAD     = 4'd0;
     localparam logic [3:0] CMD_STORE    = 4'd1;
     localparam logic [3:0] CMD_LR       = 4'd2;

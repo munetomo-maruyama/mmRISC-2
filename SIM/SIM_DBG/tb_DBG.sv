@@ -1,7 +1,7 @@
 //---------------------------------------------------------------------------
 // tb_DBG.sv
 //
-// Verification of the mmRISC-2 debug logic (RTL/CPU_DBG) through the FPGA
+// Verification of the mmRISC-2 debug logic (RTL/CPU/CPU_DBG) through the FPGA
 // top RTL/TOP/TOP.sv (SIM=1: MMCM bypassed, USE_BFM=1: CPU_BFM enabled).
 //
 //   tb_DBG ── JTAG / cJTAG host BFM ──> TOP (PMOD JA pins)
