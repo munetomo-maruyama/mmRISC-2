@@ -591,6 +591,45 @@ module tb_DBG;
     endtask
 
     //=================================================================
+    // CPU_BFM through the L1 caches (CPU_CACHE inside CPU_TOP)
+    //=================================================================
+    task automatic bfm_cache_exec(input logic [3:0] cmd, input logic [39:0] addr,
+                                  input logic [1:0] size, input logic [63:0] wdata,
+                                  output logic [63:0] rdata, output bit err);
+        u_top.u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_cmd   = cmd;
+        u_top.u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_addr  = addr;
+        u_top.u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_size  = size;
+        u_top.u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_wdata = wdata;
+        u_top.u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_valid = 1'b1;
+        wait (u_top.u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_done === 1'b1);
+        rdata = u_top.u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_rdata;
+        err   = u_top.u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_err;
+        u_top.u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_valid = 1'b0;
+        wait (u_top.u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_done === 1'b0);
+    endtask
+
+    // whitebox : is the line holding `addr` valid in the data cache?
+    // (CPU_TOP defaults: 64 sets x 4 ways x 64 byte)
+    localparam int DC_SETS_TB  = 64;
+    localparam int DC_WAYS_TB  = 4;
+    localparam int DC_BLOCK_TB = 64;
+    localparam int DC_OFF_TB   = $clog2(DC_BLOCK_TB);
+    localparam int DC_IDX_TB   = $clog2(DC_SETS_TB);
+    localparam int DC_TAG_TB   = 40 - DC_IDX_TB - DC_OFF_TB;
+
+    function automatic bit dc_line_present(input logic [39:0] addr);
+        int idx;
+        logic [DC_TAG_TB-1:0] tag;
+        idx = int'(addr[DC_OFF_TB +: DC_IDX_TB]);
+        tag = addr[39 -: DC_TAG_TB];
+        for (int w = 0; w < DC_WAYS_TB; w++)
+            if (u_top.u_cpu_top.u_cpu_cache.u_dcache.u_tag.valid_bit[idx*DC_WAYS_TB + w] &&
+                (u_top.u_cpu_top.u_cpu_cache.u_dcache.u_tag.tag_mem[idx*DC_WAYS_TB + w] == tag))
+                return 1'b1;
+        return 1'b0;
+    endfunction
+
+    //=================================================================
     // Bus stall : the RAMs withhold AWREADY / ARREADY (sim_stall)
     //=================================================================
     task automatic bus_stall(input bit on);

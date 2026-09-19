@@ -1,6 +1,8 @@
 # mmRISC-2 debug logic bring-up on Arty A7-100T
 
-Design: `RTL/TOP/TOP.sv`. It contains CPU_TOP (debug logic + pseudo hart), a 64KiB RAM on the memory bus at 0x8000_0000 and a 4KiB RAM on the peripheral bus at 0x1200_0000.
+Design: `RTL/TOP/TOP.sv`. It contains CPU_TOP (debug logic + pseudo hart + L1 caches), a 64KiB RAM on the memory bus at 0x8000_0000 and a 4KiB RAM on the peripheral bus at 0x1200_0000.
+
+Since the L1 caches were added, **memory bus accesses of the debugger go through the data cache** (`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md` 4.7): a read allocates the line (the next read of that line hits), a write goes through to memory without allocating, and the instruction cache is invalidated after a debug write. Accesses to the peripheral bus still go straight to the bus master.
 
 ## 1. Build (Windows, Vivado 2025.1)
 
@@ -88,3 +90,40 @@ Expected behaviour:
 - Access to 0x1_0000_0000 and above, or outside the two RAMs, returns a bus error.
 
 The same OpenOCD sequence was run against the RTL in simulation (`SIM/SIM_OCD`).
+
+## 5. Memory access through the data cache
+
+The D$ is 16KiB (64 sets x 4 ways x 64 byte), so a 64 byte line covers 16 words
+of `mdw`. The sequence below walks through miss, hit, write hit, write miss and
+a replacement; every step must return the value that was written.
+
+```
+halt
+mww 0x80001000 0x11111111      ; write miss  : straight to memory, no line allocated
+mdw 0x80001000                 ; read miss   : fills the line -> 0x11111111
+mdw 0x80001000                 ; read hit    : same line
+mdw 0x80001004                 ; read hit    : next word of the same line
+mww 0x80001004 0x22222222      ; write hit   : cache and memory are updated
+mdw 0x80001004                 ; read hit    -> 0x22222222
+mdw 0x80001040                 ; read miss   : next line
+mdw 0x80009000                 ; read miss   : far away line
+mdw 0x80001000 16              ; one miss and 15 hits (one line)
+mdw 0x80001000 256             ; 16 lines : 16 misses, 240 hits
+```
+
+Replacement and write-back of the lines the debugger filled:
+
+```
+mww 0x80000000 0xA5A5A5A5
+mdw 0x80000000                 ; fills the line
+load_image test.bin 0x80002000 bin      ; 32KiB of data = every set is refilled twice
+verify_image test.bin 0x80002000 bin    ; read back through the cache
+mdw 0x80000000                 ; the line was replaced: miss again -> 0xA5A5A5A5
+```
+
+Writes are write-through, so the value in memory is always the value the
+debugger wrote, no matter whether the line was in the cache or not. Whether a
+particular access was a hit or a miss cannot be seen from OpenOCD itself (only
+the timing differs, and JTAG dominates that); the hit / miss behaviour of the
+same sequences is checked in simulation against the tag array
+(`SIM/SIM_DBG` section 15 and `SIM/SIM_CACHE` sections 13 and 14).

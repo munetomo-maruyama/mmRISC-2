@@ -30,7 +30,10 @@ module CPU_DBG
         parameter logic [63:0] RESET_VECTOR   = 64'h0000_0000_8000_0000,
         parameter logic [39:0] MEM_BASE       = 40'h00_8000_0000,
         parameter logic [AXI4_ID_WIDTH-1:0] DBG_AXI4_ID = 1,
-        parameter int          SBA_TIMEOUT    = 1 << 20
+        parameter int          SBA_TIMEOUT    = 1 << 20,
+        // 1 : memory bus accesses of the debugger go through the data cache
+        //     (CPU_CACHE_SPEC.md 4.7), 0 : straight to the memory bus
+        parameter int          DBG_VIA_CACHE  = 1
     )
     (
         input  logic        clk,
@@ -118,7 +121,22 @@ module CPU_DBG
         input  logic [63:0]              m_axil_rdata,
         input  logic [1:0]               m_axil_rresp,
         input  logic                     m_axil_rvalid,
-        output logic                     m_axil_rready
+        output logic                     m_axil_rready,
+
+        //-------------------------------------------------------------
+        // Data cache port (DBG_VIA_CACHE = 1). Leave dc_resp_valid low
+        // and dc_req_ready high when the cache is not connected.
+        //-------------------------------------------------------------
+        output logic                     dc_req_valid,
+        input  logic                     dc_req_ready,
+        output logic [ADDR_WIDTH-1:0]    dc_req_addr,
+        output logic [1:0]               dc_req_size,
+        output logic [3:0]               dc_req_cmd,
+        output logic [63:0]              dc_req_wdata,
+        input  logic                     dc_resp_valid,
+        input  logic [63:0]              dc_resp_data,
+        input  logic                     dc_resp_error,
+        output logic                     dc_wrote        // pulse after a write
     );
 
     //=================================================================
@@ -250,6 +268,20 @@ module CPU_DBG
     logic [63:0] bm_wdata, bm_rdata;
     logic [2:0]  bm_err;
 
+    // the request goes to the data cache (cacheable region) or to the bus
+    // master (peripheral bus, and everything when DBG_VIA_CACHE = 0)
+    logic        bm_to_cache, bm_req_cache, bm_req_bus;
+    logic        cache_ack, bus_ack;
+    logic [63:0] cache_rdata, bus_rdata;
+    logic [2:0]  cache_err, bus_err;
+
+    assign bm_to_cache  = (DBG_VIA_CACHE != 0) && (bm_addr >= MEM_BASE);
+    assign bm_req_cache = bm_req &  bm_to_cache;
+    assign bm_req_bus   = bm_req & ~bm_to_cache;
+    assign bm_ack       = cache_ack | bus_ack;
+    assign bm_rdata     = cache_ack ? cache_rdata : bus_rdata;
+    assign bm_err       = cache_ack ? cache_err   : bus_err;
+
     DBG_DM #(.ADDR_WIDTH(ADDR_WIDTH)) u_dm
         (
             .clk               (clk),
@@ -344,14 +376,14 @@ module CPU_DBG
         (
             .clk            (clk),
             .rst_n          (rst_bus_n),
-            .bm_req         (bm_req),
+            .bm_req         (bm_req_bus),
             .bm_wr          (bm_wr),
             .bm_addr        (bm_addr),
             .bm_size        (bm_size),
             .bm_wdata       (bm_wdata),
-            .bm_ack         (bm_ack),
-            .bm_rdata       (bm_rdata),
-            .bm_err         (bm_err),
+            .bm_ack         (bus_ack),
+            .bm_rdata       (bus_rdata),
+            .bm_err         (bus_err),
             .m_axi4_awid    (m_axi4_awid),
             .m_axi4_awaddr  (m_axi4_awaddr),
             .m_axi4_awlen   (m_axi4_awlen),
@@ -409,5 +441,52 @@ module CPU_DBG
             .m_axil_rvalid  (m_axil_rvalid),
             .m_axil_rready  (m_axil_rready)
         );
+
+    //=================================================================
+    // Data cache port of the debugger (CPU_CACHE_SPEC.md 4.7)
+    //=================================================================
+    generate
+        if (DBG_VIA_CACHE != 0) begin : g_dbg_cache
+            DBG_CACHE
+                #(
+                    .ADDR_WIDTH     (ADDR_WIDTH),
+                    .TIMEOUT_CYCLES (SBA_TIMEOUT)
+                )
+            u_dbg_cache
+                (
+                    .clk           (clk),
+                    .rst_n         (rst_bus_n),
+                    .bm_req        (bm_req_cache),
+                    .bm_wr         (bm_wr),
+                    .bm_addr       (bm_addr),
+                    .bm_size       (bm_size),
+                    .bm_wdata      (bm_wdata),
+                    .bm_ack        (cache_ack),
+                    .bm_rdata      (cache_rdata),
+                    .bm_err        (cache_err),
+                    .dc_req_valid  (dc_req_valid),
+                    .dc_req_ready  (dc_req_ready),
+                    .dc_req_addr   (dc_req_addr),
+                    .dc_req_size   (dc_req_size),
+                    .dc_req_cmd    (dc_req_cmd),
+                    .dc_req_wdata  (dc_req_wdata),
+                    .dc_resp_valid (dc_resp_valid),
+                    .dc_resp_data  (dc_resp_data),
+                    .dc_resp_error (dc_resp_error),
+                    .busy          (),
+                    .wrote         (dc_wrote)
+                );
+        end else begin : g_no_dbg_cache
+            assign cache_ack    = 1'b0;
+            assign cache_rdata  = '0;
+            assign cache_err    = 3'd0;
+            assign dc_req_valid = 1'b0;
+            assign dc_req_addr  = '0;
+            assign dc_req_size  = 2'd0;
+            assign dc_req_cmd   = 4'd0;
+            assign dc_req_wdata = '0;
+            assign dc_wrote     = 1'b0;
+        end
+    endgenerate
 
 endmodule : CPU_DBG

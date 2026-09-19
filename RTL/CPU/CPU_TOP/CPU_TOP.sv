@@ -61,6 +61,23 @@ module CPU_TOP
         parameter logic [AXI4_ID_WIDTH-1:0] DBG_AXI4_ID = 1,
         parameter int          SBA_TIMEOUT  = 1 << 20,               // clk cycles
 
+        // L1 caches (RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md)
+        parameter int          IC_SETS        = 64,
+        parameter int          IC_WAYS        = 4,
+        parameter int          IC_BLOCK_BYTES = 64,
+        parameter int          DC_SETS        = 64,
+        parameter int          DC_WAYS        = 4,
+        parameter int          DC_BLOCK_BYTES = 64,
+        parameter int          DC_NUM_MSHR    = 2,
+        parameter int          DC_NUM_WB      = 2,
+        parameter int          CACHE_REPLACE_RANDOM = 0,
+        parameter logic [3:0]  CACHE_AXI4_ID_IFILL  = 4'd2,
+        parameter logic [3:0]  CACHE_AXI4_ID_DFILL  = 4'd3,
+        parameter logic [3:0]  CACHE_AXI4_ID_DWB    = 4'd4,
+
+        // 1: memory bus accesses of the debugger go through the data cache
+        parameter int          DBG_VIA_CACHE = 1,
+
         // 1: instantiate the temporary BFM (simulation)
         parameter int          USE_BFM      = 1
     )
@@ -306,6 +323,150 @@ module CPU_TOP
     logic                          cpu_axil_rvalid;
     logic                          cpu_axil_rready;
 
+    // temporary BFM (USE_BFM=1), raw bus access
+    logic [AXI4_ID_WIDTH-1:0]      bfm_axi4_awid;
+    logic [AXI4_ADDR_WIDTH-1:0]    bfm_axi4_awaddr;
+    logic [7:0]                    bfm_axi4_awlen;
+    logic [2:0]                    bfm_axi4_awsize;
+    logic [1:0]                    bfm_axi4_awburst;
+    logic                          bfm_axi4_awlock;
+    logic [3:0]                    bfm_axi4_awcache;
+    logic [2:0]                    bfm_axi4_awprot;
+    logic [3:0]                    bfm_axi4_awqos;
+    logic                          bfm_axi4_awvalid;
+    logic                          bfm_axi4_awready;
+    logic [AXI4_DATA_WIDTH-1:0]    bfm_axi4_wdata;
+    logic [AXI4_DATA_WIDTH/8-1:0]  bfm_axi4_wstrb;
+    logic                          bfm_axi4_wlast;
+    logic                          bfm_axi4_wvalid;
+    logic                          bfm_axi4_wready;
+    logic [AXI4_ID_WIDTH-1:0]      bfm_axi4_bid;
+    logic [1:0]                    bfm_axi4_bresp;
+    logic                          bfm_axi4_bvalid;
+    logic                          bfm_axi4_bready;
+    logic [AXI4_ID_WIDTH-1:0]      bfm_axi4_arid;
+    logic [AXI4_ADDR_WIDTH-1:0]    bfm_axi4_araddr;
+    logic [7:0]                    bfm_axi4_arlen;
+    logic [2:0]                    bfm_axi4_arsize;
+    logic [1:0]                    bfm_axi4_arburst;
+    logic                          bfm_axi4_arlock;
+    logic [3:0]                    bfm_axi4_arcache;
+    logic [2:0]                    bfm_axi4_arprot;
+    logic [3:0]                    bfm_axi4_arqos;
+    logic                          bfm_axi4_arvalid;
+    logic                          bfm_axi4_arready;
+    logic [AXI4_ID_WIDTH-1:0]      bfm_axi4_rid;
+    logic [AXI4_DATA_WIDTH-1:0]    bfm_axi4_rdata;
+    logic [1:0]                    bfm_axi4_rresp;
+    logic                          bfm_axi4_rlast;
+    logic                          bfm_axi4_rvalid;
+    logic                          bfm_axi4_rready;
+
+    logic [AXIL_ADDR_WIDTH-1:0]    bfm_axil_awaddr;
+    logic [2:0]                    bfm_axil_awprot;
+    logic                          bfm_axil_awvalid;
+    logic                          bfm_axil_awready;
+    logic [AXIL_DATA_WIDTH-1:0]    bfm_axil_wdata;
+    logic [AXIL_DATA_WIDTH/8-1:0]  bfm_axil_wstrb;
+    logic                          bfm_axil_wvalid;
+    logic                          bfm_axil_wready;
+    logic [1:0]                    bfm_axil_bresp;
+    logic                          bfm_axil_bvalid;
+    logic                          bfm_axil_bready;
+    logic [AXIL_ADDR_WIDTH-1:0]    bfm_axil_araddr;
+    logic [2:0]                    bfm_axil_arprot;
+    logic                          bfm_axil_arvalid;
+    logic                          bfm_axil_arready;
+    logic [AXIL_DATA_WIDTH-1:0]    bfm_axil_rdata;
+    logic [1:0]                    bfm_axil_rresp;
+    logic                          bfm_axil_rvalid;
+    logic                          bfm_axil_rready;
+
+    // L1 caches (CPU_CACHE)
+    logic [AXI4_ID_WIDTH-1:0]      cc_axi4_awid;
+    logic [AXI4_ADDR_WIDTH-1:0]    cc_axi4_awaddr;
+    logic [7:0]                    cc_axi4_awlen;
+    logic [2:0]                    cc_axi4_awsize;
+    logic [1:0]                    cc_axi4_awburst;
+    logic                          cc_axi4_awlock;
+    logic [3:0]                    cc_axi4_awcache;
+    logic [2:0]                    cc_axi4_awprot;
+    logic [3:0]                    cc_axi4_awqos;
+    logic                          cc_axi4_awvalid;
+    logic                          cc_axi4_awready;
+    logic [AXI4_DATA_WIDTH-1:0]    cc_axi4_wdata;
+    logic [AXI4_DATA_WIDTH/8-1:0]  cc_axi4_wstrb;
+    logic                          cc_axi4_wlast;
+    logic                          cc_axi4_wvalid;
+    logic                          cc_axi4_wready;
+    logic [AXI4_ID_WIDTH-1:0]      cc_axi4_bid;
+    logic [1:0]                    cc_axi4_bresp;
+    logic                          cc_axi4_bvalid;
+    logic                          cc_axi4_bready;
+    logic [AXI4_ID_WIDTH-1:0]      cc_axi4_arid;
+    logic [AXI4_ADDR_WIDTH-1:0]    cc_axi4_araddr;
+    logic [7:0]                    cc_axi4_arlen;
+    logic [2:0]                    cc_axi4_arsize;
+    logic [1:0]                    cc_axi4_arburst;
+    logic                          cc_axi4_arlock;
+    logic [3:0]                    cc_axi4_arcache;
+    logic [2:0]                    cc_axi4_arprot;
+    logic [3:0]                    cc_axi4_arqos;
+    logic                          cc_axi4_arvalid;
+    logic                          cc_axi4_arready;
+    logic [AXI4_ID_WIDTH-1:0]      cc_axi4_rid;
+    logic [AXI4_DATA_WIDTH-1:0]    cc_axi4_rdata;
+    logic [1:0]                    cc_axi4_rresp;
+    logic                          cc_axi4_rlast;
+    logic                          cc_axi4_rvalid;
+    logic                          cc_axi4_rready;
+
+    logic [AXIL_ADDR_WIDTH-1:0]    cc_axil_awaddr;
+    logic [2:0]                    cc_axil_awprot;
+    logic                          cc_axil_awvalid;
+    logic                          cc_axil_awready;
+    logic [AXIL_DATA_WIDTH-1:0]    cc_axil_wdata;
+    logic [AXIL_DATA_WIDTH/8-1:0]  cc_axil_wstrb;
+    logic                          cc_axil_wvalid;
+    logic                          cc_axil_wready;
+    logic [1:0]                    cc_axil_bresp;
+    logic                          cc_axil_bvalid;
+    logic                          cc_axil_bready;
+    logic [AXIL_ADDR_WIDTH-1:0]    cc_axil_araddr;
+    logic [2:0]                    cc_axil_arprot;
+    logic                          cc_axil_arvalid;
+    logic                          cc_axil_arready;
+    logic [AXIL_DATA_WIDTH-1:0]    cc_axil_rdata;
+    logic [1:0]                    cc_axil_rresp;
+    logic                          cc_axil_rvalid;
+    logic                          cc_axil_rready;
+
+    // cache ports
+    logic                       bfm_i_req_valid, bfm_i_req_ready, bfm_i_kill;
+    logic [AXI4_ADDR_WIDTH-1:0] bfm_i_req_addr;
+    logic                       cc_i_resp_valid, cc_i_resp_error;
+    logic [63:0]                cc_i_resp_data;
+    logic                       cc_i_flush_valid, cc_i_flush_done;
+    logic                       bfm_i_flush_valid;
+
+    logic                       bfm_d_req_valid, bfm_d_req_ready;
+    logic [AXI4_ADDR_WIDTH-1:0] bfm_d_req_addr;
+    logic [1:0]                 bfm_d_req_size;
+    logic [3:0]                 bfm_d_req_cmd;
+    logic [63:0]                bfm_d_req_wdata;
+    logic                       cc_d_resp_valid, cc_d_resp_error;
+    logic [63:0]                cc_d_resp_data;
+
+    // debug side of the data cache
+    logic                       dbg_dc_req_valid, dbg_dc_req_ready;
+    logic [AXI4_ADDR_WIDTH-1:0] dbg_dc_req_addr;
+    logic [1:0]                 dbg_dc_req_size;
+    logic [3:0]                 dbg_dc_req_cmd;
+    logic [63:0]                dbg_dc_req_wdata;
+    logic                       dbg_dc_resp_valid, dbg_dc_resp_error;
+    logic [63:0]                dbg_dc_resp_data;
+    logic                       dbg_dc_wrote;
+
     logic rst_bus_n;   // system reset synchronized to clk, includes ndmreset
 
     //=================================================================
@@ -324,7 +485,8 @@ module CPU_TOP
             .RESET_VECTOR  (RESET_VECTOR),
             .MEM_BASE      (MEM_BASE),
             .DBG_AXI4_ID   (DBG_AXI4_ID),
-            .SBA_TIMEOUT   (SBA_TIMEOUT)
+            .SBA_TIMEOUT   (SBA_TIMEOUT),
+            .DBG_VIA_CACHE (DBG_VIA_CACHE)
         )
     u_cpu_dbg
         (
@@ -404,7 +566,339 @@ module CPU_TOP
             .m_axil_rdata    (dbg_axil_rdata),
             .m_axil_rresp    (dbg_axil_rresp),
             .m_axil_rvalid   (dbg_axil_rvalid),
-            .m_axil_rready   (dbg_axil_rready)
+            .m_axil_rready   (dbg_axil_rready),
+
+            .dc_req_valid    (dbg_dc_req_valid),
+            .dc_req_ready    (dbg_dc_req_ready),
+            .dc_req_addr     (dbg_dc_req_addr),
+            .dc_req_size     (dbg_dc_req_size),
+            .dc_req_cmd      (dbg_dc_req_cmd),
+            .dc_req_wdata    (dbg_dc_req_wdata),
+            .dc_resp_valid   (dbg_dc_resp_valid),
+            .dc_resp_data    (dbg_dc_resp_data),
+            .dc_resp_error   (dbg_dc_resp_error),
+            .dc_wrote        (dbg_dc_wrote)
+        );
+
+    //=================================================================
+    // A debug write may have changed instruction memory, so the
+    // instruction cache is invalidated afterwards (fence.i on behalf of
+    // the debugger, CPU_CACHE_SPEC.md 4.7)
+    //=================================================================
+    logic ic_inv_req;
+
+    always_ff @(posedge clk or negedge rst_bus_n) begin
+        if (!rst_bus_n)                            ic_inv_req <= 1'b0;
+        else if (dbg_dc_wrote)                     ic_inv_req <= 1'b1;
+        else if (ic_inv_req && cc_i_flush_done)    ic_inv_req <= 1'b0;
+    end
+
+    assign cc_i_flush_valid = ic_inv_req | bfm_i_flush_valid;
+
+    //=================================================================
+    // L1 caches (CPU_CACHE_SPEC.md)
+    //   CPU side  : the temporary BFM (the CPU core takes over later)
+    //   debug side: memory bus accesses of the debugger, so that the
+    //               debugger and the CPU see the same data (4.7)
+    //=================================================================
+    CPU_CACHE
+        #(
+            .PADDR_WIDTH    (AXI4_ADDR_WIDTH),
+            .XLEN           (64),
+            .MEM_BASE       (MEM_BASE),
+            .IC_SETS        (IC_SETS),
+            .IC_WAYS        (IC_WAYS),
+            .IC_BLOCK_BYTES (IC_BLOCK_BYTES),
+            .FETCH_WIDTH    (64),
+            .DC_SETS        (DC_SETS),
+            .DC_WAYS        (DC_WAYS),
+            .DC_BLOCK_BYTES (DC_BLOCK_BYTES),
+            .NUM_MSHR       (DC_NUM_MSHR),
+            .NUM_WB         (DC_NUM_WB),
+            .REPLACE_RANDOM (CACHE_REPLACE_RANDOM),
+            .AXI4_ID_WIDTH  (AXI4_ID_WIDTH),
+            .AXI4_ID_IFILL  (CACHE_AXI4_ID_IFILL),
+            .AXI4_ID_DFILL  (CACHE_AXI4_ID_DFILL),
+            .AXI4_ID_DWB    (CACHE_AXI4_ID_DWB)
+        )
+    u_cpu_cache
+        (
+            .clk             (clk),
+            .rst_n           (rst_bus_n),
+            .i_req_valid     (bfm_i_req_valid),
+            .i_req_ready     (bfm_i_req_ready),
+            .i_req_addr      (bfm_i_req_addr),
+            .i_resp_valid    (cc_i_resp_valid),
+            .i_resp_data     (cc_i_resp_data),
+            .i_resp_error    (cc_i_resp_error),
+            .i_flush_valid   (cc_i_flush_valid),
+            .i_flush_done    (cc_i_flush_done),
+            .i_kill          (bfm_i_kill),
+            .d_req_valid     (bfm_d_req_valid),
+            .d_req_ready     (bfm_d_req_ready),
+            .d_req_addr      (bfm_d_req_addr),
+            .d_req_size      (bfm_d_req_size),
+            .d_req_cmd       (bfm_d_req_cmd),
+            .d_req_wdata     (bfm_d_req_wdata),
+            .d_resp_valid    (cc_d_resp_valid),
+            .d_resp_data     (cc_d_resp_data),
+            .d_resp_error    (cc_d_resp_error),
+            .dbg_req_valid   (dbg_dc_req_valid),
+            .dbg_req_ready   (dbg_dc_req_ready),
+            .dbg_req_addr    (dbg_dc_req_addr),
+            .dbg_req_size    (dbg_dc_req_size),
+            .dbg_req_cmd     (dbg_dc_req_cmd),
+            .dbg_req_wdata   (dbg_dc_req_wdata),
+            .dbg_resp_valid  (dbg_dc_resp_valid),
+            .dbg_resp_data   (dbg_dc_resp_data),
+            .dbg_resp_error  (dbg_dc_resp_error),
+            .m_axi4_awid     (cc_axi4_awid),
+            .m_axi4_awaddr   (cc_axi4_awaddr),
+            .m_axi4_awlen    (cc_axi4_awlen),
+            .m_axi4_awsize   (cc_axi4_awsize),
+            .m_axi4_awburst  (cc_axi4_awburst),
+            .m_axi4_awlock   (cc_axi4_awlock),
+            .m_axi4_awcache  (cc_axi4_awcache),
+            .m_axi4_awprot   (cc_axi4_awprot),
+            .m_axi4_awqos    (cc_axi4_awqos),
+            .m_axi4_awvalid  (cc_axi4_awvalid),
+            .m_axi4_awready  (cc_axi4_awready),
+            .m_axi4_wdata    (cc_axi4_wdata),
+            .m_axi4_wstrb    (cc_axi4_wstrb),
+            .m_axi4_wlast    (cc_axi4_wlast),
+            .m_axi4_wvalid   (cc_axi4_wvalid),
+            .m_axi4_wready   (cc_axi4_wready),
+            .m_axi4_bid      (cc_axi4_bid),
+            .m_axi4_bresp    (cc_axi4_bresp),
+            .m_axi4_bvalid   (cc_axi4_bvalid),
+            .m_axi4_bready   (cc_axi4_bready),
+            .m_axi4_arid     (cc_axi4_arid),
+            .m_axi4_araddr   (cc_axi4_araddr),
+            .m_axi4_arlen    (cc_axi4_arlen),
+            .m_axi4_arsize   (cc_axi4_arsize),
+            .m_axi4_arburst  (cc_axi4_arburst),
+            .m_axi4_arlock   (cc_axi4_arlock),
+            .m_axi4_arcache  (cc_axi4_arcache),
+            .m_axi4_arprot   (cc_axi4_arprot),
+            .m_axi4_arqos    (cc_axi4_arqos),
+            .m_axi4_arvalid  (cc_axi4_arvalid),
+            .m_axi4_arready  (cc_axi4_arready),
+            .m_axi4_rid      (cc_axi4_rid),
+            .m_axi4_rdata    (cc_axi4_rdata),
+            .m_axi4_rresp    (cc_axi4_rresp),
+            .m_axi4_rlast    (cc_axi4_rlast),
+            .m_axi4_rvalid   (cc_axi4_rvalid),
+            .m_axi4_rready   (cc_axi4_rready),
+            .m_axil_awaddr   (cc_axil_awaddr),
+            .m_axil_awprot   (cc_axil_awprot),
+            .m_axil_awvalid  (cc_axil_awvalid),
+            .m_axil_awready  (cc_axil_awready),
+            .m_axil_wdata    (cc_axil_wdata),
+            .m_axil_wstrb    (cc_axil_wstrb),
+            .m_axil_wvalid   (cc_axil_wvalid),
+            .m_axil_wready   (cc_axil_wready),
+            .m_axil_bresp    (cc_axil_bresp),
+            .m_axil_bvalid   (cc_axil_bvalid),
+            .m_axil_bready   (cc_axil_bready),
+            .m_axil_araddr   (cc_axil_araddr),
+            .m_axil_arprot   (cc_axil_arprot),
+            .m_axil_arvalid  (cc_axil_arvalid),
+            .m_axil_arready  (cc_axil_arready),
+            .m_axil_rdata    (cc_axil_rdata),
+            .m_axil_rresp    (cc_axil_rresp),
+            .m_axil_rvalid   (cc_axil_rvalid),
+            .m_axil_rready   (cc_axil_rready)
+        );
+
+    //=================================================================
+    // CPU side arbiter : s0 = L1 caches, s1 = temporary BFM (raw bus)
+    //
+    // The BFM can drive the buses directly (bus level tests of SIM_CPU) as
+    // well as through the caches. Both are merged here, so that the debug
+    // master still sees a single CPU master in u_bus_arb. This arbiter goes
+    // away together with the BFM.
+    //=================================================================
+    BUS_ARB
+        #(
+            .AXI4_ID_WIDTH   (AXI4_ID_WIDTH),
+            .AXI4_ADDR_WIDTH (AXI4_ADDR_WIDTH),
+            .AXI4_DATA_WIDTH (AXI4_DATA_WIDTH),
+            .AXIL_ADDR_WIDTH (AXIL_ADDR_WIDTH),
+            .AXIL_DATA_WIDTH (AXIL_DATA_WIDTH)
+        )
+    u_bus_arb_cpu
+        (
+            .clk             (clk),
+            .rst_n           (rst_bus_n),
+
+            .s0_axi4_awid    (cc_axi4_awid),
+            .s0_axi4_awaddr  (cc_axi4_awaddr),
+            .s0_axi4_awlen   (cc_axi4_awlen),
+            .s0_axi4_awsize  (cc_axi4_awsize),
+            .s0_axi4_awburst (cc_axi4_awburst),
+            .s0_axi4_awlock  (cc_axi4_awlock),
+            .s0_axi4_awcache (cc_axi4_awcache),
+            .s0_axi4_awprot  (cc_axi4_awprot),
+            .s0_axi4_awqos   (cc_axi4_awqos),
+            .s0_axi4_awvalid (cc_axi4_awvalid),
+            .s0_axi4_awready (cc_axi4_awready),
+            .s0_axi4_wdata   (cc_axi4_wdata),
+            .s0_axi4_wstrb   (cc_axi4_wstrb),
+            .s0_axi4_wlast   (cc_axi4_wlast),
+            .s0_axi4_wvalid  (cc_axi4_wvalid),
+            .s0_axi4_wready  (cc_axi4_wready),
+            .s0_axi4_bid     (cc_axi4_bid),
+            .s0_axi4_bresp   (cc_axi4_bresp),
+            .s0_axi4_bvalid  (cc_axi4_bvalid),
+            .s0_axi4_bready  (cc_axi4_bready),
+            .s0_axi4_arid    (cc_axi4_arid),
+            .s0_axi4_araddr  (cc_axi4_araddr),
+            .s0_axi4_arlen   (cc_axi4_arlen),
+            .s0_axi4_arsize  (cc_axi4_arsize),
+            .s0_axi4_arburst (cc_axi4_arburst),
+            .s0_axi4_arlock  (cc_axi4_arlock),
+            .s0_axi4_arcache (cc_axi4_arcache),
+            .s0_axi4_arprot  (cc_axi4_arprot),
+            .s0_axi4_arqos   (cc_axi4_arqos),
+            .s0_axi4_arvalid (cc_axi4_arvalid),
+            .s0_axi4_arready (cc_axi4_arready),
+            .s0_axi4_rid     (cc_axi4_rid),
+            .s0_axi4_rdata   (cc_axi4_rdata),
+            .s0_axi4_rresp   (cc_axi4_rresp),
+            .s0_axi4_rlast   (cc_axi4_rlast),
+            .s0_axi4_rvalid  (cc_axi4_rvalid),
+            .s0_axi4_rready  (cc_axi4_rready),
+            .s1_axi4_awid    (bfm_axi4_awid),
+            .s1_axi4_awaddr  (bfm_axi4_awaddr),
+            .s1_axi4_awlen   (bfm_axi4_awlen),
+            .s1_axi4_awsize  (bfm_axi4_awsize),
+            .s1_axi4_awburst (bfm_axi4_awburst),
+            .s1_axi4_awlock  (bfm_axi4_awlock),
+            .s1_axi4_awcache (bfm_axi4_awcache),
+            .s1_axi4_awprot  (bfm_axi4_awprot),
+            .s1_axi4_awqos   (bfm_axi4_awqos),
+            .s1_axi4_awvalid (bfm_axi4_awvalid),
+            .s1_axi4_awready (bfm_axi4_awready),
+            .s1_axi4_wdata   (bfm_axi4_wdata),
+            .s1_axi4_wstrb   (bfm_axi4_wstrb),
+            .s1_axi4_wlast   (bfm_axi4_wlast),
+            .s1_axi4_wvalid  (bfm_axi4_wvalid),
+            .s1_axi4_wready  (bfm_axi4_wready),
+            .s1_axi4_bid     (bfm_axi4_bid),
+            .s1_axi4_bresp   (bfm_axi4_bresp),
+            .s1_axi4_bvalid  (bfm_axi4_bvalid),
+            .s1_axi4_bready  (bfm_axi4_bready),
+            .s1_axi4_arid    (bfm_axi4_arid),
+            .s1_axi4_araddr  (bfm_axi4_araddr),
+            .s1_axi4_arlen   (bfm_axi4_arlen),
+            .s1_axi4_arsize  (bfm_axi4_arsize),
+            .s1_axi4_arburst (bfm_axi4_arburst),
+            .s1_axi4_arlock  (bfm_axi4_arlock),
+            .s1_axi4_arcache (bfm_axi4_arcache),
+            .s1_axi4_arprot  (bfm_axi4_arprot),
+            .s1_axi4_arqos   (bfm_axi4_arqos),
+            .s1_axi4_arvalid (bfm_axi4_arvalid),
+            .s1_axi4_arready (bfm_axi4_arready),
+            .s1_axi4_rid     (bfm_axi4_rid),
+            .s1_axi4_rdata   (bfm_axi4_rdata),
+            .s1_axi4_rresp   (bfm_axi4_rresp),
+            .s1_axi4_rlast   (bfm_axi4_rlast),
+            .s1_axi4_rvalid  (bfm_axi4_rvalid),
+            .s1_axi4_rready  (bfm_axi4_rready),
+            .m_axi4_awid     (cpu_axi4_awid),
+            .m_axi4_awaddr   (cpu_axi4_awaddr),
+            .m_axi4_awlen    (cpu_axi4_awlen),
+            .m_axi4_awsize   (cpu_axi4_awsize),
+            .m_axi4_awburst  (cpu_axi4_awburst),
+            .m_axi4_awlock   (cpu_axi4_awlock),
+            .m_axi4_awcache  (cpu_axi4_awcache),
+            .m_axi4_awprot   (cpu_axi4_awprot),
+            .m_axi4_awqos    (cpu_axi4_awqos),
+            .m_axi4_awvalid  (cpu_axi4_awvalid),
+            .m_axi4_awready  (cpu_axi4_awready),
+            .m_axi4_wdata    (cpu_axi4_wdata),
+            .m_axi4_wstrb    (cpu_axi4_wstrb),
+            .m_axi4_wlast    (cpu_axi4_wlast),
+            .m_axi4_wvalid   (cpu_axi4_wvalid),
+            .m_axi4_wready   (cpu_axi4_wready),
+            .m_axi4_bid      (cpu_axi4_bid),
+            .m_axi4_bresp    (cpu_axi4_bresp),
+            .m_axi4_bvalid   (cpu_axi4_bvalid),
+            .m_axi4_bready   (cpu_axi4_bready),
+            .m_axi4_arid     (cpu_axi4_arid),
+            .m_axi4_araddr   (cpu_axi4_araddr),
+            .m_axi4_arlen    (cpu_axi4_arlen),
+            .m_axi4_arsize   (cpu_axi4_arsize),
+            .m_axi4_arburst  (cpu_axi4_arburst),
+            .m_axi4_arlock   (cpu_axi4_arlock),
+            .m_axi4_arcache  (cpu_axi4_arcache),
+            .m_axi4_arprot   (cpu_axi4_arprot),
+            .m_axi4_arqos    (cpu_axi4_arqos),
+            .m_axi4_arvalid  (cpu_axi4_arvalid),
+            .m_axi4_arready  (cpu_axi4_arready),
+            .m_axi4_rid      (cpu_axi4_rid),
+            .m_axi4_rdata    (cpu_axi4_rdata),
+            .m_axi4_rresp    (cpu_axi4_rresp),
+            .m_axi4_rlast    (cpu_axi4_rlast),
+            .m_axi4_rvalid   (cpu_axi4_rvalid),
+            .m_axi4_rready   (cpu_axi4_rready),
+            .s0_axil_awaddr  (cc_axil_awaddr),
+            .s0_axil_awprot  (cc_axil_awprot),
+            .s0_axil_awvalid (cc_axil_awvalid),
+            .s0_axil_awready (cc_axil_awready),
+            .s0_axil_wdata   (cc_axil_wdata),
+            .s0_axil_wstrb   (cc_axil_wstrb),
+            .s0_axil_wvalid  (cc_axil_wvalid),
+            .s0_axil_wready  (cc_axil_wready),
+            .s0_axil_bresp   (cc_axil_bresp),
+            .s0_axil_bvalid  (cc_axil_bvalid),
+            .s0_axil_bready  (cc_axil_bready),
+            .s0_axil_araddr  (cc_axil_araddr),
+            .s0_axil_arprot  (cc_axil_arprot),
+            .s0_axil_arvalid (cc_axil_arvalid),
+            .s0_axil_arready (cc_axil_arready),
+            .s0_axil_rdata   (cc_axil_rdata),
+            .s0_axil_rresp   (cc_axil_rresp),
+            .s0_axil_rvalid  (cc_axil_rvalid),
+            .s0_axil_rready  (cc_axil_rready),
+            .s1_axil_awaddr  (bfm_axil_awaddr),
+            .s1_axil_awprot  (bfm_axil_awprot),
+            .s1_axil_awvalid (bfm_axil_awvalid),
+            .s1_axil_awready (bfm_axil_awready),
+            .s1_axil_wdata   (bfm_axil_wdata),
+            .s1_axil_wstrb   (bfm_axil_wstrb),
+            .s1_axil_wvalid  (bfm_axil_wvalid),
+            .s1_axil_wready  (bfm_axil_wready),
+            .s1_axil_bresp   (bfm_axil_bresp),
+            .s1_axil_bvalid  (bfm_axil_bvalid),
+            .s1_axil_bready  (bfm_axil_bready),
+            .s1_axil_araddr  (bfm_axil_araddr),
+            .s1_axil_arprot  (bfm_axil_arprot),
+            .s1_axil_arvalid (bfm_axil_arvalid),
+            .s1_axil_arready (bfm_axil_arready),
+            .s1_axil_rdata   (bfm_axil_rdata),
+            .s1_axil_rresp   (bfm_axil_rresp),
+            .s1_axil_rvalid  (bfm_axil_rvalid),
+            .s1_axil_rready  (bfm_axil_rready),
+            .m_axil_awaddr   (cpu_axil_awaddr),
+            .m_axil_awprot   (cpu_axil_awprot),
+            .m_axil_awvalid  (cpu_axil_awvalid),
+            .m_axil_awready  (cpu_axil_awready),
+            .m_axil_wdata    (cpu_axil_wdata),
+            .m_axil_wstrb    (cpu_axil_wstrb),
+            .m_axil_wvalid   (cpu_axil_wvalid),
+            .m_axil_wready   (cpu_axil_wready),
+            .m_axil_bresp    (cpu_axil_bresp),
+            .m_axil_bvalid   (cpu_axil_bvalid),
+            .m_axil_bready   (cpu_axil_bready),
+            .m_axil_araddr   (cpu_axil_araddr),
+            .m_axil_arprot   (cpu_axil_arprot),
+            .m_axil_arvalid  (cpu_axil_arvalid),
+            .m_axil_arready  (cpu_axil_arready),
+            .m_axil_rdata    (cpu_axil_rdata),
+            .m_axil_rresp    (cpu_axil_rresp),
+            .m_axil_rvalid   (cpu_axil_rvalid),
+            .m_axil_rready   (cpu_axil_rready)
         );
 
     //=================================================================
@@ -617,102 +1111,133 @@ module CPU_TOP
                     .clk             (clk),
                     .rst_n           (rst_bus_n),
 
-                    .m_axi4_awid     (cpu_axi4_awid),
-                    .m_axi4_awaddr   (cpu_axi4_awaddr),
-                    .m_axi4_awlen    (cpu_axi4_awlen),
-                    .m_axi4_awsize   (cpu_axi4_awsize),
-                    .m_axi4_awburst  (cpu_axi4_awburst),
-                    .m_axi4_awlock   (cpu_axi4_awlock),
-                    .m_axi4_awcache  (cpu_axi4_awcache),
-                    .m_axi4_awprot   (cpu_axi4_awprot),
-                    .m_axi4_awqos    (cpu_axi4_awqos),
-                    .m_axi4_awvalid  (cpu_axi4_awvalid),
-                    .m_axi4_awready  (cpu_axi4_awready),
-                    .m_axi4_wdata    (cpu_axi4_wdata),
-                    .m_axi4_wstrb    (cpu_axi4_wstrb),
-                    .m_axi4_wlast    (cpu_axi4_wlast),
-                    .m_axi4_wvalid   (cpu_axi4_wvalid),
-                    .m_axi4_wready   (cpu_axi4_wready),
-                    .m_axi4_bid      (cpu_axi4_bid),
-                    .m_axi4_bresp    (cpu_axi4_bresp),
-                    .m_axi4_bvalid   (cpu_axi4_bvalid),
-                    .m_axi4_bready   (cpu_axi4_bready),
-                    .m_axi4_arid     (cpu_axi4_arid),
-                    .m_axi4_araddr   (cpu_axi4_araddr),
-                    .m_axi4_arlen    (cpu_axi4_arlen),
-                    .m_axi4_arsize   (cpu_axi4_arsize),
-                    .m_axi4_arburst  (cpu_axi4_arburst),
-                    .m_axi4_arlock   (cpu_axi4_arlock),
-                    .m_axi4_arcache  (cpu_axi4_arcache),
-                    .m_axi4_arprot   (cpu_axi4_arprot),
-                    .m_axi4_arqos    (cpu_axi4_arqos),
-                    .m_axi4_arvalid  (cpu_axi4_arvalid),
-                    .m_axi4_arready  (cpu_axi4_arready),
-                    .m_axi4_rid      (cpu_axi4_rid),
-                    .m_axi4_rdata    (cpu_axi4_rdata),
-                    .m_axi4_rresp    (cpu_axi4_rresp),
-                    .m_axi4_rlast    (cpu_axi4_rlast),
-                    .m_axi4_rvalid   (cpu_axi4_rvalid),
-                    .m_axi4_rready   (cpu_axi4_rready),
-                    .m_axil_awaddr   (cpu_axil_awaddr),
-                    .m_axil_awprot   (cpu_axil_awprot),
-                    .m_axil_awvalid  (cpu_axil_awvalid),
-                    .m_axil_awready  (cpu_axil_awready),
-                    .m_axil_wdata    (cpu_axil_wdata),
-                    .m_axil_wstrb    (cpu_axil_wstrb),
-                    .m_axil_wvalid   (cpu_axil_wvalid),
-                    .m_axil_wready   (cpu_axil_wready),
-                    .m_axil_bresp    (cpu_axil_bresp),
-                    .m_axil_bvalid   (cpu_axil_bvalid),
-                    .m_axil_bready   (cpu_axil_bready),
-                    .m_axil_araddr   (cpu_axil_araddr),
-                    .m_axil_arprot   (cpu_axil_arprot),
-                    .m_axil_arvalid  (cpu_axil_arvalid),
-                    .m_axil_arready  (cpu_axil_arready),
-                    .m_axil_rdata    (cpu_axil_rdata),
-                    .m_axil_rresp    (cpu_axil_rresp),
-                    .m_axil_rvalid   (cpu_axil_rvalid),
-                    .m_axil_rready   (cpu_axil_rready)
+                    .m_axi4_awid     (bfm_axi4_awid),
+                    .m_axi4_awaddr   (bfm_axi4_awaddr),
+                    .m_axi4_awlen    (bfm_axi4_awlen),
+                    .m_axi4_awsize   (bfm_axi4_awsize),
+                    .m_axi4_awburst  (bfm_axi4_awburst),
+                    .m_axi4_awlock   (bfm_axi4_awlock),
+                    .m_axi4_awcache  (bfm_axi4_awcache),
+                    .m_axi4_awprot   (bfm_axi4_awprot),
+                    .m_axi4_awqos    (bfm_axi4_awqos),
+                    .m_axi4_awvalid  (bfm_axi4_awvalid),
+                    .m_axi4_awready  (bfm_axi4_awready),
+                    .m_axi4_wdata    (bfm_axi4_wdata),
+                    .m_axi4_wstrb    (bfm_axi4_wstrb),
+                    .m_axi4_wlast    (bfm_axi4_wlast),
+                    .m_axi4_wvalid   (bfm_axi4_wvalid),
+                    .m_axi4_wready   (bfm_axi4_wready),
+                    .m_axi4_bid      (bfm_axi4_bid),
+                    .m_axi4_bresp    (bfm_axi4_bresp),
+                    .m_axi4_bvalid   (bfm_axi4_bvalid),
+                    .m_axi4_bready   (bfm_axi4_bready),
+                    .m_axi4_arid     (bfm_axi4_arid),
+                    .m_axi4_araddr   (bfm_axi4_araddr),
+                    .m_axi4_arlen    (bfm_axi4_arlen),
+                    .m_axi4_arsize   (bfm_axi4_arsize),
+                    .m_axi4_arburst  (bfm_axi4_arburst),
+                    .m_axi4_arlock   (bfm_axi4_arlock),
+                    .m_axi4_arcache  (bfm_axi4_arcache),
+                    .m_axi4_arprot   (bfm_axi4_arprot),
+                    .m_axi4_arqos    (bfm_axi4_arqos),
+                    .m_axi4_arvalid  (bfm_axi4_arvalid),
+                    .m_axi4_arready  (bfm_axi4_arready),
+                    .m_axi4_rid      (bfm_axi4_rid),
+                    .m_axi4_rdata    (bfm_axi4_rdata),
+                    .m_axi4_rresp    (bfm_axi4_rresp),
+                    .m_axi4_rlast    (bfm_axi4_rlast),
+                    .m_axi4_rvalid   (bfm_axi4_rvalid),
+                    .m_axi4_rready   (bfm_axi4_rready),
+                    .m_axil_awaddr   (bfm_axil_awaddr),
+                    .m_axil_awprot   (bfm_axil_awprot),
+                    .m_axil_awvalid  (bfm_axil_awvalid),
+                    .m_axil_awready  (bfm_axil_awready),
+                    .m_axil_wdata    (bfm_axil_wdata),
+                    .m_axil_wstrb    (bfm_axil_wstrb),
+                    .m_axil_wvalid   (bfm_axil_wvalid),
+                    .m_axil_wready   (bfm_axil_wready),
+                    .m_axil_bresp    (bfm_axil_bresp),
+                    .m_axil_bvalid   (bfm_axil_bvalid),
+                    .m_axil_bready   (bfm_axil_bready),
+                    .m_axil_araddr   (bfm_axil_araddr),
+                    .m_axil_arprot   (bfm_axil_arprot),
+                    .m_axil_arvalid  (bfm_axil_arvalid),
+                    .m_axil_arready  (bfm_axil_arready),
+                    .m_axil_rdata    (bfm_axil_rdata),
+                    .m_axil_rresp    (bfm_axil_rresp),
+                    .m_axil_rvalid   (bfm_axil_rvalid),
+                    .m_axil_rready   (bfm_axil_rready),
+
+                    .i_req_valid     (bfm_i_req_valid),
+                    .i_req_ready     (bfm_i_req_ready),
+                    .i_req_addr      (bfm_i_req_addr),
+                    .i_resp_valid    (cc_i_resp_valid),
+                    .i_resp_data     (cc_i_resp_data),
+                    .i_resp_error    (cc_i_resp_error),
+                    .i_flush_valid   (bfm_i_flush_valid),
+                    .i_flush_done    (cc_i_flush_done),
+                    .i_kill          (bfm_i_kill),
+
+                    .d_req_valid     (bfm_d_req_valid),
+                    .d_req_ready     (bfm_d_req_ready),
+                    .d_req_addr      (bfm_d_req_addr),
+                    .d_req_size      (bfm_d_req_size),
+                    .d_req_cmd       (bfm_d_req_cmd),
+                    .d_req_wdata     (bfm_d_req_wdata),
+                    .d_resp_valid    (cc_d_resp_valid),
+                    .d_resp_data     (cc_d_resp_data),
+                    .d_resp_error    (cc_d_resp_error)
                 );
         end else begin : g_no_bfm
 
-            assign cpu_axi4_awid     = '0;
-            assign cpu_axi4_awaddr   = '0;
-            assign cpu_axi4_awlen    = '0;
-            assign cpu_axi4_awsize   = '0;
-            assign cpu_axi4_awburst  = '0;
-            assign cpu_axi4_awlock   = '0;
-            assign cpu_axi4_awcache  = '0;
-            assign cpu_axi4_awprot   = '0;
-            assign cpu_axi4_awqos    = '0;
-            assign cpu_axi4_awvalid  = '0;
-            assign cpu_axi4_wdata    = '0;
-            assign cpu_axi4_wstrb    = '0;
-            assign cpu_axi4_wlast    = '0;
-            assign cpu_axi4_wvalid   = '0;
-            assign cpu_axi4_bready   = '0;
-            assign cpu_axi4_arid     = '0;
-            assign cpu_axi4_araddr   = '0;
-            assign cpu_axi4_arlen    = '0;
-            assign cpu_axi4_arsize   = '0;
-            assign cpu_axi4_arburst  = '0;
-            assign cpu_axi4_arlock   = '0;
-            assign cpu_axi4_arcache  = '0;
-            assign cpu_axi4_arprot   = '0;
-            assign cpu_axi4_arqos    = '0;
-            assign cpu_axi4_arvalid  = '0;
-            assign cpu_axi4_rready   = '0;
-            assign cpu_axil_awaddr   = '0;
-            assign cpu_axil_awprot   = '0;
-            assign cpu_axil_awvalid  = '0;
-            assign cpu_axil_wdata    = '0;
-            assign cpu_axil_wstrb    = '0;
-            assign cpu_axil_wvalid   = '0;
-            assign cpu_axil_bready   = '0;
-            assign cpu_axil_araddr   = '0;
-            assign cpu_axil_arprot   = '0;
-            assign cpu_axil_arvalid  = '0;
-            assign cpu_axil_rready   = '0;
+            // no CPU: the cache ports stay idle
+            assign bfm_i_req_valid   = 1'b0;
+            assign bfm_i_req_addr    = '0;
+            assign bfm_i_kill        = 1'b0;
+            assign bfm_i_flush_valid = 1'b0;
+            assign bfm_d_req_valid   = 1'b0;
+            assign bfm_d_req_addr    = '0;
+            assign bfm_d_req_size    = 2'd0;
+            assign bfm_d_req_cmd     = 4'd0;
+            assign bfm_d_req_wdata   = '0;
+
+            assign bfm_axi4_awid     = '0;
+            assign bfm_axi4_awaddr   = '0;
+            assign bfm_axi4_awlen    = '0;
+            assign bfm_axi4_awsize   = '0;
+            assign bfm_axi4_awburst  = '0;
+            assign bfm_axi4_awlock   = '0;
+            assign bfm_axi4_awcache  = '0;
+            assign bfm_axi4_awprot   = '0;
+            assign bfm_axi4_awqos    = '0;
+            assign bfm_axi4_awvalid  = '0;
+            assign bfm_axi4_wdata    = '0;
+            assign bfm_axi4_wstrb    = '0;
+            assign bfm_axi4_wlast    = '0;
+            assign bfm_axi4_wvalid   = '0;
+            assign bfm_axi4_bready   = '0;
+            assign bfm_axi4_arid     = '0;
+            assign bfm_axi4_araddr   = '0;
+            assign bfm_axi4_arlen    = '0;
+            assign bfm_axi4_arsize   = '0;
+            assign bfm_axi4_arburst  = '0;
+            assign bfm_axi4_arlock   = '0;
+            assign bfm_axi4_arcache  = '0;
+            assign bfm_axi4_arprot   = '0;
+            assign bfm_axi4_arqos    = '0;
+            assign bfm_axi4_arvalid  = '0;
+            assign bfm_axi4_rready   = '0;
+            assign bfm_axil_awaddr   = '0;
+            assign bfm_axil_awprot   = '0;
+            assign bfm_axil_awvalid  = '0;
+            assign bfm_axil_wdata    = '0;
+            assign bfm_axil_wstrb    = '0;
+            assign bfm_axil_wvalid   = '0;
+            assign bfm_axil_bready   = '0;
+            assign bfm_axil_araddr   = '0;
+            assign bfm_axil_arprot   = '0;
+            assign bfm_axil_arvalid  = '0;
+            assign bfm_axil_rready   = '0;
         end
     endgenerate
 

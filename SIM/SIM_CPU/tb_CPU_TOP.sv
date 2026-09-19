@@ -711,6 +711,121 @@ module tb_CPU_TOP;
     // A single BFM transaction taking longer than this is reported as hung
     localparam int BFM_TIMEOUT_CYCLES = 20000;
 
+    //=================================================================
+    // L1 cache ports of the BFM (CPU_CACHE inside CPU_TOP)
+    //=================================================================
+    localparam logic [3:0] CC_LOAD  = 4'd0;
+    localparam logic [3:0] CC_STORE = 4'd1;
+    localparam logic [3:0] CC_FLUSH = 4'd14;
+
+    task automatic cache_exec(input logic [3:0] cmd, input logic [39:0] addr,
+                              input logic [1:0] size, input logic [63:0] wdata,
+                              output logic [63:0] rdata, output bit err);
+        @(posedge clk);
+        #1;
+        u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_cmd   = cmd;
+        u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_addr  = addr;
+        u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_size  = size;
+        u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_wdata = wdata;
+        u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_valid = 1'b1;
+        for (int t = 0; u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_done !== 1'b1; t++) begin
+            if (t >= BFM_TIMEOUT_CYCLES) begin
+                error_count++;
+                $display("[%0t] [FAIL] data cache access hung : cmd=%0d addr=0x%010h",
+                         $time, cmd, addr);
+                report_and_finish();
+            end
+            @(posedge clk);
+        end
+        rdata = u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_rdata;
+        err   = u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_err;
+        #1;
+        u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_valid = 1'b0;
+        // the BFM clears dc_cmd_done only after dc_cmd_valid has gone low
+        while (u_cpu_top.g_bfm.u_cpu_bfm.dc_cmd_done !== 1'b0) @(posedge clk);
+    endtask
+
+    task automatic cache_store(input logic [39:0] addr, input logic [1:0] size,
+                               input logic [63:0] wdata);
+        logic [63:0] r;
+        bit          e;
+        cache_exec(CC_STORE, addr, size, wdata, r, e);
+        check_count++;
+        if (e) begin
+            error_count++;
+            $display("[%0t] [FAIL] data cache store error @0x%010h", $time, addr);
+        end
+    endtask
+
+    task automatic cache_load_check(input string name, input logic [39:0] addr,
+                                    input logic [1:0] size, input logic [63:0] expected);
+        logic [63:0] r;
+        bit          e;
+        cache_exec(CC_LOAD, addr, size, 64'd0, r, e);
+        check_count++;
+        if (e || (r !== expected)) begin
+            error_count++;
+            $display("[%0t] [FAIL] %s @0x%010h : expected=0x%016h actual=0x%016h err=%b",
+                     $time, name, addr, expected, r, e);
+        end
+    endtask
+
+    task automatic cache_flush;
+        logic [63:0] r;
+        bit          e;
+        cache_exec(CC_FLUSH, MEM_BASE, 2'd3, 64'd0, r, e);
+        check_count++;
+        if (e) begin
+            error_count++;
+            $display("[%0t] [FAIL] data cache flush error", $time);
+        end
+    endtask
+
+    task automatic fetch_check(input string name, input logic [39:0] addr,
+                               input logic [63:0] expected);
+        @(posedge clk);
+        #1;
+        u_cpu_top.g_bfm.u_cpu_bfm.ic_cmd_addr  = addr;
+        u_cpu_top.g_bfm.u_cpu_bfm.ic_cmd_valid = 1'b1;
+        for (int t = 0; u_cpu_top.g_bfm.u_cpu_bfm.ic_cmd_done !== 1'b1; t++) begin
+            if (t >= BFM_TIMEOUT_CYCLES) begin
+                error_count++;
+                $display("[%0t] [FAIL] instruction fetch hung @0x%010h", $time, addr);
+                report_and_finish();
+            end
+            @(posedge clk);
+        end
+        check_count++;
+        if (u_cpu_top.g_bfm.u_cpu_bfm.ic_cmd_err ||
+            (u_cpu_top.g_bfm.u_cpu_bfm.ic_cmd_rdata !== expected)) begin
+            error_count++;
+            $display("[%0t] [FAIL] %s @0x%010h : expected=0x%016h actual=0x%016h err=%b",
+                     $time, name, addr, expected,
+                     u_cpu_top.g_bfm.u_cpu_bfm.ic_cmd_rdata,
+                     u_cpu_top.g_bfm.u_cpu_bfm.ic_cmd_err);
+        end
+        #1;
+        u_cpu_top.g_bfm.u_cpu_bfm.ic_cmd_valid = 1'b0;
+        while (u_cpu_top.g_bfm.u_cpu_bfm.ic_cmd_done !== 1'b0) @(posedge clk);
+    endtask
+
+    task automatic fence_i;
+        @(posedge clk);
+        #1;
+        u_cpu_top.g_bfm.u_cpu_bfm.ic_flush_req = 1'b1;
+        for (int t = 0; u_cpu_top.g_bfm.u_cpu_bfm.ic_flush_ack !== 1'b1; t++) begin
+            if (t >= BFM_TIMEOUT_CYCLES) begin
+                error_count++;
+                $display("[%0t] [FAIL] fence.i hung", $time);
+                report_and_finish();
+            end
+            @(posedge clk);
+        end
+        #1;
+        u_cpu_top.g_bfm.u_cpu_bfm.ic_flush_req = 1'b0;
+        @(posedge clk);
+    endtask
+
     task automatic report_and_finish;
         $display("");
         $display("==========================================================");
@@ -1708,6 +1823,75 @@ module tb_CPU_TOP;
         end
         u_mem_axil.stall_en = 1'b0;
         $display("[%0t] [%s] 1000 random strobe / lane AXI-Lite operations",
+                 $time, (error_count == err_mark) ? " OK " : "FAIL");
+
+        //---------------------------------------------------------
+        $display("");
+        $display("--- 27. L1 caches in CPU_TOP : CPU side through CPU_CACHE ---");
+        //---------------------------------------------------------
+        err_mark = error_count;
+        begin
+            logic [39:0] ca;
+            logic [63:0] rd;
+            bit          er;
+            ca = MEM_BASE + 40'h0001_0000;      // window used only here
+
+            // store / load through the data cache (miss, then hit)
+            for (int i = 0; i < 8; i++)
+                cache_store(ca + 40'(8*i), 2'd3, 64'hC0DE_0000_0000_0000 + 64'(i));
+            for (int i = 0; i < 8; i++)
+                cache_load_check("data cache load", ca + 40'(8*i), 2'd3,
+                                 64'hC0DE_0000_0000_0000 + 64'(i));
+
+            // byte / half / word accesses
+            cache_store(ca + 40'h80, 2'd0, 64'h00000000000000A5);
+            cache_store(ca + 40'h82, 2'd1, 64'h000000000000BEEF);
+            cache_store(ca + 40'h84, 2'd2, 64'h0000000012345678);
+            cache_load_check("data cache byte",  ca + 40'h80, 2'd0, 64'h00000000000000A5);
+            cache_load_check("data cache half",  ca + 40'h82, 2'd1, 64'h000000000000BEEF);
+            cache_load_check("data cache word",  ca + 40'h84, 2'd2, 64'h0000000012345678);
+
+            // the dirty lines reach memory only after a flush: read them back
+            // over the raw bus of the BFM (the other master of the arbiter)
+            cache_flush();
+            for (int i = 0; i < 8; i++) begin
+                bfm_exec(CMD_RD, BUS_MEM, ca + 40'(8*i), 8'd0, 64'd0);
+                check_count++;
+                if (u_cpu_top.g_bfm.u_cpu_bfm.cmd_rdata !==
+                    (64'hC0DE_0000_0000_0000 + 64'(i))) begin
+                    error_count++;
+                    $display("[%0t] [FAIL] flushed line in memory @0x%010h : 0x%016h",
+                             $time, ca + 40'(8*i), u_cpu_top.g_bfm.u_cpu_bfm.cmd_rdata);
+                end
+            end
+
+            // uncached access (peripheral bus) through the same port
+            cache_store(PERIPH_BASE + 40'h0000_A000, 2'd3, 64'h1122_3344_5566_7788);
+            cache_load_check("uncached load through the cache port",
+                             PERIPH_BASE + 40'h0000_A000, 2'd3, 64'h1122_3344_5566_7788);
+
+            // instruction fetch : the I$ must see what the D$ wrote back
+            cache_store(ca + 40'h200, 2'd3, 64'h0000_0000_1000_0001);
+            cache_flush();
+            fence_i();
+            fetch_check("instruction fetch", ca + 40'h200, 64'h0000_0000_1000_0001);
+            fetch_check("instruction fetch (hit)", ca + 40'h200, 64'h0000_0000_1000_0001);
+            // self modifying: write, flush, fence.i, fetch again
+            cache_store(ca + 40'h200, 2'd3, 64'h0000_0000_2000_0002);
+            cache_flush();
+            fence_i();
+            fetch_check("instruction fetch after fence.i", ca + 40'h200,
+                        64'h0000_0000_2000_0002);
+
+            // bus error through the cache port
+            cache_exec(CC_LOAD, 40'h01_0000_0000, 2'd3, 64'd0, rd, er);
+            check_count++;
+            if (!er) begin
+                error_count++;
+                $display("[%0t] [FAIL] no error for an unmapped cache load", $time);
+            end
+        end
+        $display("[%0t] [%s] data cache, instruction cache and fence.i through CPU_CACHE",
                  $time, (error_count == err_mark) ? " OK " : "FAIL");
 
         //---------------------------------------------------------

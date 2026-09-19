@@ -13,6 +13,8 @@
 //   10. I$ basic and mixed I$ / D$ traffic
 //   11. Random stress against the reference model
 //   12. Final FLUSH and full memory image check
+//   13. Write through, no allocate (CMD_STWTHR, used by the debug port)
+//   14. Debug port : the second port of the data cache (CACHE_PORT_ARB)
 //
 //   Plusargs: +from=<n> +to=<n> run only sections n..m
 //             +perf[=<n>]        run the throughput patterns afterwards
@@ -52,6 +54,11 @@
         d_req_size    = 2'd3;
         d_req_cmd     = CMD_LOAD;
         d_req_wdata   = '0;
+        dbg_req_valid = 1'b0;
+        dbg_req_addr  = '0;
+        dbg_req_size  = 2'd3;
+        dbg_req_cmd   = CMD_LOAD;
+        dbg_req_wdata = '0;
         ref_init();
 
         if (!$value$plusargs("from=%d", from_sec)) from_sec = 1;
@@ -445,6 +452,164 @@
             d_drain();
             check_memory("final memory image");
             if (n_error == e0) ok("memory image matches the reference model");
+        end
+
+        //=============================================================
+        section("13. Write through (debug port) : CMD_STWTHR");
+        //=============================================================
+        if (from_sec <= 13 && 13 <= to_sec) begin
+            e0 = n_error;
+            d_flush("flush before the write through tests");
+            d_drain();
+
+            // (a) miss : the word goes to memory, the line is not allocated
+            d_stwthr("write through, line not cached", a_mem(900), 2'd3,
+                     64'hAAAA_0000_0000_0001);
+            d_drain();
+            check("write through miss does not allocate", !dc_line_present(a_mem(900)));
+            check_memory("memory after a write through miss");
+            d_load("read back (fills the line now)", a_mem(900), 2'd3);
+            d_fence("wait for the fill to finish");   // the load answers early
+            d_drain();
+            check("the load allocated the line", dc_line_present(a_mem(900)));
+
+            // (b) hit : the line is updated and memory is written as well
+            d_stwthr("write through, line cached", a_mem(900), 2'd3,
+                     64'hAAAA_0000_0000_0002);
+            d_drain();
+            check("the line stays in the cache", dc_line_present(a_mem(900)));
+            check_memory("memory after a write through hit");
+            d_load("the cached line has the new value", a_mem(900), 2'd3);
+            d_drain();
+
+            // (c) hit on a dirty line : the line keeps its own dirty data
+            d_store("make the line dirty", a_mem(901), 2'd3, 64'hBBBB_0000_0000_0001);
+            d_drain();
+            d_stwthr("write through into a dirty line", a_mem(900), 2'd3,
+                     64'hAAAA_0000_0000_0003);
+            d_drain();
+            // the line at 901 is dirty, so only the word written through has
+            // reached memory
+            check_mem_word("write through into a dirty line", a_mem(900));
+            d_load("dirty word still there",     a_mem(901), 2'd3);
+            d_load("written through word there", a_mem(900), 2'd3);
+            d_flush("flush the dirty line");
+            d_drain();
+            check_memory("memory after the flush");
+
+            // (d) byte lanes
+            for (int sz = 0; sz < 4; sz++)
+                for (int off = 0; off < 8; off += (1 << sz))
+                    d_stwthr($sformatf("write through size %0d offset %0d", sz, off),
+                             a_mem(910) + PADDR_WIDTH'(off), sz[1:0],
+                             64'hC0DE_0000_0000_0000 + 64'(off) + 64'(sz) * 16);
+            d_drain();
+            check_memory("memory after byte lane write throughs");
+            for (int i = 0; i < 4; i++)
+                d_load($sformatf("read back byte lanes %0d", i), a_mem(910 + i), 2'd3);
+            d_drain();
+
+            // (e) while the line is being filled : must wait for the fill
+            d_flush("flush before the fill race");
+            d_drain();
+            d_load("start a fill of the line",  a_mem(920), 2'd3);
+            d_stwthr("write through during the fill", a_mem(921), 2'd3,
+                     64'hDDDD_0000_0000_0001);
+            d_load("read the written word",     a_mem(921), 2'd3);
+            d_drain();
+            check_memory("memory after the fill race");
+
+            // (f) uncached region : goes to the peripheral bus
+            d_stwthr("write through to the peripheral bus", a_peri(20), 2'd3,
+                     64'hEEEE_0000_0000_0001);
+            d_load("read it back from the peripheral bus", a_peri(20), 2'd3);
+            d_drain();
+
+            // (g) bus error
+            d_push_err("write through to an unmapped address", CMD_STWTHR,
+                       MEM_BASE + 40'h0001_0000_0000, 2'd3, 64'hDEAD);
+            d_drain();
+            d_load("the cache still works after the error", a_mem(900), 2'd3);
+            d_drain();
+
+            if (n_error == e0) ok("write through: miss, hit, dirty line, lanes, fill race");
+        end
+
+        //=============================================================
+        section("14. Debug port (second cache port)");
+        //=============================================================
+        if (from_sec <= 14 && 14 <= to_sec) begin
+            e0 = n_error;
+            d_flush("flush before the debug port tests");
+            d_drain();
+
+            // (a) read : first access misses and fills, the next one hits
+            dbg_load("debug read (miss)", a_mem(940), 2'd3);
+            d_fence("wait for the fill");
+            d_drain();
+            check("debug read allocated the line", dc_line_present(a_mem(940)));
+            dbg_load("debug read (hit)", a_mem(940), 2'd3);
+
+            // (b) write through : memory and the cached line are updated
+            dbg_store("debug write (line cached)", a_mem(940), 2'd3, 64'h1234_5678_9ABC_DEF0);
+            check_mem_word("debug write (line cached)", a_mem(940));
+            dbg_load("debug read after the write", a_mem(940), 2'd3);
+            d_load("CPU sees the debug write", a_mem(940), 2'd3);
+            d_drain();
+
+            // (c) write to a line that is not cached : no allocation
+            dbg_store("debug write (line not cached)", a_mem(960), 2'd3, 64'h0F0F_1111_2222_3333);
+            check("debug write did not allocate", !dc_line_present(a_mem(960)));
+            check_mem_word("debug write (line not cached)", a_mem(960));
+            d_load("CPU reads the written word", a_mem(960), 2'd3);
+            d_drain();
+
+            // (d) the CPU has the line dirty : the debug read must see it
+            d_store("CPU makes a line dirty", a_mem(970), 2'd3, 64'hCAFE_0000_0000_0001);
+            d_drain();
+            dbg_load("debug read of a dirty line", a_mem(970), 2'd3);
+
+            // (e) byte lanes through the debug port
+            for (int sz = 0; sz < 4; sz++) begin
+                dbg_store($sformatf("debug write size %0d", sz),
+                          a_mem(980) + PADDR_WIDTH'(1 << sz), sz[1:0],
+                          64'h5A5A_0000_0000_0000 + 64'(sz));
+                dbg_load($sformatf("debug read size %0d", sz),
+                         a_mem(980) + PADDR_WIDTH'(1 << sz), sz[1:0]);
+            end
+
+            // (f) uncached region through the debug port
+            dbg_store("debug write to the peripheral bus", a_peri(24), 2'd3,
+                      64'h9999_8888_7777_6666);
+            dbg_load("debug read from the peripheral bus", a_peri(24), 2'd3);
+
+            // (g) bus error
+            dbg_exec("debug read of an unmapped address", CMD_LOAD,
+                     MEM_BASE + 40'h0001_0000_0000, 2'd3, 64'd0, 64'd0, 1'b1, 1'b0);
+
+            // (h) both ports busy at the same time : the CPU has priority but
+            //     the debug access must still get through
+            fork
+                begin
+                    for (int i = 0; i < 64; i++)
+                        d_load($sformatf("CPU load during debug traffic %0d", i),
+                               a_mem(1000 + i), 2'd3);
+                    d_drain();
+                end
+                begin
+                    for (int i = 0; i < 4; i++) begin
+                        dbg_load($sformatf("debug read during CPU traffic %0d", i),
+                                 a_mem(1100 + i), 2'd3);
+                        dbg_store($sformatf("debug write during CPU traffic %0d", i),
+                                  a_mem(1100 + i), 2'd3, 64'hD0D0_0000_0000_0000 + 64'(i));
+                    end
+                end
+            join
+            d_flush("flush the dirty lines of the CPU");
+            d_drain();
+            check_memory("memory image after the debug port tests");
+
+            if (n_error == e0) ok("debug port: miss, hit, write through, sharing with the CPU");
         end
 
         //=============================================================

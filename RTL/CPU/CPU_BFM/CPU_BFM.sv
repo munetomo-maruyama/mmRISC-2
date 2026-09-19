@@ -109,7 +109,31 @@ module CPU_BFM
         input  logic [AXIL_DATA_WIDTH-1:0]   m_axil_rdata,
         input  logic [1:0]                   m_axil_rresp,
         input  logic                         m_axil_rvalid,
-        output logic                         m_axil_rready
+        output logic                         m_axil_rready,
+
+        //-------------------------------------------------------------
+        // L1 cache ports (CPU_CACHE). The BFM stands in for the CPU, so
+        // it can also drive the caches instead of the buses directly.
+        //-------------------------------------------------------------
+        output logic                         i_req_valid,
+        input  logic                         i_req_ready,
+        output logic [AXI4_ADDR_WIDTH-1:0]   i_req_addr,
+        input  logic                         i_resp_valid,
+        input  logic [63:0]                  i_resp_data,
+        input  logic                         i_resp_error,
+        output logic                         i_flush_valid,
+        input  logic                         i_flush_done,
+        output logic                         i_kill,
+
+        output logic                         d_req_valid,
+        input  logic                         d_req_ready,
+        output logic [AXI4_ADDR_WIDTH-1:0]   d_req_addr,
+        output logic [1:0]                   d_req_size,
+        output logic [3:0]                   d_req_cmd,
+        output logic [63:0]                  d_req_wdata,
+        input  logic                         d_resp_valid,
+        input  logic [63:0]                  d_resp_data,
+        input  logic                         d_resp_error
     );
 
     //-----------------------------------------------------------------
@@ -130,6 +154,115 @@ module CPU_BFM
     //-----------------------------------------------------------------
     // Command Interface (driven from the testbench via XMR)
     //-----------------------------------------------------------------
+    //-----------------------------------------------------------------
+    // Cache port commands (driven from the testbench via XMR)
+    //
+    //   dc_cmd_valid / dc_cmd_done : data cache access
+    //   ic_cmd_valid / ic_cmd_done : instruction fetch
+    //   ic_flush_req / ic_flush_ack: fence.i
+    //
+    // Same 4-phase handshake as cmd_* below.
+    //-----------------------------------------------------------------
+    logic                        dc_cmd_valid, dc_cmd_done;
+    logic [3:0]                  dc_cmd_cmd;    // cache command (0 LOAD .. 15 STWTHR)
+    logic [1:0]                  dc_cmd_size;
+    logic [AXI4_ADDR_WIDTH-1:0]  dc_cmd_addr;
+    logic [63:0]                 dc_cmd_wdata, dc_cmd_rdata;
+    logic                        dc_cmd_err;
+
+    logic                        ic_cmd_valid, ic_cmd_done;
+    logic [AXI4_ADDR_WIDTH-1:0]  ic_cmd_addr;
+    logic [63:0]                 ic_cmd_rdata;
+    logic                        ic_cmd_err;
+
+    logic                        ic_flush_req, ic_flush_ack;
+
+    initial begin
+        dc_cmd_valid = 1'b0;
+        dc_cmd_cmd   = 4'd0;
+        dc_cmd_size  = 2'd3;
+        dc_cmd_addr  = '0;
+        dc_cmd_wdata = '0;
+        ic_cmd_valid = 1'b0;
+        ic_cmd_addr  = '0;
+        ic_flush_req = 1'b0;
+    end
+
+    // data cache port : one request per command
+    logic dc_issued;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            d_req_valid  <= 1'b0;
+            dc_issued    <= 1'b0;
+            dc_cmd_done  <= 1'b0;
+            dc_cmd_rdata <= '0;
+            dc_cmd_err   <= 1'b0;
+        end else begin
+            if (!dc_cmd_valid) begin
+                dc_issued   <= 1'b0;
+                dc_cmd_done <= 1'b0;
+            end else if (!dc_issued && !d_req_valid) begin
+                d_req_valid <= 1'b1;
+                dc_issued   <= 1'b1;
+            end
+            if (d_req_valid && d_req_ready) d_req_valid <= 1'b0;
+            if (d_resp_valid) begin
+                dc_cmd_rdata <= d_resp_data;
+                dc_cmd_err   <= d_resp_error;
+                dc_cmd_done  <= 1'b1;
+            end
+        end
+    end
+    assign d_req_addr  = dc_cmd_addr;
+    assign d_req_size  = dc_cmd_size;
+    assign d_req_cmd   = dc_cmd_cmd;
+    assign d_req_wdata = dc_cmd_wdata;
+
+    // instruction fetch port : one request per command
+    logic ic_issued;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            i_req_valid  <= 1'b0;
+            ic_issued    <= 1'b0;
+            ic_cmd_done  <= 1'b0;
+            ic_cmd_rdata <= '0;
+            ic_cmd_err   <= 1'b0;
+        end else begin
+            if (!ic_cmd_valid) begin
+                ic_issued   <= 1'b0;
+                ic_cmd_done <= 1'b0;
+            end else if (!ic_issued && !i_req_valid) begin
+                i_req_valid <= 1'b1;
+                ic_issued   <= 1'b1;
+            end
+            if (i_req_valid && i_req_ready) i_req_valid <= 1'b0;
+            if (i_resp_valid) begin
+                ic_cmd_rdata <= i_resp_data;
+                ic_cmd_err   <= i_resp_error;
+                ic_cmd_done  <= 1'b1;
+            end
+        end
+    end
+    assign i_req_addr = ic_cmd_addr;
+    assign i_kill     = 1'b0;
+
+    // fence.i : held until the cache reports it is done
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            i_flush_valid <= 1'b0;
+            ic_flush_ack  <= 1'b0;
+        end else begin
+            if (ic_flush_req && !ic_flush_ack) i_flush_valid <= 1'b1;
+            if (i_flush_valid && i_flush_done) begin
+                i_flush_valid <= 1'b0;
+                ic_flush_ack  <= 1'b1;
+            end
+            if (!ic_flush_req) ic_flush_ack <= 1'b0;
+        end
+    end
+
     logic                        cmd_valid;   // TB  -> BFM : request
     logic                        cmd_we;      // TB  -> BFM : 1=write, 0=read
     logic                        cmd_bus;     // TB  -> BFM : BUS_MEM / BUS_PERIPH

@@ -126,6 +126,9 @@ module DCACHE
     localparam logic [3:0] CMD_AMO_HI = 4'd12;
     localparam logic [3:0] CMD_FENCE  = 4'd13;
     localparam logic [3:0] CMD_FLUSH  = 4'd14;
+    // write through, no allocate (debug port): the word always goes to memory,
+    // a line that happens to be in the cache is updated but not made dirty
+    localparam logic [3:0] CMD_STWTHR = 4'd15;
 
     //=================================================================
     // Geometry
@@ -347,6 +350,19 @@ module DCACHE
     logic                  res_valid;
     logic [LINE_BITS-1:0]  res_line;
 
+    //-----------------------------------------------------------------
+    // Single word write through (CMD_STWTHR, one outstanding)
+    //-----------------------------------------------------------------
+    logic                  sw_pend;     // posted by stage 1, not started yet
+    logic                  w_single;    // the write engine is doing this write
+    logic [PADDR_WIDTH-1:0] sw_addr;
+    logic [63:0]           sw_data;
+    logic [7:0]            sw_strb;
+    logic [ROB_BITS-1:0]   sw_rob;
+    logic                  sw_busy;
+
+    assign sw_busy = sw_pend | w_single;
+
     logic [15:0]           lfsr;
 
     //=================================================================
@@ -507,6 +523,7 @@ module DCACHE
     // Stage 1 decode
     //=================================================================
     logic s1_is_amo, s1_is_load, s1_is_store, s1_is_lr, s1_is_sc, s1_is_fence, s1_is_flush;
+    logic s1_is_stwthr;
     logic s1_needs_line, s1_writes, sc_ok, all_idle, fill_wr_en, fill_beat_now;
 
     assign s1_is_load  = (s1_cmd == CMD_LOAD);
@@ -516,12 +533,13 @@ module DCACHE
     assign s1_is_amo   = (s1_cmd >= CMD_AMO_LO) && (s1_cmd <= CMD_AMO_HI);
     assign s1_is_fence = (s1_cmd == CMD_FENCE);
     assign s1_is_flush = (s1_cmd == CMD_FLUSH);
+    assign s1_is_stwthr = (s1_cmd == CMD_STWTHR);
     assign s1_needs_line = s1_is_amo | s1_is_lr | s1_is_sc;
     assign sc_ok         = res_valid && (res_line == addr_line(s1_addr));
     assign s1_writes     = s1_is_store | s1_is_amo | (s1_is_sc & sc_ok);
 
     assign all_idle = ms_empty && wb_empty && (f_state == F_IDLE) &&
-                      (w_state == W_IDLE) && (u_state == U_IDLE);
+                      (w_state == W_IDLE) && (u_state == U_IDLE) && !sw_pend;
 
     assign fill_beat_now = (f_state == F_DATA) && m_axi4_rvalid;
     assign fill_wr_en    = fill_beat_now && (m_axi4_rresp == 2'b00);
@@ -542,6 +560,12 @@ module DCACHE
                 s1_can_retire = (fl_state == FL_IDLE) && all_idle;
             end else if (!s1_cacheable) begin
                 s1_can_retire = (u_state == U_IDLE);
+            end else if (s1_is_stwthr) begin
+                // write through: the bus write slot must be free. A line that
+                // is being filled has to be waited for, otherwise the fill
+                // would overwrite the new value with the old memory word.
+                s1_can_retire = !sw_busy && !fl_busy &&
+                                (hit ? (!hit_busy && !fill_beat_now) : !ms_match);
             end else if (hit) begin
                 // writing accesses need the array and the tag write port
                 s1_can_retire = !hit_busy && !(s1_writes && (fill_beat_now || fl_busy));
@@ -562,7 +586,7 @@ module DCACHE
     //=================================================================
     // Stage 1 array write (store / AMO / SC hit)
     //=================================================================
-    logic                  s1_store_hit;
+    logic                  s1_store_hit, s1_thr_hit;
     logic [63:0]           s1_wr_data, amo_result;
     logic [7:0]            s1_wr_strb;
     logic [WAY_BITS-1:0]   s1_wr_way;
@@ -572,6 +596,7 @@ module DCACHE
 
     always @(*) begin
         s1_store_hit = 1'b0;
+        s1_thr_hit   = 1'b0;
         s1_wr_way    = hit_way;
         s1_wr_addr   = {addr_index(s1_addr), addr_woff(s1_addr)};
         s1_wr_strb   = size_strb(s1_addr[2:0], s1_size);
@@ -580,6 +605,9 @@ module DCACHE
             s1_store_hit = 1'b1;
             if (s1_is_amo) s1_wr_data = align_wdata(s1_addr[2:0], amo_result);
         end
+        // write through hit: update the data array, leave valid / dirty alone
+        if (s1_valid && s1_data_ok && s1_cacheable && hit && s1_can_retire && s1_is_stwthr)
+            s1_thr_hit = 1'b1;
     end
 
     //=================================================================
@@ -595,7 +623,7 @@ module DCACHE
             if (ms_st_pending[ms_head] && (ms_st_woff[ms_head] == f_beat))
                 dat_wr_data = merge_bytes(m_axi4_rdata, ms_st_data[ms_head], ms_st_strb[ms_head]);
         end else begin
-            dat_wr_en   = s1_store_hit;
+            dat_wr_en   = s1_store_hit | s1_thr_hit;
             dat_wr_way  = s1_wr_way;
             dat_wr_addr = s1_wr_addr;
             dat_wr_data = s1_wr_data;
@@ -685,6 +713,12 @@ module DCACHE
             f_wb_way     <= '0;
             w_state      <= W_IDLE;
             w_beat       <= '0;
+            w_single     <= 1'b0;
+            sw_pend      <= 1'b0;
+            sw_addr      <= '0;
+            sw_data      <= '0;
+            sw_strb      <= '0;
+            sw_rob       <= '0;
             u_state      <= U_IDLE;
             u_rob        <= '0;
             u_lsb        <= 3'd0;
@@ -831,7 +865,7 @@ module DCACHE
                         m_axil_araddr  <= {s1_addr[PADDR_WIDTH-1:3], 3'b000};
                         m_axil_arvalid <= 1'b1;
                         u_state        <= U_AR;
-                    end else if (s1_is_store) begin
+                    end else if (s1_is_store || s1_is_stwthr) begin
                         m_axil_awaddr  <= {s1_addr[PADDR_WIDTH-1:3], 3'b000};
                         m_axil_awvalid <= 1'b1;
                         m_axil_wdata   <= align_wdata(s1_addr[2:0], s1_wdata);
@@ -842,6 +876,17 @@ module DCACHE
                         rob_done[s1_rob] <= 1'b1;      // atomics : not supported
                         rob_err[s1_rob]  <= 1'b1;
                     end
+                end
+                else if (s1_is_stwthr) begin
+                    // the word goes to memory in any case; when the line is in
+                    // the cache it was updated by s1_thr_hit in this cycle
+                    sw_pend <= 1'b1;
+                    sw_addr <= {s1_addr[PADDR_WIDTH-1:3], 3'b000};
+                    sw_data <= align_wdata(s1_addr[2:0], s1_wdata);
+                    sw_strb <= size_strb(s1_addr[2:0], s1_size);
+                    sw_rob  <= s1_rob;
+                    rob_wait[s1_rob] <= 1'b1;
+                    if (res_valid && (res_line == addr_line(s1_addr))) res_valid <= 1'b0;
                 end
                 else if (hit) begin
                     rob_done[s1_rob] <= 1'b1;
@@ -1025,9 +1070,17 @@ module DCACHE
             //---------------------------------------------------------
             case (w_state)
                 W_IDLE: begin
-                    if (!wb_empty) begin
+                    if (sw_pend) begin
+                        m_axi4_awaddr  <= sw_addr;
+                        m_axi4_awvalid <= 1'b1;
+                        w_single       <= 1'b1;
+                        sw_pend        <= 1'b0;
+                        w_beat         <= '0;
+                        w_state        <= W_ADDR;
+                    end else if (!wb_empty) begin
                         m_axi4_awaddr  <= {wb_line[wb_head], {OFF_BITS{1'b0}}};
                         m_axi4_awvalid <= 1'b1;
+                        w_single       <= 1'b0;
                         w_beat         <= '0;
                         w_state        <= W_ADDR;
                     end
@@ -1040,16 +1093,24 @@ module DCACHE
                 end
                 W_DATA: begin
                     if (m_axi4_wready) begin
-                        if (w_beat == WOFF_BITS'(WORDS_PER_BLOCK-1)) w_state <= W_RESP;
-                        else                                         w_beat  <= w_beat + WOFF_BITS'(1);
+                        if (w_single || (w_beat == WOFF_BITS'(WORDS_PER_BLOCK-1)))
+                             w_state <= W_RESP;
+                        else w_beat  <= w_beat + WOFF_BITS'(1);
                     end
                 end
                 W_RESP: begin
                     if (m_axi4_bvalid) begin
-                        wb_valid[wb_head] <= 1'b0;
-                        wb_head           <= wb_next(wb_head);
-                        wb_pop             = 1'b1;
-                        w_state           <= W_IDLE;
+                        if (w_single) begin
+                            rob_err[sw_rob]  <= (m_axi4_bresp != 2'b00);
+                            rob_wait[sw_rob] <= 1'b0;
+                            rob_done[sw_rob] <= 1'b1;
+                            w_single         <= 1'b0;
+                        end else begin
+                            wb_valid[wb_head] <= 1'b0;
+                            wb_head           <= wb_next(wb_head);
+                            wb_pop             = 1'b1;
+                        end
+                        w_state <= W_IDLE;
                     end
                 end
                 default: w_state <= W_IDLE;
@@ -1190,13 +1251,14 @@ module DCACHE
     assign m_axi4_rready  = (f_state == F_DATA);
 
     assign m_axi4_awid    = AXI4_ID_WB[AXI4_ID_WIDTH-1:0];
-    assign m_axi4_awlen   = 8'(WORDS_PER_BLOCK - 1);
+    assign m_axi4_awlen   = w_single ? 8'd0 : 8'(WORDS_PER_BLOCK - 1);
     assign m_axi4_awsize  = 3'd3;
     assign m_axi4_awburst = 2'b01;
     assign m_axi4_wvalid  = (w_state == W_DATA);
-    assign m_axi4_wdata   = wb_data[wb_head][w_beat];
-    assign m_axi4_wstrb   = 8'hFF;
-    assign m_axi4_wlast   = (w_state == W_DATA) && (w_beat == WOFF_BITS'(WORDS_PER_BLOCK-1));
+    assign m_axi4_wdata   = w_single ? sw_data : wb_data[wb_head][w_beat];
+    assign m_axi4_wstrb   = w_single ? sw_strb : 8'hFF;
+    assign m_axi4_wlast   = (w_state == W_DATA) &&
+                            (w_single || (w_beat == WOFF_BITS'(WORDS_PER_BLOCK-1)));
     assign m_axi4_bready  = (w_state == W_RESP);
 
     assign m_axil_rready  = (u_state == U_R);
