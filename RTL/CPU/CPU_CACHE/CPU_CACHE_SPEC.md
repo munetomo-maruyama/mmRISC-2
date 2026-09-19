@@ -351,6 +351,40 @@ CPU コア側の信号名は次のように対応させる予定:
 Rocket `linux` の L1 が実測 12 タイル(RAMB36×8 + RAMB18×8)なので同等の規模。
 容量を増やす場合(8 ウェイ 32KiB × 2)は約 20 タイルとなり、これも収まる。
 
+### 6.1 配列は必ず Block RAM に推論させること
+
+データ配列は **ウェイごとに別の配列**とし、書き込みはウェイをデコードした
+イネーブルで行う(`generate` + `(* ram_style = "block" *)`)。
+
+```systemverilog
+for (gw = 0; gw < WAYS; gw++) begin : g_way
+    (* ram_style = "block" *) logic [63:0] mem [0:WORDS-1];
+    always_ff @(posedge clk)
+        for (int b = 0; b < 8; b++)
+            if (wr_en && wr_strb[b] && (int'(wr_way) == gw))
+                mem[wr_addr][8*b +: 8] <= wr_data[8*b +: 8];
+    always_ff @(posedge clk) if (rd_en) rd_w <= mem[rd_addr];
+    assign rd_data[gw*64 +: 64] = rd_w;
+end
+```
+
+2 次元配列を `mem[wr_way][wr_addr]` のようにウェイを可変インデックスで書くと
+Vivado は RAM と認識せず、配列がすべてフリップフロップになる。
+2026-09-20 のビルドはこれで **138,279 FF(Artix-7 100T は 126,800)** となり、
+`place_design` が DRC UTLZ-1 で止まった。
+
+合成ログで次の行が I$/D$ の両方に出ていることを確認する。
+
+```
+INFO: [Synth 8-3971] The signal "..._reg" was recognized as a ... RAM template.
+```
+
+`build.tcl` は合成直後に FF 数と Block RAM 数を表示し、FF が 100k を超えたら
+その場でエラーにする(原因の分からない DRC エラーまで進まないようにするため)。
+
+既定構成での目安: データ配列 8 × RAMB36(ウェイごとに 512×64bit = 32Kb)、
+タグ配列 4 × RAMB18、テスト用 RAM 17 タイルで合計 30 タイル弱 / 135。
+
 ---
 
 ## 7. 検証(`SIM/SIM_CACHE`)

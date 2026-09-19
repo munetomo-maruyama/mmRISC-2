@@ -34,7 +34,7 @@ MUTATIONS=(
 "13#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_can_retire = !ms_locked\[ms_match_id\] \&\& ms_attach_ok;/s1_can_retire = ms_attach_ok;/#9#12#D\$: ignores the MSHR lock of a pending store"
 "14#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/m_axil_wstrb   <= size_strb(s1_addr\[2:0\], s1_size);/m_axil_wstrb   <= 8'hFF;/#7#7#D\$: uncached store ignores the byte strobe"
 "15#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/rob_err\[i\]  <= f_err | (m_axi4_rresp != 2'b00);/rob_err[i]  <= 1'b0;/#8#8#D\$: bus error of a store fill is not reported"
-"16#CPU/CPU_CACHE/CACHE_DATA_ARRAY/CACHE_DATA_ARRAY.sv#s/mem\[wr_way\]\[wr_addr\]/mem[0][wr_addr]/#1#3#data array: writes always go to way 0"
+"16#CPU/CPU_CACHE/CACHE_DATA_ARRAY/CACHE_DATA_ARRAY.sv#s/(int'(wr_way) == gw)/(gw == 0)/#1#3#data array: writes always go to way 0"
 "17#CPU/CPU_CACHE/CACHE_TAG_ARRAY/CACHE_TAG_ARRAY.sv#s/valid_bit\[int'(wr_index) \* WAYS + int'(wr_way)\] <= wr_valid;/valid_bit[int'(wr_index) * WAYS + int'(wr_way)] <= 1'b1;/#3#8#tag array: valid bit is never cleared"
 "18#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/if (wb_empty \&\& (w_state == W_IDLE)) begin/if (1'b1) begin/#3#3#D\$: FLUSH answers before the writebacks finished"
 )

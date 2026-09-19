@@ -49,6 +49,30 @@ read_xdc TOP_impl.xdc
 write_checkpoint -force $outdir/post_synth.dcp
 report_utilization -file $outdir/utilization_synth.rpt
 
+#---------------------------------------------------------------------------
+# Sanity check after synthesis
+#
+# The cache arrays have to be inferred as block RAM. If they are not, the
+# design needs ~140k flip-flops and place_design fails much later with a
+# DRC UTLZ-1 that does not say why. Fail here instead, with the reason.
+#---------------------------------------------------------------------------
+if {[catch {
+    set n_ff   [llength [get_cells -hier -filter {PRIMITIVE_GROUP == FLOP_LATCH}]]
+    set n_bram [llength [get_cells -hier -filter {PRIMITIVE_GROUP == BLOCKRAM}]]
+    puts "INFO: after synthesis : $n_ff flip-flops, $n_bram block RAM primitives"
+    if {$n_ff > 100000} {
+        error "too many flip-flops ($n_ff of 126800). The cache arrays were\
+               probably not inferred as block RAM (check for\
+               'recognized as ... RAM template' of CACHE_DATA_ARRAY /\
+               CACHE_TAG_ARRAY in the log)."
+    }
+} msg]} {
+    if {[string match "too many flip-flops*" $msg]} {
+        error $msg
+    }
+    puts "INFO: resource sanity check skipped ($msg)"
+}
+
 opt_design
 place_design
 phys_opt_design

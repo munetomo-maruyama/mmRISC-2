@@ -7,6 +7,10 @@
 //   - Address = set * WORDS_PER_BLOCK + word offset inside the block.
 //   - Synchronous read: rd_data is valid one cycle after rd_en. All ways are
 //     read in parallel and returned as one packed vector.
+//   - One array per way (generate), so that the memories are inferred as
+//     block RAM on the FPGA. Reading and writing the same address in the same
+//     cycle returns undefined data for the bytes that are written; the cache
+//     forwards those bytes itself (fwd_* in DCACHE).
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -37,27 +41,43 @@ module CACHE_DATA_ARRAY
     localparam int WORDS_PER_BLOCK = BLOCK_BYTES / 8;
     localparam int WORDS           = SETS * WORDS_PER_BLOCK;
 
-    logic [63:0] mem [0:WAYS-1][0:WORDS-1];
+    //-----------------------------------------------------------------
+    // One memory per way, written through a decoded way enable.
+    //
+    // This is the shape Vivado needs to infer block RAM: a single array
+    // indexed only by the word address, one write port with byte enables
+    // and one read port. Using the way as a variable index of a two
+    // dimensional array instead is NOT recognised by Vivado, and the
+    // arrays end up in flip flops - 2 x 4 x 512 x 64 bit does not fit into
+    // an Artix-7 100T (the 2026-09-20 build failed with DRC UTLZ-1).
+    //-----------------------------------------------------------------
+    genvar gw;
+    generate
+        for (gw = 0; gw < WAYS; gw++) begin : g_way
+            (* ram_style = "block" *)
+            logic [63:0] mem [0:WORDS-1];
+            logic [63:0] rd_w;                  // output register of this way
 
-    initial begin
-        rd_data = '0;
-        for (int w = 0; w < WAYS; w++)
-            for (int i = 0; i < WORDS; i++)
-                mem[w][i] = 64'd0;
-    end
+            initial begin
+                rd_w = 64'd0;
+                for (int i = 0; i < WORDS; i++) mem[i] = 64'd0;
+            end
 
-    always_ff @(posedge clk) begin
-        for (int b = 0; b < 8; b++) begin
-            if (wr_en && wr_strb[b])
-                mem[wr_way][wr_addr][8*b +: 8] <= wr_data[8*b +: 8];
+            // write port : byte enables, one way selected
+            always_ff @(posedge clk) begin
+                for (int b = 0; b < 8; b++) begin
+                    if (wr_en && wr_strb[b] && (int'(wr_way) == gw))
+                        mem[wr_addr][8*b +: 8] <= wr_data[8*b +: 8];
+                end
+            end
+
+            // read port
+            always_ff @(posedge clk) begin
+                if (rd_en) rd_w <= mem[rd_addr];
+            end
+
+            assign rd_data[gw*64 +: 64] = rd_w;
         end
-    end
-
-    always_ff @(posedge clk) begin
-        if (rd_en) begin
-            for (int w = 0; w < WAYS; w++)
-                rd_data[w*64 +: 64] <= mem[w][rd_addr];
-        end
-    end
+    endgenerate
 
 endmodule : CACHE_DATA_ARRAY
