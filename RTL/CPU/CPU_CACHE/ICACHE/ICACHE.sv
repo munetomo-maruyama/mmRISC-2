@@ -1,7 +1,7 @@
 //---------------------------------------------------------------------------
 // ICACHE.sv
 //
-// mmRISC-2 L1 instruction cache (RTL/CACHE/CACHE_SPEC.md).
+// mmRISC-2 L1 instruction cache (RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md).
 //
 //   - Physically indexed, physically tagged, set associative, read only.
 //   - Cacheable region (addr >= MEM_BASE) : line fill over AXI4, INCR burst

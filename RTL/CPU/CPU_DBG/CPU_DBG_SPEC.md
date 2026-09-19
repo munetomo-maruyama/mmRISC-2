@@ -1,9 +1,10 @@
 # mmRISC-2 暫定デバッグ論理 仕様書
 
 - 版: Rev-2 (2026-09-17) 実装・検証結果を反映(10章)
+  - 2026-09-19: `RTL/CPU_DBG/` を `RTL/CPU/CPU_DBG/` へ移動(CPU_TOP 配下にインスタンス化されるため)
 - 準拠仕様: **The RISC-V Debug Specification Version 1.0, Revised 2025-02-21: Ratified**
   (`Spec/riscv-debug-specification.pdf`)。以下、節番号はこの仕様書のもの。
-- 対象: `RTL/CPU_DBG/`(デバッグ論理)、`RTL/CPU/CPU_TOP/`(組み込み)、`RTL/TOP/`(FPGAトップ)
+- 対象: `RTL/CPU/CPU_DBG/`(デバッグ論理)、`RTL/CPU/CPU_TOP/`(組み込み)、`RTL/TOP/`(FPGAトップ)
 - 決定事項は 9章にまとめた。
 
 ---
@@ -65,13 +66,13 @@ DTM・DMレジスタ・SBA・Access Memoryは置き換えずに使い続ける�
 
 | モジュール | 置き場所 | 内容 |
 |---|---|---|
-| `CPU_DBG` | `RTL/CPU_DBG/CPU_DBG/` | 下記のラッパ |
-| `DBG_CJTAG` | `RTL/CPU_DBG/DBG_CJTAG/` | cJTAG(OScan1)受信部。JTAGモードでは素通し |
-| `DBG_DTM` | `RTL/CPU_DBG/DBG_DTM/` | JTAG TAP、IDCODE/dtmcs/dmi/BYPASS、CDC送信側 |
-| `DBG_CDC` | `RTL/CPU_DBG/DBG_CDC/` | 同期化器、4相ハンドシェイク、リセット同期化器 |
-| `DBG_DM` | `RTL/CPU_DBG/DBG_DM/` | DMレジスタ、Abstract Command、SBA制御 |
-| `DBG_BUSMST` | `RTL/CPU_DBG/DBG_BUSMST/` | SBA/Access Memory用バスマスタ(AXI4/AXI4-Lite) |
-| `DBG_HART_STUB` | `RTL/CPU_DBG/DBG_HART_STUB/` | 疑似ハート(暫定、CPU本体実装時に削除) |
+| `CPU_DBG` | `RTL/CPU/CPU_DBG/CPU_DBG/` | 下記のラッパ |
+| `DBG_CJTAG` | `RTL/CPU/CPU_DBG/DBG_CJTAG/` | cJTAG(OScan1)受信部。JTAGモードでは素通し |
+| `DBG_DTM` | `RTL/CPU/CPU_DBG/DBG_DTM/` | JTAG TAP、IDCODE/dtmcs/dmi/BYPASS、CDC送信側 |
+| `DBG_CDC` | `RTL/CPU/CPU_DBG/DBG_CDC/` | 同期化器、4相ハンドシェイク、リセット同期化器 |
+| `DBG_DM` | `RTL/CPU/CPU_DBG/DBG_DM/` | DMレジスタ、Abstract Command、SBA制御 |
+| `DBG_BUSMST` | `RTL/CPU/CPU_DBG/DBG_BUSMST/` | SBA/Access Memory用バスマスタ(AXI4/AXI4-Lite) |
+| `DBG_HART_STUB` | `RTL/CPU/CPU_DBG/DBG_HART_STUB/` | 疑似ハート(暫定、CPU本体実装時に削除) |
 | `BUS_ARB` | `RTL/BUS/BUS_ARB/` | BFMとデバッグバスマスタの調停、メモリバス/周辺バスの振り分け |
 
 
@@ -442,7 +443,7 @@ FPGA確認(Arty A7-100T): OpenOCD から上記8と同じ操作、および `load
 | 5 | misa | `0x800000000014112d`(RV64 IMAFDC + S/U) |
 | 6 | バス選択規則 | `0x8000_0000` 以上をメモリバス |
 | 7 | FPGA のシステムクロック | MMCMで 50MHz(パラメータで変更可) |
-| 8 | ディレクトリ | `RTL/CPU_DBG`、FPGAビルド用は `FPGA/ARTY_A7_100T` |
+| 8 | ディレクトリ | `RTL/CPU/CPU_DBG`、FPGAビルド用は `FPGA/ARTY_A7_100T` |
 
 ---
 
@@ -452,7 +453,7 @@ FPGA確認(Arty A7-100T): OpenOCD から上記8と同じ操作、および `load
 
 | 種別 | ファイル |
 |---|---|
-| デバッグ論理 | `RTL/CPU_DBG/{DBG_CDC,DBG_CJTAG,DBG_DTM,DBG_DM,DBG_HART_STUB,DBG_BUSMST,CPU_DBG}/*.sv` |
+| デバッグ論理 | `RTL/CPU/CPU_DBG/{DBG_CDC,DBG_CJTAG,DBG_DTM,DBG_DM,DBG_HART_STUB,DBG_BUSMST,CPU_DBG}/*.sv` |
 | バス | `RTL/BUS/BUS_ARB/BUS_ARB.sv`、`RTL/BUS/AXI4_RAM/AXI4_RAM.sv`、`RTL/BUS/AXIL_RAM/AXIL_RAM.sv` |
 | CPU | `RTL/CPU/CPU_TOP/CPU_TOP.sv`(ポート追加、パラメータ `USE_BFM`) |
 | FPGAトップ | `RTL/TOP/TOP.sv`(`SIM=1` で MMCM をバイパス) |

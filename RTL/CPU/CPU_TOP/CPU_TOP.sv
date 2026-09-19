@@ -7,7 +7,7 @@
 // MMU          : Sv39 (planned)
 // CLINT        : internal
 // PLIC         : internal
-// Debug I/F    : RISC-V Debug Spec 1.0, JTAG / cJTAG (RTL/CPU_DBG)
+// Debug I/F    : RISC-V Debug Spec 1.0, JTAG / cJTAG (RTL/CPU/CPU_DBG)
 //
 // Bus interfaces (decided in docs/MMRISC_INTERFACE.md):
 //   - Memory bus (DRAM / cache-fill)     : AXI4      (burst capable)

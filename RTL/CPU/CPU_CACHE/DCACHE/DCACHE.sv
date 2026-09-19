@@ -1,7 +1,7 @@
 //---------------------------------------------------------------------------
 // DCACHE.sv
 //
-// mmRISC-2 L1 data cache (RTL/CACHE/CACHE_SPEC.md).
+// mmRISC-2 L1 data cache (RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md).
 //
 //   - Physically indexed / tagged, set associative, write back + write
 //     allocate.

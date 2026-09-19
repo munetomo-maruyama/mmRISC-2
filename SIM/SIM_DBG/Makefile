@@ -1,5 +1,5 @@
 #---------------------------------------------------------------------------
-# Makefile : debug logic verification (RTL/TOP/TOP.sv + RTL/CPU_DBG)
+# Makefile : debug logic verification (RTL/TOP/TOP.sv + RTL/CPU/CPU_DBG)
 #
 #   make            : run with Verilator (default simulator)
 #   make wave       : run with Verilator and dump tb_DBG.vcd
@@ -21,13 +21,13 @@ TOP      := tb_DBG
 RTL_DIR  := ../../RTL
 
 RTL_SRCS := \
-	$(RTL_DIR)/CPU_DBG/DBG_CDC/DBG_CDC.sv \
-	$(RTL_DIR)/CPU_DBG/DBG_CJTAG/DBG_CJTAG.sv \
-	$(RTL_DIR)/CPU_DBG/DBG_DTM/DBG_DTM.sv \
-	$(RTL_DIR)/CPU_DBG/DBG_DM/DBG_DM.sv \
-	$(RTL_DIR)/CPU_DBG/DBG_HART_STUB/DBG_HART_STUB.sv \
-	$(RTL_DIR)/CPU_DBG/DBG_BUSMST/DBG_BUSMST.sv \
-	$(RTL_DIR)/CPU_DBG/CPU_DBG/CPU_DBG.sv \
+	$(RTL_DIR)/CPU/CPU_DBG/DBG_CDC/DBG_CDC.sv \
+	$(RTL_DIR)/CPU/CPU_DBG/DBG_CJTAG/DBG_CJTAG.sv \
+	$(RTL_DIR)/CPU/CPU_DBG/DBG_DTM/DBG_DTM.sv \
+	$(RTL_DIR)/CPU/CPU_DBG/DBG_DM/DBG_DM.sv \
+	$(RTL_DIR)/CPU/CPU_DBG/DBG_HART_STUB/DBG_HART_STUB.sv \
+	$(RTL_DIR)/CPU/CPU_DBG/DBG_BUSMST/DBG_BUSMST.sv \
+	$(RTL_DIR)/CPU/CPU_DBG/CPU_DBG/CPU_DBG.sv \
 	$(RTL_DIR)/BUS/BUS_ARB/BUS_ARB.sv \
 	$(RTL_DIR)/BUS/AXI4_ADDR_NARROW/AXI4_ADDR_NARROW.sv \
 	$(RTL_DIR)/BUS/AXIL_ADDR_NARROW/AXIL_ADDR_NARROW.sv \
