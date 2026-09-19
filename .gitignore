@@ -8,6 +8,7 @@ bug_work/
 sweep_work/
 *.vvp
 *.vcd
+*.marks
 *.log
 *.jou
 

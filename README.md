@@ -58,6 +58,8 @@ LitexRocket/        参考用(リポジトリには含めない)
 | コマンド | 内容 | 結果 |
 |---|---|---|
 | `cd SIM/SIM_CACHE && make` | L1 キャッシュ全試験 | PASS 8817 チェック |
+| `cd SIM/SIM_CACHE && make perf` | ヒット連続 / ミス連続のスループット | ヒット 1.0、ミス 12〜13、追い出し 22 サイクル/アクセス |
+| `cd SIM/SIM_CACHE && make wave-perf` | 同上の波形(VCD + GTKWave 用 .gtkw) | 4 パターン |
 | `cd SIM/SIM_CACHE && ./sweep.sh` | パラメータ掃引 18 構成 | 全 PASS |
 | `cd SIM/SIM_CACHE && ./bug_inject.sh` | バグ注入 18 種 | 全て検出 |
 | `cd SIM/SIM_DBG && make` | デバッグ論理 | PASS 3010 チェック |

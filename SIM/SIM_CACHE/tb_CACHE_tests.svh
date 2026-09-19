@@ -15,6 +15,8 @@
 //   12. Final FLUSH and full memory image check
 //
 //   Plusargs: +from=<n> +to=<n> run only sections n..m
+//             +perf[=<n>]        run the throughput patterns afterwards
+//                                (tb_CACHE_perf.svh)
 //---------------------------------------------------------------------------
 
     int from_sec, to_sec;
@@ -444,6 +446,11 @@
             check_memory("final memory image");
             if (n_error == e0) ok("memory image matches the reference model");
         end
+
+        //=============================================================
+        // Throughput patterns (only with +perf, see tb_CACHE_perf.svh)
+        //=============================================================
+        if ($test$plusargs("perf")) perf_run();
 
         //=============================================================
         $display("");
