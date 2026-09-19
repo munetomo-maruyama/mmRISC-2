@@ -2,6 +2,8 @@
 
 - 版: Rev-2 (2026-09-17) 実装・検証結果を反映(10章)
   - 2026-09-19: `RTL/CPU_DBG/` を `RTL/CPU/CPU_DBG/` へ移動(CPU_TOP 配下にインスタンス化されるため)
+  - 2026-09-19: メモリバスのデバッグアクセスを L1 データキャッシュ経由にした
+    (`DBG_CACHE`、`CPU_CACHE_SPEC.md` 4.7)。周辺バスは従来どおり `DBG_BUSMST` 直結
 - 準拠仕様: **The RISC-V Debug Specification Version 1.0, Revised 2025-02-21: Ratified**
   (`Spec/riscv-debug-specification.pdf`)。以下、節番号はこの仕様書のもの。
 - 対象: `RTL/CPU/CPU_DBG/`(デバッグ論理)、`RTL/CPU/CPU_TOP/`(組み込み)、`RTL/TOP/`(FPGAトップ)
@@ -73,6 +75,7 @@ DTM・DMレジスタ・SBA・Access Memoryは置き換えずに使い続ける�
 | `DBG_DM` | `RTL/CPU/CPU_DBG/DBG_DM/` | DMレジスタ、Abstract Command、SBA制御 |
 | `DBG_BUSMST` | `RTL/CPU/CPU_DBG/DBG_BUSMST/` | SBA/Access Memory用バスマスタ(AXI4/AXI4-Lite) |
 | `DBG_HART_STUB` | `RTL/CPU/CPU_DBG/DBG_HART_STUB/` | 疑似ハート(暫定、CPU本体実装時に削除) |
+| `DBG_CACHE` | `RTL/CPU/CPU_DBG/DBG_CACHE/` | メモリバスアクセスをデータキャッシュ経由にする(`DBG_VIA_CACHE=1`、既定) |
 | `BUS_ARB` | `RTL/BUS/BUS_ARB/` | BFMとデバッグバスマスタの調停、メモリバス/周辺バスの振り分け |
 
 

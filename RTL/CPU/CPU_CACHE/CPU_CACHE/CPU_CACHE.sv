@@ -6,7 +6,8 @@
 //
 //   CPU ─ i_* ─> ICACHE ─┐
 //                        ├─ BUS_ARB ─> memory bus AXI4 / peripheral bus AXI4-Lite
-//   CPU ─ d_* ─> DCACHE ─┘   (s0 = data, s1 = instruction)
+//   CPU ─ d_* ─┬> DCACHE ─┘   (s0 = data, s1 = instruction)
+//   DBG ─ dbg_*┘  through CACHE_PORT_ARB (CPU first, see 4.7 of the spec)
 //
 // The data side has priority in the arbiter, so a fill for the CPU data
 // stream is not delayed by instruction prefetching.
@@ -63,6 +64,18 @@ module CPU_CACHE
         output logic                     d_resp_valid,
         output logic [XLEN-1:0]          d_resp_data,
         output logic                     d_resp_error,
+
+        // debug side : shares the data cache port with the CPU (CPU first).
+        // Tie dbg_req_valid to 0 when the debug module is not connected.
+        input  logic                     dbg_req_valid,
+        output logic                     dbg_req_ready,
+        input  logic [PADDR_WIDTH-1:0]   dbg_req_addr,
+        input  logic [1:0]               dbg_req_size,
+        input  logic [3:0]               dbg_req_cmd,
+        input  logic [XLEN-1:0]          dbg_req_wdata,
+        output logic                     dbg_resp_valid,
+        output logic [XLEN-1:0]          dbg_resp_data,
+        output logic                     dbg_resp_error,
 
         // memory bus : AXI4
         output logic [AXI4_ID_WIDTH-1:0] m_axi4_awid,
@@ -323,6 +336,56 @@ module CPU_CACHE
     assign ic_axil_arprot  = '0;
 
     //=================================================================
+    // Data cache port : CPU (priority) and debug module
+    //=================================================================
+    logic                   dc_req_valid, dc_req_ready;
+    logic [PADDR_WIDTH-1:0] dc_req_addr;
+    logic [1:0]             dc_req_size;
+    logic [3:0]             dc_req_cmd;
+    logic [XLEN-1:0]        dc_req_wdata;
+    logic                   dc_resp_valid, dc_resp_error;
+    logic [XLEN-1:0]        dc_resp_data;
+
+    CACHE_PORT_ARB
+        #(
+            .PADDR_WIDTH   (PADDR_WIDTH),
+            .XLEN          (XLEN),
+            .DEPTH         (ROB_DEPTH)
+        )
+    u_port_arb
+        (
+            .clk            (clk),
+            .rst_n          (rst_n),
+            .s0_req_valid   (d_req_valid),
+            .s0_req_ready   (d_req_ready),
+            .s0_req_addr    (d_req_addr),
+            .s0_req_size    (d_req_size),
+            .s0_req_cmd     (d_req_cmd),
+            .s0_req_wdata   (d_req_wdata),
+            .s0_resp_valid  (d_resp_valid),
+            .s0_resp_data   (d_resp_data),
+            .s0_resp_error  (d_resp_error),
+            .s1_req_valid   (dbg_req_valid),
+            .s1_req_ready   (dbg_req_ready),
+            .s1_req_addr    (dbg_req_addr),
+            .s1_req_size    (dbg_req_size),
+            .s1_req_cmd     (dbg_req_cmd),
+            .s1_req_wdata   (dbg_req_wdata),
+            .s1_resp_valid  (dbg_resp_valid),
+            .s1_resp_data   (dbg_resp_data),
+            .s1_resp_error  (dbg_resp_error),
+            .m_req_valid    (dc_req_valid),
+            .m_req_ready    (dc_req_ready),
+            .m_req_addr     (dc_req_addr),
+            .m_req_size     (dc_req_size),
+            .m_req_cmd      (dc_req_cmd),
+            .m_req_wdata    (dc_req_wdata),
+            .m_resp_valid   (dc_resp_valid),
+            .m_resp_data    (dc_resp_data),
+            .m_resp_error   (dc_resp_error)
+        );
+
+    //=================================================================
     // Data cache
     //=================================================================
     DCACHE
@@ -345,15 +408,15 @@ module CPU_CACHE
         (
             .clk            (clk),
             .rst_n          (rst_n),
-            .d_req_valid    (d_req_valid),
-            .d_req_ready    (d_req_ready),
-            .d_req_addr     (d_req_addr),
-            .d_req_size     (d_req_size),
-            .d_req_cmd      (d_req_cmd),
-            .d_req_wdata    (d_req_wdata),
-            .d_resp_valid   (d_resp_valid),
-            .d_resp_data    (d_resp_data),
-            .d_resp_error   (d_resp_error),
+            .d_req_valid    (dc_req_valid),
+            .d_req_ready    (dc_req_ready),
+            .d_req_addr     (dc_req_addr),
+            .d_req_size     (dc_req_size),
+            .d_req_cmd      (dc_req_cmd),
+            .d_req_wdata    (dc_req_wdata),
+            .d_resp_valid   (dc_resp_valid),
+            .d_resp_data    (dc_resp_data),
+            .d_resp_error   (dc_resp_error),
             .m_axi4_awid    (dc_axi4_awid),
             .m_axi4_awaddr  (dc_axi4_awaddr),
             .m_axi4_awlen   (dc_axi4_awlen),

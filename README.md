@@ -15,6 +15,7 @@ RTL/
 │   │   ├── CPU_CACHE/      I$ + D$ + BUS_ARB
 │   │   ├── ICACHE/         命令キャッシュ
 │   │   ├── DCACHE/         データキャッシュ(MSHR、書き戻し、AMO/LR-SC)
+│   │   ├── CACHE_PORT_ARB/ D$ ポートの調停(CPU 優先、デバッガと共有)
 │   │   ├── CACHE_TAG_ARRAY/    タグ + 有効 + ダーティ
 │   │   └── CACHE_DATA_ARRAY/   データ配列
 │   ├── CPU_DBG/        デバッグ論理  → CPU_DBG_SPEC.md
@@ -23,7 +24,8 @@ RTL/
 │   │   ├── DBG_CJTAG/      cJTAG (OScan1) アダプタ
 │   │   ├── DBG_CDC/        DTM ↔ DM のクロック載せ替え
 │   │   ├── DBG_DM/         デバッグモジュール(abstract command、SBA、認証)
-│   │   ├── DBG_BUSMST/     デバッグ用バスマスタ
+│   │   ├── DBG_BUSMST/     デバッグ用バスマスタ(周辺バス)
+│   │   ├── DBG_CACHE/      デバッグアクセスをデータキャッシュへ
 │   │   └── DBG_HART_STUB/  CPU コア実装までのハート代用
 │   └── CPU_BFM/        CPU コア代用の BFM(シミュレーション用)
 └── BUS/
@@ -64,7 +66,7 @@ LitexRocket/        参考用(リポジトリには含めない)
 | `cd SIM/SIM_CACHE && ./bug_inject.sh` | バグ注入 18 種 | 全て検出 |
 | `cd SIM/SIM_DBG && make` | デバッグ論理 | PASS 3010 チェック |
 | `cd SIM/SIM_DBG && ./bug_inject.sh` | バグ注入 15 種 | 全て検出 |
-| `cd SIM/SIM_CPU && make` | CPU_TOP のバス | PASS 47351 チェック |
+| `cd SIM/SIM_CPU && make` | CPU_TOP のバスと L1 キャッシュ経路 | PASS |
 | `cd SIM/SIM_OCD && make` | OpenOCD 協調シミュレーション | PASS |
 
 必要なツール: Verilator 5.x、Icarus Verilog 12、GTKWave、riscv-openocd。
@@ -85,6 +87,6 @@ vivado -mode batch -source build.tcl
 |---|---|
 | JTAG / cJTAG デバッグ論理 | 完了(シミュレーション、FPGA 実機とも確認済み) |
 | L1 命令/データキャッシュ | 完了(掃引・バグ注入まで) |
-| CPU_TOP への組み込み | これから |
+| CPU_TOP への組み込み | 完了(BFM がキャッシュを駆動、デバッガも D$ 経由) |
 | CPU コア(パイプライン)と MMU | これから |
 | L2 キャッシュ | CPU ブロック完成後に検討 |

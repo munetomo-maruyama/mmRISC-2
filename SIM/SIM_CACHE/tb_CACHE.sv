@@ -67,6 +67,7 @@ module tb_CACHE;
     localparam logic [3:0] CMD_AMOMAXU  = 4'd12;
     localparam logic [3:0] CMD_FENCE    = 4'd13;
     localparam logic [3:0] CMD_FLUSH    = 4'd14;
+    localparam logic [3:0] CMD_STWTHR   = 4'd15;   // write through, no allocate
 
     //=================================================================
     // Clock / reset
@@ -99,6 +100,15 @@ module tb_CACHE;
     logic [XLEN-1:0]         d_req_wdata;
     logic                    d_resp_valid, d_resp_error;
     logic [XLEN-1:0]         d_resp_data;
+
+    // second port of the data cache (debug module in CPU_TOP)
+    logic                    dbg_req_valid, dbg_req_ready;
+    logic [PADDR_WIDTH-1:0]  dbg_req_addr;
+    logic [1:0]              dbg_req_size;
+    logic [3:0]              dbg_req_cmd;
+    logic [XLEN-1:0]         dbg_req_wdata;
+    logic                    dbg_resp_valid, dbg_resp_error;
+    logic [XLEN-1:0]         dbg_resp_data;
 
     // AXI4 (memory bus, 40bit)
     logic [3:0]              m_axi4_awid;
@@ -191,6 +201,15 @@ module tb_CACHE;
             .d_resp_valid   (d_resp_valid),
             .d_resp_data    (d_resp_data),
             .d_resp_error   (d_resp_error),
+            .dbg_req_valid  (dbg_req_valid),
+            .dbg_req_ready  (dbg_req_ready),
+            .dbg_req_addr   (dbg_req_addr),
+            .dbg_req_size   (dbg_req_size),
+            .dbg_req_cmd    (dbg_req_cmd),
+            .dbg_req_wdata  (dbg_req_wdata),
+            .dbg_resp_valid (dbg_resp_valid),
+            .dbg_resp_data  (dbg_resp_data),
+            .dbg_resp_error (dbg_resp_error),
 
             .m_axi4_awid    (m_axi4_awid),
             .m_axi4_awaddr  (m_axi4_awaddr),
@@ -626,7 +645,7 @@ module tb_CACHE;
                 word = ref_read_word(addr);
                 exp  = extract(word, addr, size);
             end
-            CMD_STORE: begin
+            CMD_STORE, CMD_STWTHR: begin
                 word = ref_read_word(addr);
                 ref_write_word(addr, merge(word, addr, size, wdata));
                 if (res_valid && (res_addr >> $clog2(DC_BLOCK)) == (addr >> $clog2(DC_BLOCK)))
@@ -701,6 +720,66 @@ module tb_CACHE;
     task automatic d_store(input string n, input logic [PADDR_WIDTH-1:0] a, input logic [1:0] s,
                            input logic [63:0] v);
         d_push(n, CMD_STORE, a, s, v);
+    endtask
+    //=================================================================
+    // CPU BFM : debug side (second port of the data cache)
+    //   One access at a time, the way the debug module issues them.
+    //=================================================================
+    task automatic dbg_exec(input string name, input logic [3:0] cmd,
+                            input logic [PADDR_WIDTH-1:0] addr, input logic [1:0] size,
+                            input logic [63:0] wdata, input logic [63:0] exp,
+                            input bit exp_err, input bit check_data);
+        int guard;
+        @(negedge clk);
+        dbg_req_valid = 1'b1;
+        dbg_req_cmd   = cmd;
+        dbg_req_addr  = addr;
+        dbg_req_size  = size;
+        dbg_req_wdata = wdata;
+        guard = 0;
+        do begin
+            @(posedge clk);
+            guard++;
+            if (guard > 100_000) begin
+                check({name, " : debug request accepted"}, 1'b0);
+                $finish;
+            end
+        end while (!dbg_req_ready);
+        @(negedge clk);
+        dbg_req_valid = 1'b0;
+        guard = 0;
+        while (!dbg_resp_valid) begin
+            @(posedge clk);
+            guard++;
+            if (guard > 100_000) begin
+                check({name, " : debug response"}, 1'b0);
+                $finish;
+            end
+        end
+        check({name, " : error flag"}, dbg_resp_error === exp_err);
+        if (check_data && !exp_err) check64(name, exp, dbg_resp_data);
+        @(negedge clk);
+    endtask
+
+    task automatic dbg_load(input string n, input logic [PADDR_WIDTH-1:0] a,
+                            input logic [1:0] sz);
+        logic [63:0] w;
+        w = ref_read_word(a);
+        dbg_exec(n, CMD_LOAD, a, sz, 64'd0, extract(w, a, sz), 1'b0, 1'b1);
+    endtask
+    task automatic dbg_store(input string n, input logic [PADDR_WIDTH-1:0] a,
+                             input logic [1:0] sz, input logic [63:0] v);
+        logic [63:0] w;
+        w = ref_read_word(a);
+        ref_write_word(a, merge(w, a, sz, v));
+        if (res_valid && (res_addr >> $clog2(DC_BLOCK)) == (a >> $clog2(DC_BLOCK)))
+            res_valid = 1'b0;
+        dbg_exec(n, CMD_STWTHR, a, sz, v, 64'd0, 1'b0, 1'b0);
+    endtask
+
+    task automatic d_stwthr(input string n, input logic [PADDR_WIDTH-1:0] a, input logic [1:0] s,
+                            input logic [63:0] v);
+        d_push(n, CMD_STWTHR, a, s, v);
     endtask
     task automatic d_fence(input string n);
         d_push(n, CMD_FENCE, MEM_BASE, 2'd3, 64'd0);
@@ -878,6 +957,30 @@ module tb_CACHE;
     //=================================================================
     // Backdoor check of the whole memory image (after FLUSH)
     //=================================================================
+    // whitebox: is the line holding `addr` valid in the data cache?
+    localparam int DC_OFF_BITS = $clog2(DC_BLOCK);
+    localparam int DC_IDX_BITS = $clog2(DC_SETS);
+    localparam int DC_TAG_BITS = PADDR_WIDTH - DC_IDX_BITS - DC_OFF_BITS;
+
+    function automatic bit dc_line_present(input logic [PADDR_WIDTH-1:0] addr);
+        int idx;
+        logic [DC_TAG_BITS-1:0] tag;
+        idx = int'(addr[DC_OFF_BITS +: DC_IDX_BITS]);
+        tag = addr[PADDR_WIDTH-1 -: DC_TAG_BITS];
+        for (int w = 0; w < DC_WAYS; w++)
+            if (u_cache.u_dcache.u_tag.valid_bit[idx*DC_WAYS + w] &&
+                (u_cache.u_dcache.u_tag.tag_mem[idx*DC_WAYS + w] == tag))
+                return 1'b1;
+        return 1'b0;
+    endfunction
+
+    // compare one word of the memory model with the reference
+    task automatic check_mem_word(input string name, input logic [PADDR_WIDTH-1:0] addr);
+        int i;
+        i = ref_index(addr);
+        check64({name, " (memory)"}, ref_mem[i], u_mem.mem[i]);
+    endtask
+
     task automatic check_memory(input string name);
         int bad;
         bad = 0;

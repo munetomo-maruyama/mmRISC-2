@@ -846,6 +846,77 @@
         end
 
         //=============================================================
+        section("15. Debug access through the data cache");
+        //=============================================================
+        if (from_sec <= 15 && 15 <= to_sec) begin
+            int e0;
+            logic [63:0] cv;
+            bit          cerr;
+            e0 = n_error;
+
+            // the CPU flushes its cache first, so the state is known
+            bfm_cache_exec(4'd14, 40'h00_8000_0000, 2'd3, 64'd0, cv, cerr);
+
+            // (a) debug write : write through, memory holds the value and the
+            //     line is not allocated
+            sba_write(40'h00_8000_A000, 3'd3, 64'hDCDC_0000_0000_0001, err3);
+            check32("debug write sberror", 32'd0, err3);
+            check64("debug write reached memory", 64'hDCDC_0000_0000_0001,
+                    mem_peek(40'h00_8000_A000));
+            check("debug write does not allocate a line",
+                  dc_line_present(40'h00_8000_A000) == 1'b0);
+
+            // (b) debug read : the first one misses and fills the line,
+            //     the second one hits
+            sba_read(40'h00_8000_A000, 3'd3, r64, err3);
+            check64("debug read (miss)", 64'hDCDC_0000_0000_0001, r64);
+            check("debug read allocated the line", dc_line_present(40'h00_8000_A000));
+            sba_read(40'h00_8000_A000, 3'd3, r64, err3);
+            check64("debug read (hit)", 64'hDCDC_0000_0000_0001, r64);
+
+            // (c) debug write into a line that is in the cache : both the
+            //     cache and memory are updated
+            sba_write(40'h00_8000_A000, 3'd3, 64'hDCDC_0000_0000_0002, err3);
+            check64("second debug write reached memory", 64'hDCDC_0000_0000_0002,
+                    mem_peek(40'h00_8000_A000));
+            sba_read(40'h00_8000_A000, 3'd3, r64, err3);
+            check64("debug read after the write", 64'hDCDC_0000_0000_0002, r64);
+            bfm_cache_exec(4'd0, 40'h00_8000_A000, 2'd3, 64'd0, cv, cerr);
+            check64("the CPU sees the debug write", 64'hDCDC_0000_0000_0002, cv);
+
+            // (d) the CPU has the line dirty : the debugger must see the new
+            //     value even though memory still holds the old one
+            bfm_cache_exec(4'd1, 40'h00_8000_A100, 2'd3, 64'hC0FE_0000_0000_0001,
+                           cv, cerr);
+            check("memory still has the old value",
+                  mem_peek(40'h00_8000_A100) !== (64'hC0FE_0000_0000_0001));
+            sba_read(40'h00_8000_A100, 3'd3, r64, err3);
+            check64("debug read of a line the CPU left dirty",
+                    64'hC0FE_0000_0000_0001, r64);
+
+            // (e) after the CPU flushed, memory holds it as well
+            bfm_cache_exec(4'd14, 40'h00_8000_0000, 2'd3, 64'd0, cv, cerr);
+            check64("memory after the CPU flush", 64'hC0FE_0000_0000_0001,
+                    mem_peek(40'h00_8000_A100));
+
+            // (f) byte / half / word sizes through the cache
+            for (int sz = 0; sz < 3; sz++) begin
+                w64 = {$urandom, $urandom} &
+                      ((64'd1 << (8 * (1 << sz))) - 64'd1);
+                sba_write(40'h00_8000_A200 + 40'(1 << sz), 3'(sz), w64, err3);
+                sba_read (40'h00_8000_A200 + 40'(1 << sz), 3'(sz), r64, err3);
+                check64($sformatf("debug size %0d through the cache", sz), w64, r64);
+            end
+
+            // (g) peripheral bus : still goes straight to the bus master
+            sba_write(40'h00_1200_0A00, 3'd3, 64'hBEEF_0000_0000_0001, err3);
+            check64("peripheral write (not cached)", 64'hBEEF_0000_0000_0001,
+                    mem_peek(40'h00_1200_0A00));
+
+            if (n_error == e0) ok("debug accesses go through the data cache (miss, hit, coherent)");
+        end
+
+        //=============================================================
         $display("");
         $display("==========================================================");
         $display(" RESULT : %s   (%0d checks, %0d errors)",
