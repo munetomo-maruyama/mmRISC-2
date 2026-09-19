@@ -58,7 +58,7 @@ report_utilization -file $outdir/utilization_synth.rpt
 #---------------------------------------------------------------------------
 if {[catch {
     set n_ff   [llength [get_cells -hier -filter {PRIMITIVE_GROUP == FLOP_LATCH}]]
-    set n_bram [llength [get_cells -hier -filter {PRIMITIVE_GROUP == BLOCKRAM}]]
+    set n_bram [llength [get_cells -hier -filter {REF_NAME =~ RAMB*}]]
     puts "INFO: after synthesis : $n_ff flip-flops, $n_bram block RAM primitives"
     if {$n_ff > 100000} {
         error "too many flip-flops ($n_ff of 126800). The cache arrays were\
