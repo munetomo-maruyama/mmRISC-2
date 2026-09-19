@@ -34,6 +34,16 @@ Things to check after the build:
 | LUTAR-1 (LUT drives async reset) | Reset combinations (POR & button & nSRST, POR & nTRST, rst_n & ~ndmreset) in front of the reset synchronizers; assertion is asynchronous by design. |
 | SYNTH-6 / SYNTH-15 (RAM output register / byte write enable) | RAM timing has large margin at 50MHz. |
 
+### Cache arrays must end up in block RAM
+
+`build.tcl` prints the number of flip-flops and block RAM primitives right
+after synthesis and stops if the design needs more than 100k flip-flops. The
+cache data arrays are 2 x 4 x 512 x 64 bit: in block RAM they are 8 RAMB36,
+in flip-flops they do not fit into the device (the 2026-09-20 build failed
+that way with `[DRC UTLZ-1] FDRE over-utilized`, 138279 of 126800). Check that
+the log contains `[Synth 8-3971] ... recognized as ... RAM template` for the
+data and tag arrays of both caches.
+
 ## 2. Board settings
 
 | Part | Setting |
