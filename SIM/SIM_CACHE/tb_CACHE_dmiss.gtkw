@@ -1,0 +1,524 @@
+[*] GTKWave Analyzer save file
+[*] mmRISC-2 L1 D$ : miss burst (make wave-perf, +perf=4)
+[*] fill, write allocate and dirty eviction (writeback + fill)
+[*] marker : D$ load miss burst (fill) (7.01 us)
+[*] A : D$ store miss burst (allocate) (9.21 us)
+[*] B : D$ miss burst (writeback + fill) (15.65 us)
+[*] C : end (19.45 us)
+[dumpfile] "/media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/tb_CACHE_dmiss.vcd"
+[savefile] "/media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/tb_CACHE_dmiss.gtkw"
+[timestart] 6388000
+[size] 1600 900
+[pos] -1 -1
+*-13.155240 7010000 9210000 15650000 19450000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] TOP.tb_CACHE.
+[treeopen] TOP.tb_CACHE.u_cache.
+[treeopen] TOP.tb_CACHE.u_cache.u_icache.
+[treeopen] TOP.tb_CACHE.u_cache.u_dcache.
+[sst_width] 300
+[signals_width] 400
+[sst_expanded] 1
+[sst_vpaned_height] 300
+@800
+-1. CLOCK / CYCLE
+@28
+TOP.tb_CACHE.clk
+TOP.tb_CACHE.rst_n
+@24
+TOP.tb_CACHE.cyc[31:0]
+@1000
+-1. CLOCK / CYCLE
+@800
+-2. CPU SIDE : LOAD / STORE
+@28
+TOP.tb_CACHE.d_req_valid
+TOP.tb_CACHE.d_req_ready
+@22
+TOP.tb_CACHE.d_req_addr[39:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/cmd.txt
+TOP.tb_CACHE.d_req_cmd[3:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/size.txt
+TOP.tb_CACHE.d_req_size[1:0]
+@22
+TOP.tb_CACHE.d_req_wdata[63:0]
+@200
+-response
+@28
+TOP.tb_CACHE.d_resp_valid
+@22
+TOP.tb_CACHE.d_resp_data[63:0]
+@28
+TOP.tb_CACHE.d_resp_error
+@1000
+-2. CPU SIDE : LOAD / STORE
+@800
+-3. D$ : STAGE 1 (hit / miss decision)
+@28
+TOP.tb_CACHE.u_cache.u_dcache.s1_valid
+@22
+TOP.tb_CACHE.u_cache.u_dcache.s1_addr[39:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/cmd.txt
+TOP.tb_CACHE.u_cache.u_dcache.s1_cmd[3:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/size.txt
+TOP.tb_CACHE.u_cache.u_dcache.s1_size[1:0]
+@22
+TOP.tb_CACHE.u_cache.u_dcache.s1_wdata[63:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.s1_rob[2:0]
+@200
+-lookup
+@28
+TOP.tb_CACHE.u_cache.u_dcache.s1_data_ok
+TOP.tb_CACHE.u_cache.u_dcache.hit
+@22
+TOP.tb_CACHE.u_cache.u_dcache.hit_oh[3:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.hit_way[1:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.hit_busy
+@22
+TOP.tb_CACHE.u_cache.u_dcache.hit_word[63:0]
+@200
+-retire / stall
+@28
+TOP.tb_CACHE.u_cache.u_dcache.s1_can_retire
+TOP.tb_CACHE.u_cache.u_dcache.s1_busy
+TOP.tb_CACHE.u_cache.u_dcache.s1_store_hit
+TOP.tb_CACHE.u_cache.u_dcache.s1_reread
+TOP.tb_CACHE.u_cache.u_dcache.s1_wait_fill
+TOP.tb_CACHE.u_cache.u_dcache.array_rd_busy
+@200
+-victim
+@24
+TOP.tb_CACHE.u_cache.u_dcache.victim_way[1:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.victim_valid
+TOP.tb_CACHE.u_cache.u_dcache.victim_dirty
+@22
+TOP.tb_CACHE.u_cache.u_dcache.victim_tag[27:0]
+TOP.tb_CACHE.u_cache.u_dcache.busy_way[3:0]
+@1000
+-3. D$ : STAGE 1 (hit / miss decision)
+@800
+-4. D$ : ARRAYS (tag / data / forwarding)
+@28
+TOP.tb_CACHE.u_cache.u_dcache.tag_rd_en
+@22
+TOP.tb_CACHE.u_cache.u_dcache.tag_rd_index[5:0]
+TOP.tb_CACHE.u_cache.u_dcache.tag_rd_valid[3:0]
+TOP.tb_CACHE.u_cache.u_dcache.tag_rd_dirty[3:0]
+TOP.tb_CACHE.u_cache.u_dcache.tag_rd_tag[111:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.tag_wr_en
+@22
+TOP.tb_CACHE.u_cache.u_dcache.tag_wr_index[5:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.tag_wr_way[1:0]
+@22
+TOP.tb_CACHE.u_cache.u_dcache.tag_wr_tag[27:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.tag_wr_valid
+TOP.tb_CACHE.u_cache.u_dcache.tag_wr_dirty
+@200
+-data array
+@28
+TOP.tb_CACHE.u_cache.u_dcache.dat_rd_en
+@22
+TOP.tb_CACHE.u_cache.u_dcache.dat_rd_addr[8:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.dat_wr_en
+@24
+TOP.tb_CACHE.u_cache.u_dcache.dat_wr_way[1:0]
+@22
+TOP.tb_CACHE.u_cache.u_dcache.dat_wr_addr[8:0]
+TOP.tb_CACHE.u_cache.u_dcache.dat_wr_data[63:0]
+TOP.tb_CACHE.u_cache.u_dcache.dat_wr_strb[7:0]
+@200
+-forwarding (write in the cycle of the read)
+@28
+TOP.tb_CACHE.u_cache.u_dcache.fwd_valid
+@22
+TOP.tb_CACHE.u_cache.u_dcache.fwd_addr[8:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.fwd_way[1:0]
+@22
+TOP.tb_CACHE.u_cache.u_dcache.fwd_strb[7:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.tfwd_en
+@22
+TOP.tb_CACHE.u_cache.u_dcache.tfwd_index[5:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.tfwd_way[1:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.tfwd_valid
+TOP.tb_CACHE.u_cache.u_dcache.tfwd_dirty
+@1000
+-4. D$ : ARRAYS (tag / data / forwarding)
+@800
+-5. D$ : MSHR / LINE FILL
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/f_state.txt
+TOP.tb_CACHE.u_cache.u_dcache.f_state[2:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.f_beat[2:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.f_err
+TOP.tb_CACHE.u_cache.u_dcache.fill_wr_en
+TOP.tb_CACHE.u_cache.u_dcache.fill_beat_now
+@24
+TOP.tb_CACHE.u_cache.u_dcache.f_wb_word[2:0]
+TOP.tb_CACHE.u_cache.u_dcache.f_wb_way[1:0]
+@200
+-MSHR
+@22
+TOP.tb_CACHE.u_cache.u_dcache.ms_valid[1:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.ms_count[1:0]
+TOP.tb_CACHE.u_cache.u_dcache.ms_head[0:0]
+TOP.tb_CACHE.u_cache.u_dcache.ms_tail[0:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.ms_full
+@22
+TOP.tb_CACHE.u_cache.u_dcache.ms_locked[1:0]
+TOP.tb_CACHE.u_cache.u_dcache.ms_wb_needed[1:0]
+TOP.tb_CACHE.u_cache.u_dcache.ms_st_pending[1:0]
+TOP.tb_CACHE.u_cache.u_dcache.ms_line[0][33:0]
+TOP.tb_CACHE.u_cache.u_dcache.ms_line[1][33:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.ms_way[0][1:0]
+TOP.tb_CACHE.u_cache.u_dcache.ms_way[1][1:0]
+@200
+-attach / match
+@28
+TOP.tb_CACHE.u_cache.u_dcache.ms_match
+@24
+TOP.tb_CACHE.u_cache.u_dcache.ms_match_id[0:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.ms_attach_ok
+@1000
+-5. D$ : MSHR / LINE FILL
+@800
+-6. D$ : WRITEBACK
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/w_state.txt
+TOP.tb_CACHE.u_cache.u_dcache.w_state[1:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.w_beat[2:0]
+@22
+TOP.tb_CACHE.u_cache.u_dcache.wb_valid[1:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.wb_count[1:0]
+TOP.tb_CACHE.u_cache.u_dcache.wb_head[0:0]
+TOP.tb_CACHE.u_cache.u_dcache.wb_tail[0:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.wb_full
+TOP.tb_CACHE.u_cache.u_dcache.wb_empty
+@22
+TOP.tb_CACHE.u_cache.u_dcache.wb_line[0][33:0]
+TOP.tb_CACHE.u_cache.u_dcache.wb_line[1][33:0]
+@1000
+-6. D$ : WRITEBACK
+@800
+-7. D$ : RESPONSE ORDER (ROB)
+@22
+TOP.tb_CACHE.u_cache.u_dcache.rob_valid[7:0]
+TOP.tb_CACHE.u_cache.u_dcache.rob_done[7:0]
+TOP.tb_CACHE.u_cache.u_dcache.rob_wait[7:0]
+TOP.tb_CACHE.u_cache.u_dcache.rob_st[7:0]
+TOP.tb_CACHE.u_cache.u_dcache.rob_err[7:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.rob_count[3:0]
+TOP.tb_CACHE.u_cache.u_dcache.rob_head[2:0]
+TOP.tb_CACHE.u_cache.u_dcache.rob_tail[2:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.rob_full
+@1000
+-7. D$ : RESPONSE ORDER (ROB)
+@800
+-8. D$ : AXI4
+@28
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_arvalid
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_arready
+@22
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_araddr[39:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_arlen[7:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/axi_id.txt
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_arid[3:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_rvalid
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_rready
+@22
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_rdata[63:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_rlast
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/axi_resp.txt
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_rresp[1:0]
+@200
+-write (line writeback)
+@28
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_awvalid
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_awready
+@22
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_awaddr[39:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_awlen[7:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/axi_id.txt
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_awid[3:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_wvalid
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_wready
+@22
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_wdata[63:0]
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_wstrb[7:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_wlast
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_bvalid
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_bready
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/axi_resp.txt
+TOP.tb_CACHE.u_cache.u_dcache.m_axi4_bresp[1:0]
+@1000
+-8. D$ : AXI4
+@c00200
+-9. D$ : FLUSH / UNCACHED / LR-SC
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/fl_state.txt
+TOP.tb_CACHE.u_cache.u_dcache.fl_state[2:0]
+@22
+TOP.tb_CACHE.u_cache.u_dcache.fl_index[5:0]
+@24
+TOP.tb_CACHE.u_cache.u_dcache.fl_way[1:0]
+@28
+TOP.tb_CACHE.u_cache.u_dcache.fl_busy
+@200
+-uncached (peripheral bus)
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/u_state.txt
+TOP.tb_CACHE.u_cache.u_dcache.u_state[2:0]
+@200
+-LR / SC reservation
+@28
+TOP.tb_CACHE.u_cache.u_dcache.res_valid
+@22
+TOP.tb_CACHE.u_cache.u_dcache.res_line[33:0]
+@200
+-idle
+@28
+TOP.tb_CACHE.u_cache.u_dcache.all_idle
+@1401200
+-9. D$ : FLUSH / UNCACHED / LR-SC
+@c00200
+-10. CPU SIDE : INSTRUCTION FETCH
+@28
+TOP.tb_CACHE.i_req_valid
+TOP.tb_CACHE.i_req_ready
+@22
+TOP.tb_CACHE.i_req_addr[39:0]
+@200
+-response
+@28
+TOP.tb_CACHE.i_resp_valid
+@22
+TOP.tb_CACHE.i_resp_data[63:0]
+@28
+TOP.tb_CACHE.i_resp_error
+@200
+-fence.i
+@28
+TOP.tb_CACHE.i_flush_valid
+TOP.tb_CACHE.i_flush_done
+TOP.tb_CACHE.i_kill
+@1401200
+-10. CPU SIDE : INSTRUCTION FETCH
+@c00200
+-11. I$ : LOOKUP / ARRAYS / FILL
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/ic_state.txt
+TOP.tb_CACHE.u_cache.u_icache.state[1:0]
+@200
+-stage 1 lookup
+@28
+TOP.tb_CACHE.u_cache.u_icache.s1_valid
+@22
+TOP.tb_CACHE.u_cache.u_icache.s1_addr[39:0]
+@28
+TOP.tb_CACHE.u_cache.u_icache.s1_cacheable
+TOP.tb_CACHE.u_cache.u_icache.hit
+@22
+TOP.tb_CACHE.u_cache.u_icache.hit_way_oh[3:0]
+@24
+TOP.tb_CACHE.u_cache.u_icache.hit_way[1:0]
+@22
+TOP.tb_CACHE.u_cache.u_icache.hit_data[63:0]
+@200
+-tag array
+@28
+TOP.tb_CACHE.u_cache.u_icache.tag_rd_en
+@22
+TOP.tb_CACHE.u_cache.u_icache.tag_rd_index[5:0]
+TOP.tb_CACHE.u_cache.u_icache.tag_rd_valid[3:0]
+TOP.tb_CACHE.u_cache.u_icache.tag_rd_tag[111:0]
+@28
+TOP.tb_CACHE.u_cache.u_icache.tag_wr_en
+@22
+TOP.tb_CACHE.u_cache.u_icache.tag_wr_index[5:0]
+@24
+TOP.tb_CACHE.u_cache.u_icache.tag_wr_way[1:0]
+@22
+TOP.tb_CACHE.u_cache.u_icache.tag_wr_tag[27:0]
+@200
+-data array
+@28
+TOP.tb_CACHE.u_cache.u_icache.dat_rd_en
+@22
+TOP.tb_CACHE.u_cache.u_icache.dat_rd_addr[8:0]
+@28
+TOP.tb_CACHE.u_cache.u_icache.dat_wr_en
+@24
+TOP.tb_CACHE.u_cache.u_icache.dat_wr_way[1:0]
+@22
+TOP.tb_CACHE.u_cache.u_icache.dat_wr_addr[8:0]
+TOP.tb_CACHE.u_cache.u_icache.dat_wr_data[63:0]
+@200
+-line fill
+@22
+TOP.tb_CACHE.u_cache.u_icache.fill_addr[39:0]
+@24
+TOP.tb_CACHE.u_cache.u_icache.fill_way[1:0]
+TOP.tb_CACHE.u_cache.u_icache.fill_beat[2:0]
+@28
+TOP.tb_CACHE.u_cache.u_icache.fill_err
+TOP.tb_CACHE.u_cache.u_icache.fill_kill
+TOP.tb_CACHE.u_cache.u_icache.fill_flushed
+TOP.tb_CACHE.u_cache.u_icache.fill_hold_valid
+@22
+TOP.tb_CACHE.u_cache.u_icache.rr_way[3:0]
+@1401200
+-11. I$ : LOOKUP / ARRAYS / FILL
+@c00200
+-12. I$ : AXI4 LINE FILL
+@28
+TOP.tb_CACHE.u_cache.u_icache.m_axi4_arvalid
+TOP.tb_CACHE.u_cache.u_icache.m_axi4_arready
+@22
+TOP.tb_CACHE.u_cache.u_icache.m_axi4_araddr[39:0]
+@24
+TOP.tb_CACHE.u_cache.u_icache.m_axi4_arlen[7:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/axsize.txt
+TOP.tb_CACHE.u_cache.u_icache.m_axi4_arsize[2:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/axburst.txt
+TOP.tb_CACHE.u_cache.u_icache.m_axi4_arburst[1:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/axi_id.txt
+TOP.tb_CACHE.u_cache.u_icache.m_axi4_arid[3:0]
+@200
+-read data
+@28
+TOP.tb_CACHE.u_cache.u_icache.m_axi4_rvalid
+TOP.tb_CACHE.u_cache.u_icache.m_axi4_rready
+@22
+TOP.tb_CACHE.u_cache.u_icache.m_axi4_rdata[63:0]
+@28
+TOP.tb_CACHE.u_cache.u_icache.m_axi4_rlast
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/axi_resp.txt
+TOP.tb_CACHE.u_cache.u_icache.m_axi4_rresp[1:0]
+@1401200
+-12. I$ : AXI4 LINE FILL
+@800
+-13. BUS_ARB / MEMORY BUS
+@28
+TOP.tb_CACHE.u_cache.u_arb.x4r_act
+TOP.tb_CACHE.u_cache.u_arb.x4r_g1
+TOP.tb_CACHE.u_cache.u_arb.x4w_act
+TOP.tb_CACHE.u_cache.u_arb.x4w_g1
+@200
+-memory bus out of CPU_CACHE
+@28
+TOP.tb_CACHE.m_axi4_arvalid
+TOP.tb_CACHE.m_axi4_arready
+@22
+TOP.tb_CACHE.m_axi4_araddr[39:0]
+@24
+TOP.tb_CACHE.m_axi4_arlen[7:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/axi_id.txt
+TOP.tb_CACHE.m_axi4_arid[3:0]
+@28
+TOP.tb_CACHE.m_axi4_rvalid
+TOP.tb_CACHE.m_axi4_rready
+@22
+TOP.tb_CACHE.m_axi4_rdata[63:0]
+@28
+TOP.tb_CACHE.m_axi4_rlast
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/axi_id.txt
+TOP.tb_CACHE.m_axi4_rid[3:0]
+@28
+TOP.tb_CACHE.m_axi4_awvalid
+TOP.tb_CACHE.m_axi4_awready
+@22
+TOP.tb_CACHE.m_axi4_awaddr[39:0]
+@28
+TOP.tb_CACHE.m_axi4_wvalid
+TOP.tb_CACHE.m_axi4_wready
+TOP.tb_CACHE.m_axi4_wlast
+TOP.tb_CACHE.m_axi4_bvalid
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/axi_resp.txt
+TOP.tb_CACHE.m_axi4_bresp[1:0]
+@1000
+-13. BUS_ARB / MEMORY BUS
+@c00200
+-14. AXI4 MEMORY MODEL
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/ram_r.txt
+TOP.tb_CACHE.u_mem.rstate[1:0]
+@24
+TOP.tb_CACHE.u_mem.rbeat[8:0]
+@22
+TOP.tb_CACHE.u_mem.raddr_r[31:0]
+@2022
+^1 /media/psf/Home/Documents/CQ/RISCV/mmRISC/mmRISC-2/SIM/SIM_CACHE/gtkw_filter/ram_w.txt
+TOP.tb_CACHE.u_mem.wstate[1:0]
+@24
+TOP.tb_CACHE.u_mem.wbeat[8:0]
+@22
+TOP.tb_CACHE.u_mem.waddr_r[31:0]
+@28
+TOP.tb_CACHE.u_mem.stall_en
+@1401200
+-14. AXI4 MEMORY MODEL
+@c00200
+-15. PERIPHERAL BUS (AXI4-Lite)
+@28
+TOP.tb_CACHE.m_axil_arvalid
+TOP.tb_CACHE.m_axil_arready
+@22
+TOP.tb_CACHE.m_axil_araddr[39:0]
+@28
+TOP.tb_CACHE.m_axil_rvalid
+@22
+TOP.tb_CACHE.m_axil_rdata[63:0]
+@28
+TOP.tb_CACHE.m_axil_awvalid
+@22
+TOP.tb_CACHE.m_axil_awaddr[39:0]
+@28
+TOP.tb_CACHE.m_axil_wvalid
+@22
+TOP.tb_CACHE.m_axil_wdata[63:0]
+@28
+TOP.tb_CACHE.m_axil_bvalid
+@1401200
+-15. PERIPHERAL BUS (AXI4-Lite)

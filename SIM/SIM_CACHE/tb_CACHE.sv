@@ -377,6 +377,10 @@ module tb_CACHE;
     //=================================================================
     // Result bookkeeping
     //=================================================================
+    // free running cycle counter (throughput measurement, 7. in the spec)
+    int unsigned cyc = 0;
+    always @(posedge clk) if (rst_n) cyc <= cyc + 1;
+
     int n_check = 0;
     int n_error = 0;
 
@@ -895,6 +899,7 @@ module tb_CACHE;
     //=================================================================
     // Tests
     //=================================================================
+    `include "tb_CACHE_perf.svh"
     `include "tb_CACHE_tests.svh"
 `ifdef PROBE
     `include "probe.svh"

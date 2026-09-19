@@ -1,0 +1,3 @@
+2 I$ fill
+3 D$ fill
+4 D$ writeback
