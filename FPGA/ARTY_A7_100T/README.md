@@ -32,7 +32,24 @@ Things to check after the build:
 | CKLD-2 (JA_TMS drives clock pins without BUFG) | TMSC clocks the 5-bit Gray escape counter directly (by design, no BUFG needed). |
 | TIMING-9 and Critical CDC rows (jtag_tmsc, jtag_tck, clk_out) | Intentional crossings: Gray counter snapshots, TMS/TDI pin data, bundled DMI data held by the req/ack handshake, and asynchronous reset assertion. Check `cdc.rpt` (-details) that the unsafe endpoints are only of these kinds. |
 | LUTAR-1 (LUT drives async reset) | Reset combinations (POR & button & nSRST, POR & nTRST, rst_n & ~ndmreset) in front of the reset synchronizers; assertion is asynchronous by design. |
+| REQP-1839 / REQP-1840 (RAMB36 / RAMB18 async control check) | The address pins of the cache arrays are driven by cache state machines that have an asynchronous reset, so a read or a write can be corrupted while the reset is being asserted. Harmless here: the same reset clears every valid bit of the tag array, so the caches start empty and nothing that was in the arrays is ever used again. |
 | SYNTH-6 / SYNTH-15 (RAM output register / byte write enable) | RAM timing has large margin at 50MHz. |
+
+### Utilization (2026-09-20 build, USE_BFM=0)
+
+| Resource | Used | Available |
+|---|---|---|
+| Slice registers | 6960 | 126800 (5.5%) |
+| Slice LUTs | 7693 | 63400 (12.1%) |
+| Block RAM tiles | 23 | 135 (17%) |
+| WNS / WHS | +4.387 ns / +0.014 ns (50MHz system clock) | |
+
+The 23 block RAM tiles are 16 for the 64KiB memory bus RAM, 1 for the 4KiB
+peripheral RAM, 4 RAMB36 for the data cache arrays (one per way, 512 x 64
+bit) and 4 RAMB18 for the tag arrays. The instruction cache is optimized
+away in this build: with `USE_BFM=0` nothing fetches instructions, and the
+debugger uses the data cache only. It comes back (4 more RAMB36) when the
+CPU core is added.
 
 ### Cache arrays must end up in block RAM
 

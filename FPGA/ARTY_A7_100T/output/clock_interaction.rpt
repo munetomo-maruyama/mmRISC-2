@@ -1,7 +1,7 @@
 Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
 ---------------------------------------------------------------------------------------------------------------------------------------------
 | Tool Version : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
-| Date         : Thu Sep 17 21:35:03 2026
+| Date         : Sun Sep 20 01:32:45 2026
 | Host         : ARM-Windows running 64-bit major release  (build 9200)
 | Command      : report_clock_interaction -file ./output/clock_interaction.rpt
 | Design       : TOP
@@ -18,13 +18,13 @@ Clock Interaction Table
                                         WNS                            TNS Failing  TNS Total    WNS Path         Clock-Pair           Inter-Clock          
 From Clock          To Clock            Clock Edges  WNS(ns)  TNS(ns)    Endpoints    Endpoints  Requirement(ns)  Classification       Constraints          
 ------------------  ------------------  -----------  -------  -------  -----------  -----------  ---------------  -------------------  -------------------  
-g_clk_mmcm.clk_out  g_clk_mmcm.clk_out  rise - rise     8.38     0.00            0         7178            20.00  Clean                Timed                
+g_clk_mmcm.clk_out  g_clk_mmcm.clk_out  rise - rise     4.39     0.00            0        18167            20.00  Clean                Timed                
 g_clk_mmcm.clk_out  jtag_tck                                                     0           69                   Ignored              Asynchronous Groups  
 g_clk_mmcm.clk_out  jtag_tmsc                                                    0            5                   Ignored              Asynchronous Groups  
 jtag_tck            g_clk_mmcm.clk_out                                           0           41                   Ignored              Asynchronous Groups  
-jtag_tck            jtag_tck            fall - rise    38.08     0.00            0          430            50.00  Clean                Timed                
+jtag_tck            jtag_tck            fall - rise    40.82     0.00            0          430            50.00  Clean                Timed                
 jtag_tck            jtag_tmsc                                                    0            5                   Ignored              Asynchronous Groups  
 jtag_tmsc           jtag_tck                                                     0           24                   Ignored              Asynchronous Groups  
-jtag_tmsc           jtag_tmsc           rise - rise    97.38     0.00            0            5           100.00  Clean                Timed                
+jtag_tmsc           jtag_tmsc           rise - rise    97.15     0.00            0            5           100.00  Clean                Timed                
 
 
