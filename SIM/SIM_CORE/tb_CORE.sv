@@ -68,7 +68,8 @@ module tb_CORE;
     logic [4:0]             trap_cause;
     logic [63:0]            trap_epc, trap_tval;
 
-    logic                   irq_m_soft, irq_m_timer, irq_m_ext;
+    logic                   irq_m_ext;
+    logic [0:0]             irq_m_soft, irq_m_timer;   // one bit per hart
     logic [63:0]            mtime;
 
     // the instruction cache of the system answers the invalidate of a fence.i
@@ -106,8 +107,8 @@ module tb_CORE;
             .d_resp_valid  (d_resp_valid),
             .d_resp_data   (d_resp_data),
             .d_resp_error  (d_resp_error),
-            .irq_m_soft    (irq_m_soft),
-            .irq_m_timer   (irq_m_timer),
+            .irq_m_soft    (irq_m_soft[0]),
+            .irq_m_timer   (irq_m_timer[0]),
             .irq_m_ext     (irq_m_ext),
             .mtime         (mtime),
             .trace_valid   (trace_valid),
@@ -171,7 +172,7 @@ module tb_CORE;
             .prot_error   (prot_error)
         );
 
-    CPU_CLINT #(.TICK_DIV(1)) u_clint
+    CPU_CLINT #(.NUM_HARTS(1), .TICK_DIV(1)) u_clint
         (
             .clk         (clk),
             .rst_n       (rst_n),

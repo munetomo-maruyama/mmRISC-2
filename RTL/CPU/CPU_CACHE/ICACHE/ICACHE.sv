@@ -94,6 +94,15 @@ module ICACHE
     localparam int WAY_BITS        = (WAYS > 1) ? $clog2(WAYS) : 1;
     localparam int DADDR_BITS      = $clog2(SETS * WORDS_PER_BLOCK);
 
+    initial begin
+    // The index and the offset have to fit into the page offset, so that the
+    // cache can be indexed with the virtual address while the tag is compared
+    // against the physical one (CPU_CACHE_SPEC.md 3.5 and 6.4.7). The default
+    // is exactly at the limit, so a bigger cache has to gain ways, not sets.
+    if (SETS * BLOCK_BYTES > 4096)
+        $fatal(1, "SETS * BLOCK_BYTES must not be larger than the page size (4096)");
+    end
+
     function automatic logic [TAG_BITS-1:0]  addr_tag  (input logic [PADDR_WIDTH-1:0] a);
         return a[PADDR_WIDTH-1 -: TAG_BITS];
     endfunction

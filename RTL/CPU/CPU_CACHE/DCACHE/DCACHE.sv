@@ -152,6 +152,15 @@ module DCACHE
     localparam int WB_BITS         = (NUM_WB   > 1) ? $clog2(NUM_WB)   : 1;
     localparam int LINE_BITS       = PADDR_WIDTH - OFF_BITS;
 
+    initial begin
+    // The index and the offset have to fit into the page offset, so that the
+    // cache can be indexed with the virtual address while the tag is compared
+    // against the physical one (CPU_CACHE_SPEC.md 3.5 and 6.4.7). The default
+    // is exactly at the limit, so a bigger cache has to gain ways, not sets.
+    if (SETS * BLOCK_BYTES > 4096)
+        $fatal(1, "SETS * BLOCK_BYTES must not be larger than the page size (4096)");
+    end
+
     function automatic logic [TAG_BITS-1:0]  addr_tag  (input logic [PADDR_WIDTH-1:0] a);
         return a[PADDR_WIDTH-1 -: TAG_BITS];
     endfunction
@@ -357,7 +366,13 @@ module DCACHE
     logic [WB_BITS:0]      wb_count;
     logic                  wb_full, wb_empty;
 
-    assign wb_full  = ((WB_BITS+1)'(wb_count) == (WB_BITS+1)'(NUM_WB));
+    // How many entries of the writeback queue the pipeline may use. A
+    // coherent version keeps one for the probe, so that an external
+    // invalidate of a dirty line can always be answered even when the CPU
+    // filled the queue (CPU_CACHE_SPEC.md 6.4.4): WB_CPU_LIMIT = NUM_WB - 1.
+    localparam int WB_CPU_LIMIT = NUM_WB;
+
+    assign wb_full  = ((WB_BITS+1)'(wb_count) >= (WB_BITS+1)'(WB_CPU_LIMIT));
     assign wb_empty = (wb_count == '0);
 
     logic                  res_valid;
@@ -388,35 +403,91 @@ module DCACHE
     assign array_rd_busy = fl_rd_busy | f_rd_busy;
     assign fl_busy       = (fl_state != FL_IDLE);
 
+    //-----------------------------------------------------------------
+    // Who may use the arrays (CPU_CACHE_SPEC.md 6.4.3)
+    //
+    //   priority   requester            read tag  read data  can be held back
+    //   1          (probe, not built)   no (*)    yes        no
+    //   2          fill completion      no        no         no
+    //   3          flush walk           yes       yes        no, has its own
+    //                                                        state machine
+    //   4          pipeline stage 1     yes       yes        yes (s1_reread)
+    //   5          pipeline stage 0     yes       yes        yes (d_req_ready)
+    //
+    //   (*) a probe would look its line up in a copy of the tag array that is
+    //       written from the same tag_wr_* bundle, so it never takes the read
+    //       port away from the pipeline. It does take the data read port when
+    //       it has to write a dirty line back.
+    //
+    // Every requester below drives one *_req / *_index (or *_addr) pair; the
+    // block after them is the only place that picks one. Adding the probe
+    // means adding one row here, not hunting through the module.
+    //-----------------------------------------------------------------
+    logic                    flw_dat_req;     // flush walk, reading a line out
+    logic [DADDR_BITS-1:0]   flw_dat_addr;
+    logic                    fwb_dat_req;     // writeback of a victim
+    logic [DADDR_BITS-1:0]   fwb_dat_addr;
+    logic                    s1_dat_req;      // stage 1, reading again
+    logic [DADDR_BITS-1:0]   s1_dat_addr;
+    logic                    s0_dat_req;      // a new request from the CPU
+    logic [DADDR_BITS-1:0]   s0_dat_addr;
+
+    logic                    flw_tag_req;     // flush walk, tag of one set
+    logic [IDX_BITS-1:0]     flw_tag_index;
+    logic                    s1_tag_req;
+    logic [IDX_BITS-1:0]     s1_tag_index;
+    logic                    s0_tag_req;
+    logic [IDX_BITS-1:0]     s0_tag_index;
+
+    assign flw_dat_req  = fl_rd_busy;
+    assign flw_dat_addr = {fl_index, fl_word};
+    assign fwb_dat_req  = f_rd_busy;
+    assign fwb_dat_addr = {ms_line[ms_head][IDX_BITS-1:0], f_wb_word};
+    assign s1_dat_req   = s1_reread;
+    assign s1_dat_addr  = {addr_index(s1_addr), addr_woff(s1_addr)};
+    assign s0_dat_req   = d_req_valid & d_req_ready;
+    assign s0_dat_addr  = {addr_index(d_req_addr), addr_woff(d_req_addr)};
+
+    assign flw_tag_req   = (fl_state == FL_TAG);
+    assign flw_tag_index = fl_index;
+    assign s1_tag_req    = s1_reread;
+    assign s1_tag_index  = addr_index(s1_addr);
+    assign s0_tag_req    = d_req_valid & d_req_ready;
+    assign s0_tag_index  = addr_index(d_req_addr);
+
+    // data array, read port
     always @(*) begin
-        if (fl_rd_busy) begin
+        if (flw_dat_req) begin
             dat_rd_en   = 1'b1;
-            dat_rd_addr = {fl_index, fl_word};
-        end else if (f_rd_busy) begin
+            dat_rd_addr = flw_dat_addr;
+        end else if (fwb_dat_req) begin
             dat_rd_en   = 1'b1;
-            dat_rd_addr = {ms_line[ms_head][IDX_BITS-1:0], f_wb_word};
-        end else if (s1_reread) begin
+            dat_rd_addr = fwb_dat_addr;
+        end else if (s1_dat_req) begin
             dat_rd_en   = 1'b1;
-            dat_rd_addr = {addr_index(s1_addr), addr_woff(s1_addr)};
+            dat_rd_addr = s1_dat_addr;
         end else begin
-            dat_rd_en   = d_req_valid & d_req_ready;
-            dat_rd_addr = {addr_index(d_req_addr), addr_woff(d_req_addr)};
+            dat_rd_en   = s0_dat_req;
+            dat_rd_addr = s0_dat_addr;
         end
     end
 
+    // tag array, read port. While the flush walk or a writeback is reading the
+    // data array the pipeline is held back anyway (array_rd_busy is part of
+    // d_req_ready), so the tag port simply stays idle.
     always @(*) begin
-        if (fl_state == FL_TAG) begin
+        if (flw_tag_req) begin
             tag_rd_en    = 1'b1;
-            tag_rd_index = fl_index;
+            tag_rd_index = flw_tag_index;
         end else if (array_rd_busy) begin
             tag_rd_en    = 1'b0;
             tag_rd_index = fl_index;
-        end else if (s1_reread) begin
+        end else if (s1_tag_req) begin
             tag_rd_en    = 1'b1;
-            tag_rd_index = addr_index(s1_addr);
+            tag_rd_index = s1_tag_index;
         end else begin
-            tag_rd_en    = d_req_valid & d_req_ready;
-            tag_rd_index = addr_index(d_req_addr);
+            tag_rd_en    = s0_tag_req;
+            tag_rd_index = s0_tag_index;
         end
     end
 
@@ -632,7 +703,14 @@ module DCACHE
     end
 
     //=================================================================
-    // Data array write port (fill beat > stage 1)
+    // Data array write port
+    //
+    //   priority   requester           can be held back
+    //   1          fill beat           no, the bus is delivering
+    //   2          pipeline stage 1    yes
+    //
+    // A probe never writes the data array: it reads a dirty line out and
+    // invalidates it in the tag array (CPU_CACHE_SPEC.md 6.4.3).
     //=================================================================
     always @(*) begin
         if (fill_wr_en) begin
@@ -653,7 +731,16 @@ module DCACHE
     end
 
     //=================================================================
-    // Tag write port (fill completion > flush invalidate > store hit)
+    // Tag write port
+    //
+    //   priority   requester           writes
+    //   1          (probe, not built)  valid / dirty of the probed line
+    //   2          fill completion     tag + valid + dirty of the new line
+    //   3          flush invalidate    valid = 0
+    //   4          store hit           dirty = 1
+    //
+    // A copy of the tag array for the probe hit test (6.4.3) is written from
+    // exactly this bundle, so it stays in step without any further logic.
     //=================================================================
     always @(*) begin
         tag_wr_en    = 1'b0;
