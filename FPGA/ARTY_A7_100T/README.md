@@ -155,6 +155,25 @@ that the values survive `reset halt` (debug writes are write through, so they
 are in memory and not in a dirty line), and an access to the peripheral bus.
 It prints `CACHE TEST RESULT : PASS` at the end and leaves OpenOCD running.
 
+It starts with `reset halt` (which empties the caches) and writes every value
+it checks, so it can be run again without power cycling the board. Note that
+a reset does not clear the RAM: the values of an earlier run are still there.
+
+Two messages during `verify_image` are expected as long as there is no CPU
+core:
+
+```
+Error: No working memory available. Specify -work-area-phys to target.
+Warn : not enough working area available(requested 1112)
+```
+
+OpenOCD would like to run a CRC routine on the target to compare the image;
+that needs a hart that can execute code (this design has the pseudo hart with
+`progbufsize=0`). It falls back to reading the data back over JTAG, which is
+exactly the access path we want to check, and `verify_image` succeeds. Do not
+configure a work area before the CPU core exists: OpenOCD would then try to
+run the routine and fail.
+
 Any file works for a manual `load_image`; for example
 `head -c 32768 /dev/urandom > test.bin`.
 

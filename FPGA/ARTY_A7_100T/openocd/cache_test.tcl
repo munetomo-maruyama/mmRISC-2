@@ -12,6 +12,15 @@
 # The image for load_image / verify_image is generated here, there is no
 # binary in the repository. It is written to the directory OpenOCD was
 # started in (cache_test_image.bin) and can be deleted afterwards.
+#
+# The script can be run again without power cycling the board: it starts with
+# reset halt and writes every value it checks.
+#
+# "No working memory available / not enough working area" during verify_image
+# is expected: OpenOCD would like to run a CRC routine on the target, which
+# needs a CPU. There is none yet (pseudo hart, progbufsize=0), so it falls
+# back to reading the data back over JTAG, which is what we want to test
+# anyway. Do not configure a work area before the CPU core exists.
 #---------------------------------------------------------------------------
 
 # size of the block used for the replacement test (32KiB = twice the cache).
@@ -39,18 +48,22 @@ proc rd32 {addr} {
 # config that does not, do it here (the run stage commands do not exist yet)
 if {[info commands halt] eq ""} { init }
 
-halt
+# Start from an empty cache. reset halt clears the caches (every valid bit),
+# it does NOT clear the RAM: the values written by an earlier run are still
+# there, which is why this script never expects a memory location to be zero.
+reset halt
 
 #---------------------------------------------------------------------------
 # 1. one line : write miss, read miss, read hit, write hit
 #---------------------------------------------------------------------------
 echo ""
 echo "--- 1. single line : miss and hit ---"
-mww 0x80001000 0x11111111
-chk "read miss  @0x80001000" 0x11111111 [rd32 0x80001000]
+mww 0x80001000 0x11111111       ;# write miss : memory, no line allocated
+mww 0x80001004 0x33333333       ;# same line, also a write miss
+chk "read miss  @0x80001000" 0x11111111 [rd32 0x80001000]   ;# fills the line
 chk "read hit   @0x80001000" 0x11111111 [rd32 0x80001000]
-chk "read hit   @0x80001004" 0x00000000 [rd32 0x80001004]
-mww 0x80001004 0x22222222
+chk "read hit   @0x80001004" 0x33333333 [rd32 0x80001004]   ;# same line
+mww 0x80001004 0x22222222       ;# write hit : line and memory are updated
 chk "write hit  @0x80001004" 0x22222222 [rd32 0x80001004]
 chk "line kept  @0x80001000" 0x11111111 [rd32 0x80001000]
 
