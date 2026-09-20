@@ -27,8 +27,8 @@
 | `make wave` | VCD を出す |
 | `make iverilog` | Icarus Verilog で同じ試験 |
 | `make clint` | `CPU_CLINT` を 4 ハート構成で直接叩く(`tb_CLINT.sv`)。単一コアのプログラムからは届かないレジスタマップの検査 |
-| `make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / mi)。`RVTESTS` でリポジトリの場所を指定 |
-| `make bugs` / `./bug_inject.sh` | バグ注入 76 種(背圧あり/なしの両方で判定) |
+| `make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / mi)。`RVTESTS` でリポジトリの場所を指定 |
+| `make bugs` / `./bug_inject.sh` | バグ注入 90 種(背圧あり/なしの両方で判定) |
 | `make lint` | Verilator lint |
 
 プラスアーグ:
@@ -39,6 +39,7 @@
 | `+tohost=<addr>` | tohost の番地(既定 0x8000_2000。riscv-tests では ELF から取る) |
 | `+trace` | リタイアした命令(PC、命令語、書き込みレジスタ)とトラップを出す |
 | `+dtrace` | データポートの要求/応答を出す |
+| `+ftrace` | FPU に渡した演算・書式・丸めモード・オペランドを出す |
 | `+istall=<n>` `+dstall=<n>` | 命令/データポートの `ready` を約 n% のサイクルで落とす |
 | `+maxcycles=<n>` | ウォッチドッグ(既定 200000) |
 
@@ -71,6 +72,7 @@ x10〜x30 だけを使うこと。`TEST_INIT` が既定のトラップハンド�
 | `t08_rvc` | 圧縮命令、語境界をまたぐ 32bit 命令、語の途中への分岐、不正な圧縮命令 |
 | `t09_muldiv` | 乗除算の符号、ゼロ除算、オーバーフロー、32bit 形 |
 | `t10_atomic` | LR/SC と全 AMO の 32/64bit、不整列 |
+| `t11_fp` | `mstatus.FS`、NaN-boxing、`fcsr`/丸めモード、FP ストアのデータ源、FPU と他ユニットのハザード |
 
 ## テストベンチが自動で見ているもの
 

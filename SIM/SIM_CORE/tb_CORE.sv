@@ -258,7 +258,11 @@ module tb_CORE;
                              $time, trace_pc);
                 end
                 if (do_trace) begin
-                    if (trace_rd_we)
+                    if (u_core.wb_fp_we)
+                        $display("[%0t] %010h : %08h   f%0d <- %016h",
+                                 $time, trace_pc, trace_insn,
+                                 u_core.wb_fp_rd, u_core.wb_fp_data);
+                    else if (trace_rd_we)
                         $display("[%0t] %010h : %08h   x%0d <- %016h",
                                  $time, trace_pc, trace_insn, trace_rd, trace_rd_data);
                     else
@@ -314,6 +318,13 @@ module tb_CORE;
         end
         $display("==========================================================");
         $finish;
+    end
+
+    always @(posedge clk) begin
+        if ($test$plusargs("ftrace") && rst_n && u_core.fpu_start)
+            $display("[%0t] FPU op=%0d fmt=%0d rm=%0d a=%016h b=%016h c=%016h",
+                     $time, u_core.ex_fp_op, u_core.ex_fp_fmt, u_core.ex_rm_eff,
+                     u_core.fpu_a, u_core.ex_fs2_fwd, u_core.ex_fs3_fwd);
     end
 
     // +dtrace : every access on the data port

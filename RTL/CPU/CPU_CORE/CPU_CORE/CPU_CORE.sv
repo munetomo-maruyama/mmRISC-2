@@ -160,6 +160,12 @@ module CPU_CORE
     logic        dec_mem_signed;
     logic        dec_is_fence, dec_is_fence_i, dec_is_ecall, dec_is_ebreak;
     logic        dec_is_mret, dec_is_wfi, dec_illegal;
+    logic        dec_is_fp, dec_fp_arith, dec_fp_fmt;
+    logic [4:0]  dec_fp_op;
+    logic [2:0]  dec_fp_rm;
+    logic        dec_use_fs1, dec_use_fs2, dec_use_fs3, dec_fp_we_rd;
+    logic        dec_fp_int_signed, dec_fp_int_w;
+    logic        dec_is_fp_load, dec_is_fp_store;
     logic        dec_is_csr, dec_csr_imm_sel, dec_csr_wr, dec_csr_rd;
     logic [11:0] dec_csr_addr;
     logic [1:0]  dec_csr_op;
@@ -196,6 +202,19 @@ module CPU_CORE
             .is_mret     (dec_is_mret),
             .is_wfi      (dec_is_wfi),
             .illegal     (dec_illegal),
+            .is_fp         (dec_is_fp),
+            .fp_arith      (dec_fp_arith),
+            .fp_op         (dec_fp_op),
+            .fp_fmt        (dec_fp_fmt),
+            .fp_rm         (dec_fp_rm),
+            .use_fs1       (dec_use_fs1),
+            .use_fs2       (dec_use_fs2),
+            .use_fs3       (dec_use_fs3),
+            .fp_we_rd      (dec_fp_we_rd),
+            .fp_int_signed (dec_fp_int_signed),
+            .fp_int_w      (dec_fp_int_w),
+            .is_fp_load    (dec_is_fp_load),
+            .is_fp_store   (dec_is_fp_store),
             .is_csr      (dec_is_csr),
             .csr_addr    (dec_csr_addr),
             .csr_op      (dec_csr_op),
@@ -223,6 +242,41 @@ module CPU_CORE
         );
 
     //=================================================================
+    // floating point register file
+    //=================================================================
+    logic [63:0] frf_fs1_data, frf_fs2_data, frf_fs3_data;
+    logic        wb_fp_we;
+    logic [63:0] wb_fp_data;
+    logic [4:0]  wb_fp_rd;
+
+    CORE_FRF u_frf
+        (
+            .clk      (clk),
+            .rst_n    (rst_n),
+            .rs1      (dec_rs1),
+            .rs1_data (frf_fs1_data),
+            .rs2      (dec_rs2),
+            .rs2_data (frf_fs2_data),
+            .rs3      (fq_insn[31:27]),
+            .rs3_data (frf_fs3_data),
+            .we       (wb_valid & wb_fp_we),
+            .rd       (wb_fp_rd),
+            .rd_data  (wb_fp_data)
+        );
+
+    //=================================================================
+    // pipeline control
+    //
+    //   Declared here because the units below are held back by them: an
+    //   iterative unit must not start while MA is still waiting for the
+    //   cache, and it has to be killed when a trap empties the pipeline.
+    //=================================================================
+    logic ex_is_mem, stall_ma, stall_ex, ex_advance;
+    logic id_ready, id_advance, pipe_busy, serial_busy, wfi_wait, flush;
+    logic ma_exc, trap_taken, mret_taken, fencei_taken, fencei_busy;
+    logic commit;
+
+    //=================================================================
     // EX stage registers
     //=================================================================
     logic        ex_valid;
@@ -240,11 +294,19 @@ module CPU_CORE
     logic [3:0]  ex_mem_cmd;
     logic [1:0]  ex_mem_size;
     logic        ex_mem_signed;
+    logic        ex_is_fp, ex_fp_arith, ex_fp_fmt, ex_fp_we_rd;
+    logic [4:0]  ex_fp_op;
+    logic [2:0]  ex_fp_rm;
+    logic        ex_use_fs1, ex_use_fs2, ex_use_fs3;
+    logic        ex_fp_int_signed, ex_fp_int_w;
+    logic        ex_is_fp_store, ex_fp_box;
+    logic [4:0]  ex_fs1, ex_fs2, ex_fs3;
+    logic [63:0] ex_fs1_data, ex_fs2_data, ex_fs3_data;
     logic        ex_is_csr, ex_csr_imm_sel, ex_csr_wr;
     logic [4:0]  ex_csr_uimm;
     logic [11:0] ex_csr_addr;
     logic [1:0]  ex_csr_op;
-    logic        ex_is_mret, ex_is_fencei;
+    logic        ex_is_mret, ex_is_fencei, ex_serial;
     logic        ex_exc_r;                 // exception seen in ID
     logic        ex_exc_int_r;
     logic [4:0]  ex_exc_cause_r;
@@ -257,7 +319,10 @@ module CPU_CORE
     logic [63:0] ma_pc, ma_result;
     logic [31:0] ma_insn;
     logic [4:0]  ma_rd;
-    logic        ma_is_mret, ma_is_fencei, ma_is_rvc;
+    logic        ma_is_mret, ma_is_fencei, ma_is_rvc, ma_serial;
+    logic        ma_is_fp, ma_fp_arith, ma_fp_we, ma_fp_box;
+    logic [4:0]  ma_fp_rd;
+    logic [4:0]  ma_fp_flags;
     logic        ma_csr_wr;
     logic [11:0] ma_csr_addr;
     logic [63:0] ma_csr_wdata;
@@ -291,6 +356,33 @@ module CPU_CORE
         ex_b_fwd = ex_rs2_data;
         if      (ma_valid && ma_we_rd && (ma_rd != 5'd0) && (ma_rd == ex_rs2)) ex_b_fwd = ma_fwd_data;
         else if (wb_valid && wb_we_rd && (wb_rd != 5'd0) && (wb_rd == ex_rs2)) ex_b_fwd = wb_data;
+    end
+
+    //=================================================================
+    // forwarding of the floating point sources
+    //
+    //   f0 is an ordinary register, so "this instruction does not use the
+    //   source" is a flag of its own and not the register number zero.
+    //=================================================================
+    logic [63:0] ex_fs1_fwd, ex_fs2_fwd, ex_fs3_fwd, ma_fp_fwd_data;
+    logic [63:0] ma_load_data;
+
+    assign ma_load_data  = ma_fp_box ? {32'hFFFF_FFFF, lsu_resp_data[31:0]}
+                                     : lsu_resp_data;
+    assign ma_fp_fwd_data = (ma_mem & ma_is_load) ? ma_load_data : ma_result;
+
+    always @(*) begin
+        ex_fs1_fwd = ex_fs1_data;
+        if      (ex_use_fs1 && ma_valid && ma_fp_we && (ma_fp_rd == ex_fs1)) ex_fs1_fwd = ma_fp_fwd_data;
+        else if (ex_use_fs1 && wb_valid && wb_fp_we && (wb_fp_rd == ex_fs1)) ex_fs1_fwd = wb_fp_data;
+
+        ex_fs2_fwd = ex_fs2_data;
+        if      (ex_use_fs2 && ma_valid && ma_fp_we && (ma_fp_rd == ex_fs2)) ex_fs2_fwd = ma_fp_fwd_data;
+        else if (ex_use_fs2 && wb_valid && wb_fp_we && (wb_fp_rd == ex_fs2)) ex_fs2_fwd = wb_fp_data;
+
+        ex_fs3_fwd = ex_fs3_data;
+        if      (ex_use_fs3 && ma_valid && ma_fp_we && (ma_fp_rd == ex_fs3)) ex_fs3_fwd = ma_fp_fwd_data;
+        else if (ex_use_fs3 && wb_valid && wb_fp_we && (wb_fp_rd == ex_fs3)) ex_fs3_fwd = wb_fp_data;
     end
 
     //=================================================================
@@ -344,8 +436,51 @@ module CPU_CORE
         );
 
     assign mdu_active = ex_valid & ex_is_mdu & ~ex_exc;
-    assign mdu_start  = mdu_active & ~mdu_busy & ~mdu_done & ~flush;
+    // Not while MA is waiting for the cache: the operand of this instruction
+    // may be the answer that has not arrived yet, and a unit that runs for
+    // several cycles latches what it is given at the start.
+    assign mdu_start  = mdu_active & ~mdu_busy & ~mdu_done & ~flush & ~stall_ma;
     assign mdu_ack    = mdu_active & mdu_done & ex_advance;
+
+    //=================================================================
+    // floating point unit
+    //=================================================================
+    logic        fpu_active, fpu_start, fpu_busy, fpu_done, fpu_ack;
+    logic [63:0] fpu_result;
+    logic        fpu_res_is_int;
+    logic [4:0]  fpu_flags;
+    logic [63:0] fpu_a;
+    logic [2:0]  frm_csr;
+    logic [1:0]  fs_csr;
+    logic [2:0]  ex_rm_eff;
+
+    assign fpu_a = ex_use_fs1 ? ex_fs1_fwd : ex_a_fwd;
+
+    CORE_FPU u_fpu
+        (
+            .clk           (clk),
+            .rst_n         (rst_n),
+            .start         (fpu_start),
+            .kill          (flush),
+            .op            (ex_fp_op),
+            .fmt           (ex_fp_fmt),
+            .rm            (ex_rm_eff),
+            .int_signed    (ex_fp_int_signed),
+            .int_w         (ex_fp_int_w),
+            .a             (fpu_a),
+            .b             (ex_fs2_fwd),
+            .c             (ex_fs3_fwd),
+            .busy          (fpu_busy),
+            .done          (fpu_done),
+            .ack           (fpu_ack),
+            .result        (fpu_result),
+            .result_is_int (fpu_res_is_int),
+            .flags         (fpu_flags)
+        );
+
+    assign fpu_active = ex_valid & ex_fp_arith & ~ex_exc;
+    assign fpu_start  = fpu_active & ~fpu_busy & ~fpu_done & ~flush & ~stall_ma;
+    assign fpu_ack    = fpu_active & fpu_done & ex_advance;
 
     //=================================================================
     // CSR file
@@ -360,11 +495,12 @@ module CPU_CORE
     logic [63:0] mret_target;
     logic        irq_req, irq_any;
     logic [4:0]  irq_cause;
-    logic        commit;
 
     // misa : bit 0 is 'A' ... bit 8 is 'I' ... bit 12 is 'M'
+    // bit 0 'A', 2 'C', 3 'D', 5 'F', 8 'I', 12 'M'
     localparam logic [63:0] MISA_VAL = (64'd2 << 62) | (64'd1 << 0) | (64'd1 << 2) |
-                                       (64'd1 << 8)  | (64'd1 << 12);
+                                       (64'd1 << 3) | (64'd1 << 5) |
+                                       (64'd1 << 8) | (64'd1 << 12);
 
     CORE_CSR #(.HART_ID(HART_ID), .MISA(MISA_VAL)) u_csr
         (
@@ -392,7 +528,12 @@ module CPU_CORE
             .irq_req     (irq_req),
             .irq_cause   (irq_cause),
             .irq_any     (irq_any),
-            .instret_inc (commit)
+            .instret_inc (commit),
+            .fflags_we   (commit & ma_fp_arith),
+            .fflags_set  (ma_fp_flags),
+            .fs_dirty    (commit & ma_is_fp),
+            .frm_out     (frm_csr),
+            .fs_out      (fs_csr)
         );
 
     // the new value of the CSR
@@ -406,6 +547,30 @@ module CPU_CORE
             default: csr_wval = csr_src;                  // write
         endcase
     end
+
+    //=================================================================
+    // the rounding mode of the instruction
+    //
+    //   rm = 111 means "take it from frm". A reserved value, in the
+    //   instruction or in frm, makes the instruction illegal.
+    //=================================================================
+    logic dec_rm_bad;
+
+    always @(*) begin
+        ex_rm_eff = (ex_fp_rm == 3'b111) ? frm_csr : ex_fp_rm;
+    end
+
+    assign dec_rm_bad = dec_fp_arith &
+                        ((dec_fp_rm == 3'b101) || (dec_fp_rm == 3'b110) ||
+                         ((dec_fp_rm == 3'b111) &&
+                          ((frm_csr == 3'b101) || (frm_csr == 3'b110) ||
+                           (frm_csr == 3'b111))));
+
+    // with mstatus.FS off the whole extension is not there
+    logic fp_off, csr_is_fp;
+    assign fp_off    = (fs_csr == 2'b00);
+    assign csr_is_fp = (dec_csr_addr == 12'h001) || (dec_csr_addr == 12'h002) ||
+                       (dec_csr_addr == 12'h003);
 
     //=================================================================
     // exceptions found in EX
@@ -460,7 +625,7 @@ module CPU_CORE
             .req_addr     (mem_addr),
             .req_size     (ex_mem_size),
             .req_signed   (ex_mem_signed),
-            .req_wdata    (ex_b_fwd),
+            .req_wdata    (ex_is_fp_store ? ex_fs2_fwd : ex_b_fwd),
             .req_accept   (lsu_accept),
             .resp_valid   (lsu_resp_valid),
             .resp_data    (lsu_resp_data),
@@ -484,9 +649,6 @@ module CPU_CORE
     //=================================================================
     // the commit point (MA) : trap, MRET, CSR write
     //=================================================================
-    logic ex_is_mem, stall_ma, stall_ex, ex_advance;
-    logic id_ready, id_advance, pipe_busy, wfi_wait, flush;
-    logic ma_exc, trap_taken, mret_taken, fencei_taken, fencei_busy;
     logic [4:0]  ma_exc_cause;
     logic [63:0] ma_exc_tval;
 
@@ -528,18 +690,26 @@ module CPU_CORE
     assign lsu_req_valid = ex_is_mem & ~stall_ma & ~flush;
     assign stall_ma      = ma_valid & ma_mem & ~lsu_resp_valid;
     assign stall_ex      = stall_ma | (ex_is_mem & ~lsu_accept & ~flush)
-                                    | (mdu_active & ~mdu_done & ~flush);
+                                    | (mdu_active & ~mdu_done & ~flush)
+                                    | (fpu_active & ~fpu_done & ~flush);
     assign ex_advance    = ~stall_ex;
 
-    // a CSR access, an MRET and the fences are serialising: they are only
-    // issued into an empty pipeline. That makes the counters exact, and since
-    // a CSR access is the only reader of the CSR file it also keeps the read
-    // of one away from the write of the one in front of it.
+    // A CSR access, an MRET and the fences are serialising in both
+    // directions: they are only issued into an empty pipeline, and nothing
+    // follows them until they have committed.
+    //
+    //   The first half makes the counters exact. The second half is needed
+    //   because the decoder itself reads CSR state: mstatus.FS says whether
+    //   the floating point extension is there at all, and frm supplies the
+    //   rounding mode of an instruction that asks for the dynamic one. An
+    //   instruction decoded one cycle too early would see the old value of
+    //   either and be turned into an illegal instruction.
     assign pipe_busy   = ex_valid | ma_valid | wb_valid;
+    assign serial_busy = (ex_valid & ex_serial) | (ma_valid & ma_serial);
     assign wfi_wait    = fq_valid & dec_is_wfi & ~irq_any;
     assign id_ready    = ~(fq_valid & (dec_is_csr | dec_is_mret | dec_is_fence |
                                        dec_is_fence_i) & pipe_busy)
-                       & ~wfi_wait;
+                       & ~serial_busy & ~wfi_wait;
     assign id_advance  = ex_advance & id_ready;
     assign fq_ready    = id_advance;
 
@@ -587,7 +757,10 @@ module CPU_CORE
                 id_exc       = 1'b1;
                 id_exc_cause = EXC_IFAULT;
                 id_exc_tval  = fq_pc;
-            end else if (dec_illegal || (fq_is_rvc && decomp_illegal)) begin
+            end else if (dec_illegal || (fq_is_rvc && decomp_illegal) ||
+                         (dec_is_fp & fp_off) ||
+                         (dec_is_csr & csr_is_fp & fp_off) ||
+                         dec_rm_bad) begin
                 id_exc       = 1'b1;
                 id_exc_cause = EXC_ILLEGAL;
                 id_exc_tval  = fq_is_rvc ? {48'd0, fq_insn[15:0]} : {32'd0, fq_insn};
@@ -633,6 +806,21 @@ module CPU_CORE
             ex_mem_cmd    <= 4'd0;
             ex_mem_size   <= 2'd0;
             ex_mem_signed <= 1'b0;
+            ex_is_fp        <= 1'b0;
+            ex_fp_arith     <= 1'b0;
+            ex_fp_op        <= 5'd0;
+            ex_fp_fmt       <= 1'b0;
+            ex_fp_rm        <= 3'd0;
+            ex_use_fs1      <= 1'b0;
+            ex_use_fs2      <= 1'b0;
+            ex_use_fs3      <= 1'b0;
+            ex_fp_we_rd     <= 1'b0;
+            ex_fp_int_signed<= 1'b0;
+            ex_fp_int_w     <= 1'b0;
+            ex_is_fp_store  <= 1'b0;
+            ex_fp_box       <= 1'b0;
+            ex_fs1 <= 5'd0; ex_fs2 <= 5'd0; ex_fs3 <= 5'd0;
+            ex_fs1_data <= 64'd0; ex_fs2_data <= 64'd0; ex_fs3_data <= 64'd0;
             ex_is_csr     <= 1'b0;
             ex_csr_addr   <= 12'd0;
             ex_csr_op     <= 2'd0;
@@ -641,6 +829,7 @@ module CPU_CORE
             ex_csr_wr     <= 1'b0;
             ex_is_mret    <= 1'b0;
             ex_is_fencei  <= 1'b0;
+            ex_serial     <= 1'b0;
             ex_exc_r      <= 1'b0;
             ex_exc_int_r  <= 1'b0;
             ex_exc_cause_r<= 5'd0;
@@ -657,10 +846,17 @@ module CPU_CORE
             ma_rd         <= 5'd0;
             ma_is_mret    <= 1'b0;
             ma_is_fencei  <= 1'b0;
+            ma_serial     <= 1'b0;
             ma_is_rvc     <= 1'b0;
             ma_csr_wr     <= 1'b0;
             ma_csr_addr   <= 12'd0;
             ma_csr_wdata  <= 64'd0;
+            ma_is_fp      <= 1'b0;
+            ma_fp_arith   <= 1'b0;
+            ma_fp_we      <= 1'b0;
+            ma_fp_box     <= 1'b0;
+            ma_fp_rd      <= 5'd0;
+            ma_fp_flags   <= 5'd0;
             ma_exc_r      <= 1'b0;
             ma_exc_int_r  <= 1'b0;
             ma_exc_cause_r<= 5'd0;
@@ -672,6 +868,9 @@ module CPU_CORE
             wb_data       <= 64'd0;
             wb_pc         <= 64'd0;
             wb_insn       <= 32'd0;
+            wb_fp_we      <= 1'b0;
+            wb_fp_rd      <= 5'd0;
+            wb_fp_data    <= 64'd0;
         end else begin
             //---------------------------------------------------------
             // ID -> EX
@@ -704,6 +903,25 @@ module CPU_CORE
                 ex_mem_cmd    <= dec_mem_cmd;
                 ex_mem_size   <= dec_mem_size;
                 ex_mem_signed <= dec_mem_signed;
+                ex_is_fp        <= dec_is_fp;
+                ex_fp_arith     <= dec_fp_arith;
+                ex_fp_op        <= dec_fp_op;
+                ex_fp_fmt       <= dec_fp_fmt;
+                ex_fp_rm        <= dec_fp_rm;
+                ex_use_fs1      <= dec_use_fs1;
+                ex_use_fs2      <= dec_use_fs2;
+                ex_use_fs3      <= dec_use_fs3;
+                ex_fp_we_rd     <= dec_fp_we_rd;
+                ex_fp_int_signed<= dec_fp_int_signed;
+                ex_fp_int_w     <= dec_fp_int_w;
+                ex_is_fp_store  <= dec_is_fp_store;
+                ex_fp_box       <= dec_is_fp_load & ~dec_fp_fmt;
+                ex_fs1          <= dec_use_fs1 ? dec_rs1 : 5'd0;
+                ex_fs2          <= dec_use_fs2 ? dec_rs2 : 5'd0;
+                ex_fs3          <= dec_use_fs3 ? fq_insn[31:27] : 5'd0;
+                ex_fs1_data     <= frf_fs1_data;
+                ex_fs2_data     <= frf_fs2_data;
+                ex_fs3_data     <= frf_fs3_data;
                 ex_is_csr     <= dec_is_csr;
                 ex_csr_addr   <= dec_csr_addr;
                 ex_csr_op     <= dec_csr_op;
@@ -711,11 +929,15 @@ module CPU_CORE
                 ex_csr_wr     <= dec_csr_wr;
                 ex_is_mret    <= dec_is_mret;
                 ex_is_fencei  <= dec_is_fence_i;
+                ex_serial     <= dec_is_csr | dec_is_mret;
                 ex_exc_r      <= id_exc;
                 ex_exc_int_r  <= id_exc_int;
                 ex_exc_cause_r<= id_exc_cause;
                 ex_exc_tval_r <= id_exc_tval;
             end else begin
+                ex_fs1_data <= ex_fs1_fwd;
+                ex_fs2_data <= ex_fs2_fwd;
+                ex_fs3_data <= ex_fs3_fwd;
                 // EX is stalled : keep the operands it has been given. The
                 // forwarding sources move on (MA hands its instruction over,
                 // WB becomes a bubble) while the instruction stays here, so
@@ -739,7 +961,14 @@ module CPU_CORE
                 ma_is_store   <= ex_is_store;
                 ma_is_mret    <= ex_is_mret;
                 ma_is_fencei  <= ex_is_fencei;
+                ma_serial     <= ex_serial;
                 ma_is_rvc     <= ex_is_rvc;
+                ma_is_fp      <= ex_is_fp;
+                ma_fp_arith   <= ex_fp_arith & ~ex_exc;
+                ma_fp_we      <= ex_fp_we_rd & ~ex_exc;
+                ma_fp_rd      <= ex_rd;
+                ma_fp_box     <= ex_fp_box;
+                ma_fp_flags   <= fpu_flags;
                 ma_csr_wr     <= ex_is_csr & ex_csr_wr & ~ex_exc;
                 ma_csr_addr   <= ex_csr_addr;
                 ma_csr_wdata  <= csr_wval;
@@ -748,6 +977,7 @@ module CPU_CORE
                 ma_exc_cause_r<= ex_exc_cause;
                 ma_exc_tval_r <= ex_exc_tval;
                 if      (ex_is_csr)                ma_result <= csr_rdata;
+                else if (ex_fp_arith)              ma_result <= fpu_result;
                 else if (ex_is_mdu)                ma_result <= mdu_result;
                 else if (ex_is_jal || ex_is_jalr)  ma_result <= link_pc;
                 else                               ma_result <= alu_result;
@@ -760,8 +990,12 @@ module CPU_CORE
                 ma_is_load <= 1'b0;
                 ma_is_mret <= 1'b0;
                 ma_is_fencei <= 1'b0;
+                ma_serial  <= 1'b0;
                 ma_csr_wr  <= 1'b0;
                 ma_exc_r   <= 1'b0;
+                ma_is_fp   <= 1'b0;
+                ma_fp_arith<= 1'b0;
+                ma_fp_we   <= 1'b0;
             end
 
             //---------------------------------------------------------
@@ -773,11 +1007,19 @@ module CPU_CORE
                 wb_insn  <= ma_insn;
                 wb_rd    <= ma_rd;
                 wb_we_rd <= ma_we_rd;
-                if (ma_mem && ma_is_load) wb_data <= lsu_resp_data;
-                else                      wb_data <= ma_result;
+                wb_fp_we <= ma_fp_we & ~trap_taken;
+                wb_fp_rd <= ma_fp_rd;
+                if (ma_mem && ma_is_load) begin
+                    wb_data    <= ma_load_data;
+                    wb_fp_data <= ma_load_data;
+                end else begin
+                    wb_data    <= ma_result;
+                    wb_fp_data <= ma_result;
+                end
             end else begin
                 wb_valid <= 1'b0;       // MA keeps its instruction : bubble
                 wb_we_rd <= 1'b0;
+                wb_fp_we <= 1'b0;
             end
 
             //---------------------------------------------------------
@@ -786,13 +1028,18 @@ module CPU_CORE
             if (flush) begin
                 ex_valid   <= 1'b0;
                 ex_exc_r   <= 1'b0;
+                ex_serial  <= 1'b0;
                 ma_valid   <= 1'b0;
                 ma_we_rd   <= 1'b0;
                 ma_mem     <= 1'b0;
                 ma_is_mret <= 1'b0;
                 ma_is_fencei <= 1'b0;
+                ma_serial  <= 1'b0;
                 ma_csr_wr  <= 1'b0;
                 ma_exc_r   <= 1'b0;
+                ma_is_fp   <= 1'b0;
+                ma_fp_arith<= 1'b0;
+                ma_fp_we   <= 1'b0;
             end
         end
     end
