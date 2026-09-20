@@ -1,18 +1,24 @@
 //---------------------------------------------------------------------------
 // tb_CORE.sv
 //
-// Core test bench (M1). The core runs against CORE_MEM_MODEL, which speaks
-// the cache port protocol, so the core is tested without the caches.
+// Core test bench (M2). The core runs against CORE_MEM_MODEL, which speaks
+// the cache port protocol, so the core is tested without the caches. The
+// CLINT of the system is next to the model, at its usual address.
 //
-//   Programs are built from tests/*.S and follow the riscv-tests convention:
-//   the program writes 1 to `tohost` when it passes and (testnum << 1) | 1
-//   when it fails, then executes ECALL, which stops the core in M1.
+//   Programs follow the riscv-tests convention: the program writes 1 to
+//   `tohost` when it passes and (testnum << 1) | 1 when it fails. The test
+//   bench watches the store channel and ends the run on the first value that
+//   is not zero, so the program may spin afterwards.
 //
 //   Plusargs:
-//     +hex=<file>   program image, one 64 bit word per line (default given
-//                   by the Makefile)
-//     +trace        print every retired instruction
-//     +maxcycles=n  watchdog (default 200000)
+//     +hex=<file>     program image, one 64 bit word per line
+//     +name=<name>    name printed in the result line
+//     +tohost=<addr>  address of the tohost word (default 0x80002000)
+//     +trace          print every retired instruction and every trap
+//     +dtrace         print every access on the data port
+//     +istall=<n>     hold the ready of the instruction port low in n% of the
+//                     cycles, +dstall=<n> the same for the data port
+//     +maxcycles=n    watchdog (default 200000)
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -22,7 +28,7 @@ module tb_CORE;
     localparam int          PADDR_WIDTH = 40;
     localparam logic [63:0] MEM_BASE    = 64'h0000_0000_8000_0000;
     localparam int          MEM_WORDS   = 8192;                  // 64 KiB
-    localparam logic [63:0] TOHOST      = 64'h0000_0000_8000_2000;
+    localparam logic [63:0] CLINT_BASE  = 64'h0000_0000_0200_0000;
 
     //=================================================================
     // clock and reset
@@ -53,18 +59,27 @@ module tb_CORE;
     logic [3:0]             d_req_cmd;
     logic [63:0]            d_req_wdata, d_resp_data;
 
-    logic                   trace_valid, trace_rd_we, core_halted;
+    logic                   trace_valid, trace_rd_we;
     logic [63:0]            trace_pc, trace_rd_data;
     logic [31:0]            trace_insn;
     logic [4:0]             trace_rd;
-    logic [2:0]             halt_cause;
 
-    assign i_flush_done = 1'b1;
+    logic                   trap_valid, trap_is_int;
+    logic [4:0]             trap_cause;
+    logic [63:0]            trap_epc, trap_tval;
+
+    logic                   irq_m_soft, irq_m_timer, irq_m_ext;
+    logic [63:0]            mtime;
+
+    // the instruction cache of the system answers the invalidate of a fence.i
+    // as soon as it is idle; there is no cache here, so it is always done
+    assign i_flush_done = i_flush_valid;
 
     CPU_CORE
         #(
             .PADDR_WIDTH  (PADDR_WIDTH),
             .RESET_VECTOR (MEM_BASE),
+            .HART_ID      (64'd0),
             .FQ_DEPTH     (4)
         )
     u_core
@@ -91,23 +106,38 @@ module tb_CORE;
             .d_resp_valid  (d_resp_valid),
             .d_resp_data   (d_resp_data),
             .d_resp_error  (d_resp_error),
+            .irq_m_soft    (irq_m_soft),
+            .irq_m_timer   (irq_m_timer),
+            .irq_m_ext     (irq_m_ext),
+            .mtime         (mtime),
             .trace_valid   (trace_valid),
             .trace_pc      (trace_pc),
             .trace_insn    (trace_insn),
             .trace_rd_we   (trace_rd_we),
             .trace_rd      (trace_rd),
             .trace_rd_data (trace_rd_data),
-            .core_halted   (core_halted),
-            .halt_cause    (halt_cause)
+            .trap_valid    (trap_valid),
+            .trap_is_int   (trap_is_int),
+            .trap_cause    (trap_cause),
+            .trap_epc      (trap_epc),
+            .trap_tval     (trap_tval)
         );
 
-    logic prot_error;
+    //=================================================================
+    // memory model and CLINT
+    //=================================================================
+    logic        clint_sel, clint_we;
+    logic [15:0] clint_addr;
+    logic [63:0] clint_wdata, clint_rdata;
+    logic [7:0]  clint_wstrb;
+    logic        prot_error;
 
     CORE_MEM_MODEL
         #(
             .PADDR_WIDTH (PADDR_WIDTH),
             .BASE_ADDR   (MEM_BASE),
             .WORDS       (MEM_WORDS),
+            .CLINT_BASE  (CLINT_BASE),
             .I_LATENCY   (2),
             .D_LATENCY   (3)
         )
@@ -131,24 +161,49 @@ module tb_CORE;
             .d_resp_valid (d_resp_valid),
             .d_resp_data  (d_resp_data),
             .d_resp_error (d_resp_error),
+            .clint_sel    (clint_sel),
+            .clint_we     (clint_we),
+            .clint_addr   (clint_addr),
+            .clint_wdata  (clint_wdata),
+            .clint_wstrb  (clint_wstrb),
+            .clint_rdata  (clint_rdata),
+            .irq_ext      (irq_m_ext),
             .prot_error   (prot_error)
+        );
+
+    CPU_CLINT #(.TICK_DIV(1)) u_clint
+        (
+            .clk         (clk),
+            .rst_n       (rst_n),
+            .sel         (clint_sel),
+            .we          (clint_we),
+            .addr        (clint_addr),
+            .wdata       (clint_wdata),
+            .wstrb       (clint_wstrb),
+            .rdata       (clint_rdata),
+            .irq_m_soft  (irq_m_soft),
+            .irq_m_timer (irq_m_timer),
+            .mtime       (mtime)
         );
 
     //=================================================================
     // program image
     //=================================================================
-    string hex_file;
-    string test_name;
+    string       hex_file;
+    string       test_name;
+    logic [63:0] tohost_addr;
 
     initial begin
-        if (!$value$plusargs("hex=%s", hex_file)) hex_file = "tests/t01_alu.hex";
+        if (!$value$plusargs("hex=%s", hex_file))   hex_file  = "tests/t01_alu.hex";
         if (!$value$plusargs("name=%s", test_name)) test_name = hex_file;
+        if (!$value$plusargs("tohost=%h", tohost_addr))
+            tohost_addr = 64'h0000_0000_8000_2000;
         for (int i = 0; i < MEM_WORDS; i++) u_mem.mem[i] = 64'd0;
         $readmemh(hex_file, u_mem.mem);
     end
 
     //=================================================================
-    // tohost : the program reports the result here
+    // tohost, trace
     //=================================================================
     logic [63:0] tohost;
     int          n_retired;
@@ -157,6 +212,11 @@ module tb_CORE;
     logic [63:0] last_trace_pc;
     logic        retire_error;
 
+    logic        seen_trap;
+    logic        last_trap_int;
+    logic [4:0]  last_trap_cause;
+    logic [63:0] last_trap_epc, last_trap_tval;
+
     initial begin
         tohost           = 64'd0;
         n_retired        = 0;
@@ -164,13 +224,27 @@ module tb_CORE;
         last_trace_valid = 1'b0;
         last_trace_pc    = 64'd0;
         retire_error     = 1'b0;
+        seen_trap        = 1'b0;
     end
 
     always @(posedge clk) begin
         if (rst_n) begin
             if (d_req_valid && d_req_ready && (d_req_cmd == 4'd1) &&
-                ({24'd0, d_req_addr} == TOHOST))
+                ({24'd0, d_req_addr} == tohost_addr) && (d_req_wdata != 64'd0))
                 tohost <= d_req_wdata;
+
+            if (trap_valid) begin
+                seen_trap       <= 1'b1;
+                last_trap_int   <= trap_is_int;
+                last_trap_cause <= trap_cause;
+                last_trap_epc   <= trap_epc;
+                last_trap_tval  <= trap_tval;
+                if (do_trace)
+                    $display("[%0t] TRAP %s cause=%0d epc=%010h tval=%016h",
+                             $time, trap_is_int ? "interrupt" : "exception",
+                             trap_cause, trap_epc, trap_tval);
+            end
+
             last_trace_valid <= trace_valid;
             last_trace_pc    <= trace_pc;
             if (trace_valid) begin
@@ -196,49 +270,46 @@ module tb_CORE;
     //=================================================================
     // end of test
     //=================================================================
-    string cause_name [0:4];
-    int    max_cycles;
-    int    cycle_count;
+    int max_cycles;
+    int cycle_count;
+
+    task automatic report_trap();
+        if (seen_trap)
+            $display("          last trap: %s cause=%0d epc=%010h tval=%016h",
+                     last_trap_int ? "interrupt" : "exception",
+                     last_trap_cause, last_trap_epc, last_trap_tval);
+        else
+            $display("          no trap was taken");
+    endtask
 
     initial begin
-        cause_name[0] = "none";
-        cause_name[1] = "ECALL";
-        cause_name[2] = "EBREAK";
-        cause_name[3] = "illegal instruction";
-        cause_name[4] = "bus error";
         if (!$value$plusargs("maxcycles=%d", max_cycles)) max_cycles = 200000;
 
         wait (rst_n === 1'b1);
         cycle_count = 0;
-        while ((core_halted !== 1'b1) && (cycle_count < max_cycles)) begin
+        while ((tohost === 64'd0) && (cycle_count < max_cycles)) begin
             @(posedge clk);
             cycle_count = cycle_count + 1;
         end
 
         $display("");
         $display("==========================================================");
-        if (core_halted !== 1'b1) begin
+        if (tohost === 64'd0) begin
             $display(" %s : FAIL   (watchdog after %0d cycles, %0d retired, pc=%010h)",
                      test_name, cycle_count, n_retired, u_core.wb_pc);
+            report_trap();
+        end else if (prot_error) begin
+            $display(" %s : FAIL   (the core broke the rules of the cache port)",
+                     test_name);
+        end else if (retire_error) begin
+            $display(" %s : FAIL   (an instruction was retired twice)", test_name);
+        end else if (tohost == 64'd1) begin
+            $display(" %s : PASS   (%0d instructions retired, %0d cycles)",
+                     test_name, n_retired, cycle_count);
         end else begin
-            repeat (4) @(posedge clk);
-            if (prot_error) begin
-                $display(" %s : FAIL   (the core broke the rules of the cache port)",
-                         test_name);
-            end else if (retire_error) begin
-                $display(" %s : FAIL   (an instruction was retired twice)", test_name);
-            end else if (halt_cause != 3'd1) begin
-                $display(" %s : FAIL   (core stopped on %s at pc=%010h)",
-                         test_name, cause_name[halt_cause], u_core.wb_pc);
-            end else if (tohost == 64'd1) begin
-                $display(" %s : PASS   (%0d instructions retired, %0d cycles)",
-                         test_name, n_retired, cycle_count);
-            end else if (tohost == 64'd0) begin
-                $display(" %s : FAIL   (ECALL without a result in tohost)", test_name);
-            end else begin
-                $display(" %s : FAIL   (check %0d, tohost=%016h)",
-                         test_name, tohost >> 1, tohost);
-            end
+            $display(" %s : FAIL   (check %0d, tohost=%016h)",
+                     test_name, tohost >> 1, tohost);
+            report_trap();
         end
         $display("==========================================================");
         $finish;

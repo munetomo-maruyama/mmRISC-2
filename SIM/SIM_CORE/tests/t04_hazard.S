@@ -11,6 +11,7 @@
     .section .text.init
     .globl _start
 _start:
+    TEST_INIT
     la   x10, scratch
 
     // ---- EX -> EX, back to back ----

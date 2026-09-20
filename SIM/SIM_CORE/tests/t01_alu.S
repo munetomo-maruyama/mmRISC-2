@@ -6,6 +6,7 @@
     .section .text.init
     .globl _start
 _start:
+    TEST_INIT
     // ---- immediate ----
     addi x10, x0, 5
     TEST_EQ(1, x10, 5)

@@ -8,7 +8,11 @@
 //   - LOAD  : the answer is right aligned and zero extended, like the cache
 //   - STORE : byte strobes from the size and the offset
 //   - FENCE / FLUSH : answered immediately
-//   - addresses outside the memory return an error
+//   - addresses outside a known region return an error (access fault)
+//
+//   Besides the memory the data port reaches two more regions, which is what
+//   the system looks like: the CLINT of the core and one register of the test
+//   bench that drives the external interrupt line.
 //
 //   +istall=<n> / +dstall=<n> hold the ready line of the port low in about
 //   n percent of the cycles, which exercises the back pressure paths of the
@@ -23,6 +27,8 @@ module CORE_MEM_MODEL
         parameter int          PADDR_WIDTH = 40,
         parameter logic [63:0] BASE_ADDR   = 64'h0000_0000_8000_0000,
         parameter int          WORDS       = 8192,      // 64 KiB
+        parameter logic [63:0] CLINT_BASE  = 64'h0000_0000_0200_0000,
+        parameter logic [63:0] TBREG_BASE  = 64'h0000_0000_0300_0000,
         parameter int          I_LATENCY   = 2,
         parameter int          D_LATENCY   = 3
     )
@@ -52,6 +58,17 @@ module CORE_MEM_MODEL
         output logic [63:0]             d_resp_data,
         output logic                    d_resp_error,
 
+        // CLINT (the model routes the accesses of its region to it)
+        output logic                    clint_sel,
+        output logic                    clint_we,
+        output logic [15:0]             clint_addr,
+        output logic [63:0]             clint_wdata,
+        output logic [7:0]              clint_wstrb,
+        input  logic [63:0]             clint_rdata,
+
+        // register of the test bench: bit 0 is the external interrupt
+        output logic                    irq_ext,
+
         // sticky : the core broke the rules of the port
         output logic                    prot_error
     );
@@ -71,6 +88,16 @@ module CORE_MEM_MODEL
     function automatic bit in_range(input logic [PADDR_WIDTH-1:0] a);
         return (a >= BASE_ADDR[PADDR_WIDTH-1:0]) &&
                (a <  BASE_ADDR[PADDR_WIDTH-1:0] + PADDR_WIDTH'(8 * WORDS));
+    endfunction
+    function automatic bit in_clint(input logic [PADDR_WIDTH-1:0] a);
+        return (a >= CLINT_BASE[PADDR_WIDTH-1:0]) &&
+               (a <  CLINT_BASE[PADDR_WIDTH-1:0] + PADDR_WIDTH'(65536));
+    endfunction
+    function automatic bit in_tbreg(input logic [PADDR_WIDTH-1:0] a);
+        return (a[PADDR_WIDTH-1:3] == TBREG_BASE[PADDR_WIDTH-1:3]);
+    endfunction
+    function automatic bit mapped(input logic [PADDR_WIDTH-1:0] a);
+        return in_range(a) || in_clint(a) || in_tbreg(a);
     endfunction
 
     // right align and zero extend, as the cache does
@@ -173,8 +200,21 @@ module CORE_MEM_MODEL
     end
 
     logic [63:0] rd_word, wr_word;
-    logic [7:0]  wr_strb;
     logic [63:0] wr_data;
+
+    // an access takes place this cycle
+    logic       d_acc;
+    logic [7:0] wr_strb;
+    assign d_acc   = d_req_valid & d_req_ready &
+                     ((d_req_cmd == CMD_LOAD) || (d_req_cmd == CMD_STORE));
+    assign wr_strb = strb(d_req_addr[2:0], d_req_size);
+
+    // the CLINT sees the access in the cycle it is taken
+    assign clint_sel   = d_acc & in_clint(d_req_addr);
+    assign clint_we    = (d_req_cmd == CMD_STORE);
+    assign clint_addr  = d_req_addr[15:0];
+    assign clint_wdata = align_wdata(d_req_addr[2:0], d_req_wdata);
+    assign clint_wstrb = wr_strb;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -184,6 +224,7 @@ module CORE_MEM_MODEL
             dp_error <= '0;
             for (int i = 0; i <= I_LATENCY; i++) ip_data[i] <= 64'd0;
             for (int i = 0; i <= D_LATENCY; i++) dp_data[i] <= 64'd0;
+            irq_ext  <= 1'b0;
         end else begin
             //---------------------------------------------------------
             // instruction port
@@ -207,22 +248,28 @@ module CORE_MEM_MODEL
                 dp_error[i] <= dp_error[i+1];
             end
             dp_valid[D_LATENCY] <= d_req_valid & d_req_ready;
-            dp_error[D_LATENCY] <= d_req_valid & d_req_ready & ~in_range(d_req_addr) &
+            dp_error[D_LATENCY] <= d_req_valid & d_req_ready & ~mapped(d_req_addr) &
                                    ((d_req_cmd == CMD_LOAD) || (d_req_cmd == CMD_STORE));
             dp_data[D_LATENCY]  <= 64'd0;
 
-            if (d_req_valid && d_req_ready && in_range(d_req_addr)) begin
+            if (d_acc && in_range(d_req_addr)) begin
                 rd_word = mem[widx(d_req_addr)];
                 if (d_req_cmd == CMD_LOAD) begin
                     dp_data[D_LATENCY] <= extract(rd_word, d_req_addr[2:0], d_req_size);
                 end else if (d_req_cmd == CMD_STORE) begin
-                    wr_strb = strb(d_req_addr[2:0], d_req_size);
                     wr_word = rd_word;
                     wr_data = align_wdata(d_req_addr[2:0], d_req_wdata);
                     for (int b = 0; b < 8; b++)
                         if (wr_strb[b]) wr_word[8*b +: 8] = wr_data[8*b +: 8];
                     mem[widx(d_req_addr)] <= wr_word;
                 end
+            end else if (d_acc && in_clint(d_req_addr) && (d_req_cmd == CMD_LOAD)) begin
+                dp_data[D_LATENCY] <= extract(clint_rdata, d_req_addr[2:0], d_req_size);
+            end else if (d_acc && in_tbreg(d_req_addr)) begin
+                if (d_req_cmd == CMD_LOAD)
+                    dp_data[D_LATENCY] <= extract({63'd0, irq_ext}, d_req_addr[2:0], d_req_size);
+                else if ((d_req_cmd == CMD_STORE) && wr_strb[0])
+                    irq_ext <= clint_wdata[0];
             end
         end
     end

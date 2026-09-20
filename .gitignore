@@ -23,3 +23,7 @@ SIM/*/tests/*.elf
 SIM/*/tests/*.bin
 SIM/*/tests/*.hex
 SIM/*/tests/*.dis
+
+# riscv-tests built into SIM/SIM_CORE/rvtests (the repository itself is not
+# part of this project)
+SIM/*/rvtests/

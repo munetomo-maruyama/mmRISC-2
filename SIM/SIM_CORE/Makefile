@@ -5,6 +5,7 @@
 #   make TEST=t01_alu run : run one test
 #   make stress     : run them all with back pressure on both cache ports
 #   make bugs       : injected bug campaign (bug_inject.sh)
+#   make riscv-tests: the official riscv-tests (rv64ui, rv64mi)
 #   make trace      : run one test with the retirement trace
 #   make wave       : run one test and dump tb_CORE.vcd
 #   make iverilog   : run all tests with Icarus Verilog
@@ -17,11 +18,13 @@ RTL_DIR  := ../../RTL
 
 RTL_SRCS := \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_DEC/CORE_DEC.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CORE_CSR/CORE_CSR.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_RF/CORE_RF.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_IFU/CORE_IFU.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_EXU/CORE_EXU.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_LSU/CORE_LSU.sv \
-	$(RTL_DIR)/CPU/CPU_CORE/CPU_CORE/CPU_CORE.sv
+	$(RTL_DIR)/CPU/CPU_CORE/CPU_CORE/CPU_CORE.sv \
+	$(RTL_DIR)/CPU/CPU_CLINT/CPU_CLINT.sv
 
 SIM_SRCS := CORE_MEM_MODEL.sv $(TOP).sv
 SRCS     := $(RTL_SRCS) $(SIM_SRCS)
@@ -38,7 +41,7 @@ RVPREFIX := /opt/riscv/bin/riscv64-unknown-elf-
 RVCC     := $(RVPREFIX)gcc
 RVOBJCOPY:= $(RVPREFIX)objcopy
 RVOBJDUMP:= $(RVPREFIX)objdump
-RVFLAGS  := -march=rv64i -mabi=lp64 -mcmodel=medany -nostdlib -nostartfiles \
+RVFLAGS  := -march=rv64i_zicsr_zifencei -mabi=lp64 -mcmodel=medany -nostdlib -nostartfiles \
             -Wl,--no-warn-rwx-segments -T tests/link.ld
 
 TESTS    := $(basename $(notdir $(wildcard tests/t*.S)))
@@ -46,7 +49,7 @@ HEXES    := $(addprefix tests/,$(addsuffix .hex,$(TESTS)))
 TEST     ?= $(firstword $(TESTS))
 PLUSARGS ?=
 
-.PHONY: all run run-all stress bugs trace wave lint iverilog clean tests
+.PHONY: all run run-all stress bugs riscv-tests trace wave lint iverilog clean tests
 
 # back pressure on both cache ports : ready is low in 40 % of the cycles
 STRESS_ARGS := +istall=40 +dstall=40
@@ -75,6 +78,9 @@ stress: obj_dir/V$(TOP) $(HEXES)
 bugs: obj_dir/V$(TOP) $(HEXES)
 	./bug_inject.sh
 
+riscv-tests: obj_dir/V$(TOP)
+	./run_riscv_tests.sh
+
 run-all: obj_dir/V$(TOP) $(HEXES)
 	@fail=0; \
 	for t in $(TESTS); do \
@@ -100,4 +106,4 @@ iverilog: $(HEXES)
 	@for t in $(TESTS); do vvp $(TOP).vvp +hex=tests/$$t.hex +name=$$t | grep -E "PASS|FAIL"; done
 
 clean:
-	rm -rf obj_dir obj_trace bug_work $(TOP).vvp *.vcd *.log tests/*.elf tests/*.bin tests/*.hex tests/*.dis
+	rm -rf obj_dir obj_trace bug_work rvtests $(TOP).vvp *.vcd *.log tests/*.elf tests/*.bin tests/*.hex tests/*.dis
