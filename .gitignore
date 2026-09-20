@@ -9,6 +9,7 @@ sweep_work/
 *.vvp
 *.vcd
 *.marks
+cache_test_image.bin
 *.log
 *.jou
 
