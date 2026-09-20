@@ -3,6 +3,7 @@
     .section .text.init
     .globl _start
 _start:
+    TEST_INIT
     li   x10, 5
     li   x11, 7
     li   x12, -3

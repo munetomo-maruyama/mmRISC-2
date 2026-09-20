@@ -22,9 +22,11 @@ RTL/
 │   │   ├── CPU_CORE/       コアのトップ(IF1/IF2/ID/EX/MA/WB、フォワーディング)
 │   │   ├── CORE_IFU/       命令フェッチ(PC、未処理要求 FIFO、フェッチキュー)
 │   │   ├── CORE_DEC/       命令デコーダ
+│   │   ├── CORE_CSR/       CSR ファイルとトラップ状態(M-mode)
 │   │   ├── CORE_RF/        整数レジスタファイル(32×64bit、2R1W)
 │   │   ├── CORE_EXU/       ALU、分岐条件、アドレス生成
 │   │   └── CORE_LSU/       ロード/ストアユニット(データキャッシュポート)
+│   ├── CPU_CLINT/      CLINT(msip / mtime / mtimecmp)
 │   ├── CPU_DBG/        デバッグ論理  → CPU_DBG_SPEC.md
 │   │   ├── CPU_DBG/        デバッグ論理のトップ
 │   │   ├── DBG_DTM/        JTAG DTM(Debug Spec 1.0)
@@ -68,9 +70,10 @@ LitexRocket/        参考用(リポジトリには含めない)
 
 | コマンド | 内容 | 結果 |
 |---|---|---|
-| `cd SIM/SIM_CORE && make` | CPU コアの命令試験(RV64I) | 全 PASS |
+| `cd SIM/SIM_CORE && make` | CPU コアの命令試験(RV64I + Zicsr + トラップ + CLINT) | 全 PASS |
 | `cd SIM/SIM_CORE && make stress` | 両キャッシュポートに背圧を入れて同じ試験 | 全 PASS |
-| `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 28 種 | 全て検出 |
+| `cd SIM/SIM_CORE && make riscv-tests` | 公式 riscv-tests(rv64ui / rv64mi) | 68 PASS、既知の不合格 3(未実装機能を要求する試験) |
+| `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 50 種 | 全て検出 |
 | `cd SIM/SIM_CACHE && make` | L1 キャッシュ全試験 | PASS 8817 チェック |
 | `cd SIM/SIM_CACHE && make perf` | ヒット連続 / ミス連続のスループット | ヒット 1.0、ミス 12〜13、追い出し 22 サイクル/アクセス |
 | `cd SIM/SIM_CACHE && make wave-perf` | 同上の波形(VCD + GTKWave 用 .gtkw) | 4 パターン |
@@ -81,7 +84,15 @@ LitexRocket/        参考用(リポジトリには含めない)
 | `cd SIM/SIM_CPU && make` | CPU_TOP のバスと L1 キャッシュ経路 | PASS |
 | `cd SIM/SIM_OCD && make` | OpenOCD 協調シミュレーション | PASS |
 
-必要なツール: Verilator 5.x、Icarus Verilog 12、GTKWave、riscv-openocd。
+必要なツール: Verilator 5.x、Icarus Verilog 12、GTKWave、riscv-openocd、
+riscv64-unknown-elf ツールチェイン(`/opt/riscv`)。
+
+`make riscv-tests` は公式の riscv-tests を使う。リポジトリには含めないので、
+別途取得しておく(既定の場所は `~/RISCV/riscv-tests`、`RVTESTS` で変更可)。
+
+```
+git clone --recursive https://github.com/riscv-software-src/riscv-tests ~/RISCV/riscv-tests
+```
 
 ## FPGA
 

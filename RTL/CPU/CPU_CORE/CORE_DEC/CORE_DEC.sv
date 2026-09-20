@@ -48,8 +48,23 @@ module CORE_DEC
         output logic        is_fence_i,
         output logic        is_ecall,
         output logic        is_ebreak,
-        output logic        illegal
+        output logic        is_mret,
+        output logic        is_wfi,
+        output logic        illegal,
+
+        // CSR (Zicsr)
+        output logic        is_csr,
+        output logic [11:0] csr_addr,
+        output logic [1:0]  csr_op,       // CSR_RW / CSR_RS / CSR_RC
+        output logic        csr_imm_sel,  // the source is the uimm field
+        output logic        csr_wr,       // the instruction writes the CSR
+        output logic        csr_rd        // the instruction reads the CSR
     );
+
+    // CSR operations
+    localparam logic [1:0] CSR_RW = 2'd1;
+    localparam logic [1:0] CSR_RS = 2'd2;
+    localparam logic [1:0] CSR_RC = 2'd3;
 
     // ALU operations
     localparam logic [3:0] ALU_ADD  = 4'd0;
@@ -130,7 +145,19 @@ module CORE_DEC
         is_fence_i = 1'b0;
         is_ecall   = 1'b0;
         is_ebreak  = 1'b0;
+        is_mret    = 1'b0;
+        is_wfi     = 1'b0;
         illegal    = 1'b0;
+
+        is_csr      = 1'b0;
+        csr_addr    = insn[31:20];
+        csr_op      = CSR_RW;
+        csr_imm_sel = funct3[2];
+        // CSRRS / CSRRC with x0 (or with a zero immediate) do not write, and
+        // CSRRW with x0 as the destination does not read: neither may have a
+        // side effect on the CSR
+        csr_wr      = 1'b0;
+        csr_rd      = 1'b0;
 
         case (opcode)
             //---------------------------------------------------------
@@ -288,15 +315,36 @@ module CORE_DEC
                 endcase
             end
             OP_SYSTEM: begin
-                if (funct3 == 3'b000) begin
-                    case (insn[31:20])
-                        12'h000: is_ecall  = 1'b1;
-                        12'h001: is_ebreak = 1'b1;
-                        default: illegal   = 1'b1;   // CSR / trap return: M2
-                    endcase
-                end else begin
-                    illegal = 1'b1;                  // CSR access: M2
-                end
+                case (funct3)
+                    3'b000: begin
+                        case (insn[31:20])
+                            12'h000: is_ecall  = 1'b1;
+                            12'h001: is_ebreak = 1'b1;
+                            12'h302: is_mret   = 1'b1;
+                            12'h105: is_wfi    = 1'b1;
+                            // SRET, SFENCE.VMA and the debug return come with
+                            // the supervisor mode (M5) and the debug mode
+                            default: illegal   = 1'b1;
+                        endcase
+                        // the register fields of these have to be zero
+                        if ((rs1 != 5'd0) || (rd != 5'd0)) illegal = 1'b1;
+                    end
+                    3'b100: illegal = 1'b1;
+                    default: begin                   // CSRRW/S/C and the immediate forms
+                        is_csr  = 1'b1;
+                        we_rd   = 1'b1;
+                        use_rs1 = ~funct3[2];
+                        case (funct3[1:0])
+                            2'b01:   csr_op = CSR_RW;
+                            2'b10:   csr_op = CSR_RS;
+                            default: csr_op = CSR_RC;
+                        endcase
+                        // rs1 (or the immediate) being zero means no write for
+                        // the set and clear forms; the write form always writes
+                        csr_wr = (funct3[1:0] == 2'b01) || (rs1 != 5'd0);
+                        csr_rd = (funct3[1:0] != 2'b01) || (rd  != 5'd0);
+                    end
+                endcase
             end
             default: illegal = 1'b1;
         endcase

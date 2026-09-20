@@ -202,15 +202,55 @@ MMU 追加時にキャッシュ側の変更は不要。
 CSR ファイルはアドレス → レジスタのテーブル駆動にして、拡張追加時に行を足す
 だけで済むようにする。未実装 CSR へのアクセスは不正命令例外。
 
+M2 で実装済み(`CORE_CSR`):
+
+| アドレス | CSR | 備考 |
+|---|---|---|
+| 0x300 | `mstatus` | MIE / MPIE のみ。MPP は WARL で 3 固定(M-mode しかない) |
+| 0x301 | `misa` | MXL=2、I。書き込みは無視 |
+| 0x304 / 0x344 | `mie` / `mip` | MSIE/MTIE/MEIE。`mip` は CLINT・PLIC が駆動する読み出し専用 |
+| 0x305 | `mtvec` | モード 0(direct)と 1(vectored)。予約モードは取り込まない |
+| 0x306 | `mcounteren` | S/U モード用。現状は値を保持するだけ |
+| 0x340-0x343 | `mscratch` / `mepc` / `mcause` / `mtval` | `mepc` は下位 2bit を落とす |
+| 0xB00 / 0xB02 | `mcycle` / `minstret` | 書き込み可。書き込みはその命令の加算に優先する |
+| 0xC00 / 0xC01 / 0xC02 | `cycle` / `time` / `instret` | 読み出し専用。`time` は CLINT の `mtime` |
+| 0xF11-0xF14 | `mvendorid` / `marchid` / `mimpid` / `mhartid` | 読み出し専用 |
+
+`satp`、PMP、`medeleg`/`mideleg`、デバッグ用 CSR はまだ存在しない
+(riscv-tests の p 環境はこれらが不正命令例外になることを前提に書かれている)。
+
+CSR 命令は**直列化**する。パイプラインが空になってから発行し、コミットするまで
+次の命令を入れない。これにより `minstret`/`mcycle` の読み出し値が正確になり、
+EX での CSR 読み出しが直前の CSR 書き込みを必ず見る。
+
 ---
 
 ## 8. 例外・割り込み
 
+- トラップを取るのは **MA(コミット点)**。ストアは EX でキャッシュにデータを
+  渡してしまうので、その 1 つ前の命令のトラップは、ストアがまだ EX にいる間に
+  決まっていなければならない。MA で取れば `trap_taken` でストアの発行を止められる。
+- 割り込みは **ID→EX の受け渡し**で命令に貼り付け、MA で取る。こうすると
+  割り込みを付けられた命令はメモリアクセスも分岐も実行しないので、`mepc` が
+  その命令を指す正確な割り込みになる。WFI だけは例外で、WFI 自身には貼らず
+  次の命令に貼る(`mepc` が WFI の次を指すようにするため)。
 - 優先順位は特権仕様に従う。同一命令で複数条件が立つ場合の順序:
   **命令アドレス不整列 → 命令アクセスフォールト → 命令ページフォールト →
   不正命令 → ブレークポイント → ロード/ストア不整列 → アクセスフォールト →
   ページフォールト**
-- 割り込み: CLINT(`msip`/`mtime`/`mtimecmp`)を内蔵。外部割り込みは PLIC(後段)。
+- 割り込み: CLINT(`msip`/`mtime`/`mtimecmp`)を内蔵(`RTL/CPU/CPU_CLINT`)。
+  外部割り込みは PLIC(後段)。レジスタ配置は SiFive CLINT と同じで、
+  ベースアドレスからの相対で
+
+  | オフセット | レジスタ | 幅 |
+  |---|---|---|
+  | 0x0000 | `msip` | 32bit(bit0 がソフトウェア割り込み) |
+  | 0x4000 | `mtimecmp` | 64bit |
+  | 0xBFF8 | `mtime` | 64bit |
+
+  `mtime` は `TICK_DIV` サイクルごとに 1 進む(シミュレーションは 1、実機は
+  クロックを分周して固定周波数にする)。割り込み線は `msip` と
+  `mtime >= mtimecmp`。
 - 委譲: `medeleg`/`mideleg` により S-mode へ委譲。
 - デバッグ: `ebreak` と外部からの halt 要求は `dcsr` に従ってデバッグモードへ。
 
@@ -377,7 +417,7 @@ Arty A7-100T は DSP48E1 が 240 個、現状の使用は 0 個なので倍精�
 | # | 内容 | 検証 |
 |---|---|---|
 | M1 | パイプライン骨格(IF/ID/EX/MA/WB)、RV64I 部分集合、M-mode、物理アドレス **(完了、12.3)** | 手書きプログラム 4 本、背圧注入、バグ注入 28 種 |
-| M2 | RV64I 完全 + Zicsr + トラップ + CLINT | riscv-tests rv64ui-p-*, rv64mi-p-* |
+| M2 | RV64I 完全 + Zicsr + トラップ + CLINT **(完了、12.4)** | riscv-tests rv64ui-p-*, rv64mi-p-* |
 | M3 | M / A / C 拡張(A はキャッシュ側実装済み) | rv64um/ua/uc |
 | M4 | F / D 拡張(FPU、10 章) | rv64uf/ud、TestFloat 比較 |
 | M5 | S/U 特権 + MMU(Sv39) | rv64si、自作ページテーブル試験 |
@@ -454,6 +494,61 @@ Arty A7-100T は DSP48E1 が 240 個、現状の使用は 0 個なので倍精�
 
 `./bug_inject.sh` は 28 種のバグ注入を背圧あり/なしの両方で流し、全て検出する。
 
+### 12.4 M2 の実装(完了)
+
+追加したもの:
+
+| モジュール | 内容 |
+|---|---|
+| `CORE_CSR` | M-mode の CSR ファイルとトラップ状態(7 章の表) |
+| `CPU_CLINT` | `msip` / `mtime` / `mtimecmp`(8 章) |
+| `CORE_DEC` | Zicsr(CSRRW/S/C と即値形)、MRET、WFI |
+| `CPU_CORE` | コミット点を MA に置き、トラップ・MRET・CSR 書き込み・`fence.i` をそこで行う |
+
+コミット点まわりの規則:
+
+| 事象 | 条件 |
+|---|---|
+| トラップ | `ma_valid & ma_exc & ~stall_ma` |
+| MRET | `ma_valid & ma_is_mret & ~stall_ma & ~trap_taken` |
+| `fence.i` | 同上。I$ の一括無効化を出し、`ma_pc + 4` から再フェッチ |
+| CSR 書き込み | `ma_valid & ma_csr_wr & ~stall_ma & ~trap_taken` |
+| `minstret` の加算 | `ma_valid & ~stall_ma & ~trap_taken` |
+| メモリ要求の発行 | `ex_is_mem & ~stall_ma & ~flush`(前の命令がトラップするなら出さない) |
+
+例外の検出箇所:
+
+| 段 | 例外 |
+|---|---|
+| ID→EX | 割り込み(WFI を除く)、命令アクセスフォールト、不正命令、ECALL、EBREAK |
+| EX | 不正な CSR アクセス、分岐先の不整列、ロード/ストアアドレスの不整列 |
+| MA | ロード/ストアのアクセスフォールト(キャッシュの応答エラー) |
+
+検証:
+
+| 試験 | 内容 |
+|---|---|
+| riscv-tests `rv64ui-p-*` | 53/54 PASS |
+| riscv-tests `rv64mi-p-*` | 15/17 PASS |
+| `t05_csr` | CSR 命令、WARL、カウンタの正確さ、不正アクセス |
+| `t06_irq` | CLINT のタイマ・ソフトウェア・外部割り込み、`mie`/`mip`/`mstatus.MIE` のマスク、WFI、ベクタ方式 |
+| `t07_trap` | バスのアクセスフォールト、不整列、`mtval`/`mepc`、トラップ後方の命令の抑止 |
+
+既知の不合格(いずれも未実装機能を要求する試験):
+
+| 試験 | 理由 |
+|---|---|
+| `rv64ui-p-ma_data` | 不整列アクセスをハードウェアで実行することを要求する。本コアは仕様どおりトラップする(`rv64mi-p-ma_addr` はトラップ側を検査して PASS) |
+| `rv64mi-p-breakpoint` | デバッグトリガ(`tselect`/`tdata*`)が必要。デバッグ論理の結合時に対応 |
+| `rv64mi-p-pmpaddr` | PMP が必要。S/U モードを入れる M5 で実装する |
+
+バグ注入は 50 種に増やし、背圧あり/なしの両方で全て検出する。
+
+未了(結合時に必要なもの):
+
+- `CPU_CLINT` を周辺バス(AXI4-Lite)に載せるラッパと `CPU_TOP` への組み込み
+- PMP(M5)、デバッグトリガ
+
 ---
 
 ## 13. 決定事項
@@ -474,3 +569,7 @@ Arty A7-100T は DSP48E1 が 240 個、現状の使用は 0 個なので倍精�
 | 12 | FPU のレイテンシ | FADD/FMUL 3 段、FMA 4〜5 段、FDIV/FSQRT は反復・非パイプライン |
 | 13 | subnormal | ハードウェアで完全対応(flush-to-zero にしない) |
 | 14 | FPU の検証 | Berkeley TestFloat / SoftFloat を参照モデルにした `SIM/SIM_FPU` + riscv-tests |
+| 15 | コミット点 | MA。ストアの発行が EX なので、トラップは MA で決めないとストアを止められない |
+| 16 | 割り込みの貼り付け | ID→EX。命令が何も実行しないうちに決まるので `mepc` が正確。WFI は次の命令に貼る |
+| 17 | CSR 命令 | 直列化(空のパイプラインに発行し、コミットするまで次を入れない) |
+| 18 | 不整列アクセス | ハードウェアでは実行せずトラップする(仕様が許す。`rv64ui-p-ma_data` は不合格で構わない) |

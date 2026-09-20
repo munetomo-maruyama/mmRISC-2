@@ -48,12 +48,34 @@ MUTATIONS=(
 "20#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign ma_fwd_data = (ma_mem \& ma_is_load) ? lsu_resp_data : ma_result;/assign ma_fwd_data = ma_result;/#core: a load in MA forwards its address"
 "21#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ex_rs1_data <= ex_a_fwd;/                ex_rs1_data <= ex_rs1_data;/#core: a stalled EX does not keep the forwarded operand"
 "22#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ex_rs2_data <= ex_b_fwd;/                ex_rs2_data <= ex_rs2_data;/#core: a stalled EX does not keep the forwarded store data"
-"23#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign stall_ex      = stall_ma | (ex_is_mem \& ~lsu_accept);/assign stall_ex      = stall_ma;/#core: EX moves on although the cache did not take the access"
+"23#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign stall_ex      = stall_ma | (ex_is_mem \& ~lsu_accept \& ~flush);/assign stall_ex      = stall_ma;/#core: EX moves on although the cache did not take the access"
 "24#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ma_valid   <= 1'b0;/                ma_valid   <= ma_valid;/#core: MA is not emptied when EX has nothing to hand over"
 "25#CPU_CORE/CPU_CORE/CPU_CORE.sv#s@                wb_valid <= 1'b0;       // MA keeps its instruction : bubble@                wb_valid <= wb_valid;@#core: WB keeps its instruction while MA waits and retires it again"
-"26#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ex_valid      <= fq_valid \& ~redirect_valid;/                ex_valid      <= fq_valid;/#core: the instruction behind a taken branch is not killed"
-"27#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                else if (dec_is_ecall)  ex_halt <= HALT_ECALL;/                else if (1'b0)          ex_halt <= HALT_ECALL;/#core: ECALL does not stop the core"
+"26#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ex_valid      <= id_advance \& fq_valid \& ~redirect_valid;/                ex_valid      <= id_advance \& fq_valid;/#core: the instruction behind a taken branch is not killed"
+"27#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                id_exc_cause = EXC_ECALL_M;/                id_exc_cause = EXC_BREAK;/#core: ECALL is reported as a breakpoint"
 "28#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign pop_q    = fq_valid \& fq_ready;/assign pop_q    = fq_valid;/#IFU: the fetch queue drops an instruction that ID could not take"
+"29#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/mstatus_val\[12:11\] = 2'b11;/mstatus_val[12:11] = 2'b00;/#CSR: mstatus.MPP is not the only legal value"
+"30#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/mstatus_mpie <= mstatus_mie;/mstatus_mpie <= 1'b0;/#CSR: a trap does not save the interrupt enable in MPIE"
+"31#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/mstatus_mie  <= mstatus_mpie;/mstatus_mie  <= 1'b0;/#CSR: MRET does not put the interrupt enable back"
+"32#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/CSR_MEPC      : mepc       <= {wr_data\[63:2\], 2'b00};/CSR_MEPC      : mepc       <= wr_data;/#CSR: mepc keeps the low bits of the written value"
+"33#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/assign trap_vector = (mtvec\[1:0\] == 2'b01) \&\& trap_int/assign trap_vector = 1'b0 \&\& trap_int/#CSR: the vectored mode of mtvec is ignored"
+"34#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/if      (irq_active\[IRQ_M_EXT\])   irq_cause = 5'(IRQ_M_EXT);/if      (irq_active[IRQ_M_TIMER]) irq_cause = 5'(IRQ_M_TIMER);/#CSR: the timer interrupt is reported before the external one"
+"35#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/assign rd_readonly = (rd_addr\[11:10\] == 2'b11);/assign rd_readonly = 1'b0;/#CSR: writing a read only CSR is allowed"
+"36#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/default       : rd_exists = 1'b0;/default       : rd_exists = 1'b1;/#CSR: a CSR that does not exist answers instead of trapping"
+"37#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/if (instret_inc) minstret <= minstret + 64'd1;/;/#CSR: minstret does not count"
+"38#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/assign irq_req    = irq_any \& mstatus_mie;/assign irq_req    = irq_any;/#CSR: an interrupt is taken although mstatus.MIE is clear"
+"39#CPU_CLINT/CPU_CLINT.sv#s/mtimecmp <= merge(mtimecmp, wdata, wstrb);/;/#CLINT: mtimecmp cannot be written"
+"40#CPU_CLINT/CPU_CLINT.sv#s/assign irq_m_soft  = msip;/assign irq_m_soft  = 1'b0;/#CLINT: the software interrupt never reaches the core"
+"41#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign lsu_req_valid = ex_is_mem \& ~stall_ma \& ~flush;/assign lsu_req_valid = ex_is_mem \& ~stall_ma;/#core: the access behind a trapping instruction is still issued"
+"42#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/if (irq_req \&\& !dec_is_wfi) begin/if (irq_req) begin/#core: the interrupt is taken on the WFI itself, so mepc points at it"
+"43#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                                       dec_is_fence_i) \& pipe_busy)/                                       dec_is_fence_i) \& 1'b0)/#core: a CSR access is issued into a pipeline that is not empty"
+"44#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/    assign wfi_wait    = fq_valid \& dec_is_wfi \& ~irq_any;/    assign wfi_wait    = 1'b0;/#core: WFI does not wait"
+"45#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/            2'd3:    misaligned = |mem_addr\[2:0\];/            2'd3:    misaligned = 1'b0;/#core: a misaligned double word is not detected"
+"46#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign ex_is_mem     = ex_valid \& (ex_is_load | ex_is_store) \& ~ex_exc;/assign ex_is_mem     = ex_valid \& (ex_is_load | ex_is_store);/#core: an instruction that trapped still touches memory"
+"47#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign trap_epc_c   = ma_pc;/assign trap_epc_c   = ma_pc + 64'd4;/#core: mepc points behind the instruction that trapped"
+"48#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ex_exc_tval  = {32'd0, ex_insn};/                ex_exc_tval  = 64'd0;/#core: mtval of an illegal CSR access is empty"
+"49#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/csr_wr = (funct3\[1:0\] == 2'b01) || (rs1 != 5'd0);/csr_wr = 1'b1;/#decoder: CSRRS with x0 writes the CSR"
+"50#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/12'h302: is_mret   = 1'b1;/12'h302: illegal   = 1'b1;/#decoder: MRET is not known"
 )
 
 # every mutation is run without and with back pressure on both cache ports
@@ -70,8 +92,9 @@ run_one() {
         echo "M$id [NOT APPLIED] $desc"; return
     fi
     local R=$d/CPU/CPU_CORE
-    local SRCS="$R/CORE_DEC/CORE_DEC.sv $R/CORE_RF/CORE_RF.sv $R/CORE_IFU/CORE_IFU.sv \
-$R/CORE_EXU/CORE_EXU.sv $R/CORE_LSU/CORE_LSU.sv $R/CPU_CORE/CPU_CORE.sv \
+    local SRCS="$R/CORE_DEC/CORE_DEC.sv $R/CORE_CSR/CORE_CSR.sv $R/CORE_RF/CORE_RF.sv \
+$R/CORE_IFU/CORE_IFU.sv $R/CORE_EXU/CORE_EXU.sv $R/CORE_LSU/CORE_LSU.sv \
+$R/CPU_CORE/CPU_CORE.sv $d/CPU/CPU_CLINT/CPU_CLINT.sv \
 CORE_MEM_MODEL.sv tb_CORE.sv"
     if ! verilator $VFLAGS -Mdir $d/obj $SRCS > $d/build.log 2>&1; then
         sleep 5                       # retry once (transient resource failure)
