@@ -54,6 +54,20 @@ MUTATIONS=(
 "26#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ex_valid      <= id_advance \& fq_valid \& ~redirect_valid;/                ex_valid      <= id_advance \& fq_valid;/#core: the instruction behind a taken branch is not killed"
 "27#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                id_exc_cause = EXC_ECALL_M;/                id_exc_cause = EXC_BREAK;/#core: ECALL is reported as a breakpoint"
 "28#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign pop_q     = fq_valid \& fq_ready;/assign pop_q     = fq_valid;/#IFU: the fetch queue drops an instruction that ID could not take"
+"77#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                       \& ~serial_busy \& ~wfi_wait;/                       \& ~wfi_wait;/#core: the instruction behind a CSR write is decoded with the old mstatus.FS"
+"78#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign fpu_start  = fpu_active \& ~fpu_busy \& ~fpu_done \& ~flush \& ~stall_ma;/assign fpu_start  = fpu_active \& ~fpu_busy \& ~fpu_done \& ~flush;/#core: the FPU starts before the load in front of it has answered"
+"79#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign mdu_start  = mdu_active \& ~mdu_busy \& ~mdu_done \& ~flush \& ~stall_ma;/assign mdu_start  = mdu_active \& ~mdu_busy \& ~mdu_done \& ~flush;/#core: the multiplier starts before the load in front of it has answered"
+"80#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                         (dec_is_fp \& fp_off) ||/                         (1'b0) ||/#core: an FP instruction is allowed although mstatus.FS is off"
+"81#CPU_FPU/FPU_ROUND/FPU_ROUND.sv#s/        flags\[1\] = tiny \& inexact \& ~overflow;              \/\/ UF/        flags[1] = 1'b0;/#FPU: underflow is never reported"
+"82#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign ma_load_data  = ma_fp_box ? {32'hFFFF_FFFF, lsu_resp_data\[31:0\]}/assign ma_load_data  = 1'b0 ? {32'hFFFF_FFFF, lsu_resp_data[31:0]}/#core: FLW does not NaN box what it loaded"
+"83#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/            .req_wdata    (ex_is_fp_store ? ex_fs2_fwd : ex_b_fwd),/            .req_wdata    (ex_b_fwd),/#core: the store data of FSD comes from the integer file"
+"84#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/            if (fflags_we) fflags <= fflags | fflags_set;/;/#CSR: fflags does not accumulate"
+"85#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/        mstatus_val\[14:13\] = mstatus_fs;      \/\/ FS/        mstatus_val[14:13] = 2'b11;/#CSR: mstatus.FS always reads as dirty"
+"86#CPU_FPU/FPU_ROUND/FPU_ROUND.sv#s/            RM_RNE:  inc = guard \& (rest | lsb);/            RM_RNE:  inc = guard;/#FPU: round to nearest never breaks a tie to even"
+"87#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/        ex_rm_eff = (ex_fp_rm == 3'b111) ? frm_csr : ex_fp_rm;/        ex_rm_eff = ex_fp_rm;/#core: the dynamic rounding mode ignores frm"
+"88#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/| (fpu_active \& ~fpu_done \& ~flush);/| (1'b0);/#core: EX does not wait for the FPU"
+"89#CPU_CORE/CORE_FRF/CORE_FRF.sv#s/        rs3_data = (we \&\& (rs3 == rd)) ? rd_data : regs\[rs3\];/        rs3_data = regs[rs3];/#FRF: the third read port has no write first bypass"
+"90#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/        if      (ex_use_fs1 \&\& ma_valid \&\& ma_fp_we \&\& (ma_fp_rd == ex_fs1)) ex_fs1_fwd = ma_fp_fwd_data;/        if      (1'b0) ex_fs1_fwd = ma_fp_fwd_data;/#core: no forwarding of a floating point result from MA"
 "29#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/mstatus_val\[12:11\] = 2'b11;/mstatus_val[12:11] = 2'b00;/#CSR: mstatus.MPP is not the only legal value"
 "30#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/mstatus_mpie <= mstatus_mie;/mstatus_mpie <= 1'b0;/#CSR: a trap does not save the interrupt enable in MPIE"
 "31#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/mstatus_mie  <= mstatus_mpie;/mstatus_mie  <= 1'b0;/#CSR: MRET does not put the interrupt enable back"
@@ -85,7 +99,7 @@ MUTATIONS=(
 "57#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/count   <= word_op ? 7'd32 : 7'd64;/count   <= 7'd64;/#MDU: the 32 bit forms divide over 64 steps"
 "58#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/{64'd0, a_mag\[31:0\], 32'd0}/{64'd0, a_mag}/#MDU: the dividend of a 32 bit form is not moved up"
 "59#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/else if (ex_is_mdu)                ma_result <= mdu_result;/else if (1'b0)                     ma_result <= mdu_result;/#core: the result of the multiplier is thrown away"
-"60#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                                    | (mdu_active \& ~mdu_done \& ~flush);/                                    | 1'b0;/#core: EX does not wait for the multiplier"
+"60#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/| (mdu_active \& ~mdu_done \& ~flush)/| (1'b0)/#core: EX does not wait for the multiplier"
 "61#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/5'b00000: mem_cmd = 4'd5;           \/\/ AMOADD/5'b00000: mem_cmd = 4'd4;/#decoder: AMOADD is issued as AMOSWAP"
 "62#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/5'b00011: mem_cmd = CMD_SC;/5'b00011: mem_cmd = CMD_LR;/#decoder: SC is issued as LR"
 "63#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/                    is_load = 1'b1;              \/\/ rs2 is the source of the/                    is_load = 1'b0;/#decoder: an atomic operation does not write its register"
@@ -118,9 +132,12 @@ run_one() {
         echo "M$id [NOT APPLIED] $desc"; return
     fi
     local R=$d/CPU/CPU_CORE
-    local SRCS="$R/CORE_DEC/CORE_DEC.sv $R/CORE_CSR/CORE_CSR.sv $R/CORE_RF/CORE_RF.sv \
+    local SRCS="$R/CORE_DEC/CORE_DEC.sv $R/CORE_DECOMP/CORE_DECOMP.sv $R/CORE_CSR/CORE_CSR.sv \
+$R/CORE_RF/CORE_RF.sv \
 $R/CORE_IFU/CORE_IFU.sv $R/CORE_EXU/CORE_EXU.sv $R/CORE_LSU/CORE_LSU.sv \
-$R/CORE_MDU/CORE_MDU.sv $R/CORE_DECOMP/CORE_DECOMP.sv \
+$R/CORE_MDU/CORE_MDU.sv \
+$R/CORE_FRF/CORE_FRF.sv $d/CPU/CPU_FPU/FPU_ROUND/FPU_ROUND.sv \
+$d/CPU/CPU_FPU/CORE_FPU/CORE_FPU.sv \
 $R/CPU_CORE/CPU_CORE.sv $d/CPU/CPU_CLINT/CPU_CLINT.sv \
 CORE_MEM_MODEL.sv tb_CORE.sv"
     if ! verilator $VFLAGS -Mdir $d/obj $SRCS > $d/build.log 2>&1; then

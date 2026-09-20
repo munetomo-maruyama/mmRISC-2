@@ -8,8 +8,8 @@
 //   expanded into the instruction they stand for, which writes x0 and has no
 //   effect, so nothing special has to happen for them.
 //
-//   The floating point forms (C.FLD, C.FSD, C.FLDSP, C.FSDSP) are reserved
-//   here as long as the D extension is not implemented.
+//   The floating point forms (C.FLD, C.FSD, C.FLDSP, C.FSDSP) expand into
+//   the ordinary FLD and FSD; RV64C has no single precision forms.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -31,6 +31,8 @@ module CORE_DECOMP
     localparam logic [6:0] OP_JAL    = 7'b1101111;
     localparam logic [6:0] OP_JALR   = 7'b1100111;
     localparam logic [6:0] OP_BRANCH = 7'b1100011;
+    localparam logic [6:0] OP_LOADFP = 7'b0000111;
+    localparam logic [6:0] OP_STOREFP= 7'b0100111;
 
     // register fields
     logic [4:0] rd, rs1, rs2, rdp, rs1p, rs2p;
@@ -81,6 +83,11 @@ module CORE_DECOMP
                                            input logic [2:0]  f3);
         return {imm[11:5], rs2_f, rs1_f, f3, imm[4:0], OP_STORE};
     endfunction
+    function automatic logic [31:0] s_type_fp(input logic [11:0] imm,
+                                              input logic [4:0]  rs2_f,
+                                              input logic [4:0]  rs1_f);
+        return {imm[11:5], rs2_f, rs1_f, 3'b011, imm[4:0], OP_STOREFP};
+    endfunction
     function automatic logic [31:0] r_type(input logic [6:0] f7,
                                            input logic [4:0] rs2_f,
                                            input logic [4:0] rs1_f,
@@ -115,11 +122,13 @@ module CORE_DECOMP
                     insn = i_type(imm_addi4spn, 5'd2, 3'b000, rdp, OP_IMM);
                     if (insn_c[12:5] == 8'd0) illegal = 1'b1;   // also the all zero word
                 end
+                3'b001: insn = i_type(imm_ld, rs1p, 3'b011, rdp, OP_LOADFP); // C.FLD
                 3'b010: insn = i_type(imm_lw, rs1p, 3'b010, rdp, OP_LOAD);   // C.LW
                 3'b011: insn = i_type(imm_ld, rs1p, 3'b011, rdp, OP_LOAD);   // C.LD
+                3'b101: insn = s_type_fp(imm_ld, rs2p, rs1p);                // C.FSD
                 3'b110: insn = s_type(imm_lw, rs2p, rs1p, 3'b010);           // C.SW
                 3'b111: insn = s_type(imm_ld, rs2p, rs1p, 3'b011);           // C.SD
-                default: illegal = 1'b1;    // C.FLD / C.FSD need D, 100 is reserved
+                default: illegal = 1'b1;    // 100 is reserved
             endcase
         end
         //-------------------------------------------------------------
@@ -167,6 +176,7 @@ module CORE_DECOMP
         2'b10: begin
             case (funct3)
                 3'b000: insn = i_type({6'b000000, shamt}, rd, 3'b001, rd, OP_IMM);  // C.SLLI
+                3'b001: insn = i_type(imm_ldsp, 5'd2, 3'b011, rd, OP_LOADFP); // C.FLDSP
                 3'b010: begin                                                // C.LWSP
                     insn = i_type(imm_lwsp, 5'd2, 3'b010, rd, OP_LOAD);
                     if (rd == 5'd0) illegal = 1'b1;
@@ -193,9 +203,10 @@ module CORE_DECOMP
                         end
                     end
                 end
+                3'b101: insn = s_type_fp(imm_sdsp, rs2, 5'd2);               // C.FSDSP
                 3'b110: insn = s_type(imm_swsp, rs2, 5'd2, 3'b010);          // C.SWSP
                 3'b111: insn = s_type(imm_sdsp, rs2, 5'd2, 3'b011);          // C.SDSP
-                default: illegal = 1'b1;    // C.FLDSP / C.FSDSP need D
+                default: illegal = 1'b1;
             endcase
         end
         //-------------------------------------------------------------

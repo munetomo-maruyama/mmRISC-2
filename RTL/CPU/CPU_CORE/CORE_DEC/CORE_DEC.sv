@@ -57,6 +57,21 @@ module CORE_DEC
         output logic        is_wfi,
         output logic        illegal,
 
+        // floating point (F / D)
+        output logic        is_fp,        // any instruction of F or D
+        output logic        fp_arith,     // goes to the FPU
+        output logic [4:0]  fp_op,        // FOP_* of CORE_FPU
+        output logic        fp_fmt,       // 0 : single, 1 : double
+        output logic [2:0]  fp_rm,        // the rm field of the instruction
+        output logic        use_fs1,
+        output logic        use_fs2,
+        output logic        use_fs3,
+        output logic        fp_we_rd,     // writes a floating point register
+        output logic        fp_int_signed,
+        output logic        fp_int_w,
+        output logic        is_fp_load,
+        output logic        is_fp_store,
+
         // CSR (Zicsr)
         output logic        is_csr,
         output logic [11:0] csr_addr,
@@ -105,6 +120,39 @@ module CORE_DEC
     localparam logic [6:0] OP_FENCE  = 7'b0001111;
     localparam logic [6:0] OP_SYSTEM = 7'b1110011;
     localparam logic [6:0] OP_AMO    = 7'b0101111;
+    localparam logic [6:0] OP_LOADFP = 7'b0000111;
+    localparam logic [6:0] OP_STOREFP= 7'b0100111;
+    localparam logic [6:0] OP_MADD   = 7'b1000011;
+    localparam logic [6:0] OP_MSUB   = 7'b1000111;
+    localparam logic [6:0] OP_NMSUB  = 7'b1001011;
+    localparam logic [6:0] OP_NMADD  = 7'b1001111;
+    localparam logic [6:0] OP_FP     = 7'b1010011;
+
+    // the operation numbers of CORE_FPU
+    localparam logic [4:0] FOP_ADD     = 5'd0;
+    localparam logic [4:0] FOP_SUB     = 5'd1;
+    localparam logic [4:0] FOP_MUL     = 5'd2;
+    localparam logic [4:0] FOP_DIV     = 5'd3;
+    localparam logic [4:0] FOP_SQRT    = 5'd4;
+    localparam logic [4:0] FOP_MADD    = 5'd5;
+    localparam logic [4:0] FOP_MSUB    = 5'd6;
+    localparam logic [4:0] FOP_NMSUB   = 5'd7;
+    localparam logic [4:0] FOP_NMADD   = 5'd8;
+    localparam logic [4:0] FOP_SGNJ    = 5'd9;
+    localparam logic [4:0] FOP_SGNJN   = 5'd10;
+    localparam logic [4:0] FOP_SGNJX   = 5'd11;
+    localparam logic [4:0] FOP_MIN     = 5'd12;
+    localparam logic [4:0] FOP_MAX     = 5'd13;
+    localparam logic [4:0] FOP_EQ      = 5'd14;
+    localparam logic [4:0] FOP_LT      = 5'd15;
+    localparam logic [4:0] FOP_LE      = 5'd16;
+    localparam logic [4:0] FOP_CLASS   = 5'd17;
+    localparam logic [4:0] FOP_MV_X_F  = 5'd18;
+    localparam logic [4:0] FOP_MV_F_X  = 5'd19;
+    localparam logic [4:0] FOP_CVT_S_D = 5'd20;
+    localparam logic [4:0] FOP_CVT_D_S = 5'd21;
+    localparam logic [4:0] FOP_CVT_F_I = 5'd22;
+    localparam logic [4:0] FOP_CVT_I_F = 5'd23;
 
     // commands of the cache port (CPU_CACHE_SPEC.md 5)
     localparam logic [3:0] CMD_LOAD  = 4'd0;
@@ -163,6 +211,20 @@ module CORE_DEC
         is_mret    = 1'b0;
         is_wfi     = 1'b0;
         illegal    = 1'b0;
+
+        is_fp         = 1'b0;
+        fp_arith      = 1'b0;
+        fp_op         = FOP_ADD;
+        fp_fmt        = insn[25];
+        fp_rm         = funct3;
+        use_fs1       = 1'b0;
+        use_fs2       = 1'b0;
+        use_fs3       = 1'b0;
+        fp_we_rd      = 1'b0;
+        fp_int_signed = ~insn[20];
+        fp_int_w      = insn[21];
+        is_fp_load    = 1'b0;
+        is_fp_store   = 1'b0;
 
         is_csr      = 1'b0;
         csr_addr    = insn[31:20];
@@ -362,6 +424,146 @@ module CORE_DEC
                         default:  illegal = 1'b1;           // AMOCAS is Zacas
                     endcase
                 end else illegal = 1'b1;
+            end
+
+            //---------------------------------------------------------
+            // F and D
+            //---------------------------------------------------------
+            OP_LOADFP: begin
+                // FLW and FLD go through the ordinary load path; the answer
+                // is NaN boxed by the core when it is a single
+                if ((funct3 == 3'b010) || (funct3 == 3'b011)) begin
+                    is_fp      = 1'b1;
+                    is_fp_load = 1'b1;
+                    is_load    = 1'b1;
+                    mem_cmd    = CMD_LOAD;
+                    fp_we_rd   = 1'b1;
+                    use_rs1    = 1'b1;
+                    imm        = imm_i;
+                    mem_signed = 1'b0;           // a word is boxed, not extended
+                    fp_fmt     = funct3[0];
+                end else illegal = 1'b1;
+            end
+            OP_STOREFP: begin
+                if ((funct3 == 3'b010) || (funct3 == 3'b011)) begin
+                    is_fp       = 1'b1;
+                    is_fp_store = 1'b1;
+                    is_store    = 1'b1;
+                    mem_cmd     = CMD_STORE;
+                    use_rs1     = 1'b1;
+                    use_fs2     = 1'b1;
+                    imm         = imm_s;
+                    fp_fmt      = funct3[0];
+                end else illegal = 1'b1;
+            end
+            OP_MADD, OP_MSUB, OP_NMSUB, OP_NMADD: begin
+                is_fp    = 1'b1;
+                fp_arith = 1'b1;
+                fp_we_rd = 1'b1;
+                use_fs1  = 1'b1;
+                use_fs2  = 1'b1;
+                use_fs3  = 1'b1;
+                case (opcode)
+                    OP_MADD:  fp_op = FOP_MADD;
+                    OP_MSUB:  fp_op = FOP_MSUB;
+                    OP_NMSUB: fp_op = FOP_NMSUB;
+                    default:  fp_op = FOP_NMADD;
+                endcase
+                if (insn[26]) illegal = 1'b1;    // only single and double
+            end
+            OP_FP: begin
+                is_fp    = 1'b1;
+                fp_arith = 1'b1;
+                use_fs1  = 1'b1;
+                use_fs2  = 1'b1;
+                fp_we_rd = 1'b1;
+                if (insn[26]) illegal = 1'b1;    // only single and double
+                case (funct7[6:2])
+                    5'b00000: fp_op = FOP_ADD;
+                    5'b00001: fp_op = FOP_SUB;
+                    5'b00010: fp_op = FOP_MUL;
+                    5'b00011: fp_op = FOP_DIV;
+                    5'b01011: begin
+                        fp_op   = FOP_SQRT;
+                        use_fs2 = 1'b0;
+                        if (rs2 != 5'd0) illegal = 1'b1;
+                    end
+                    5'b00100: begin
+                        case (funct3)
+                            3'b000:  fp_op = FOP_SGNJ;
+                            3'b001:  fp_op = FOP_SGNJN;
+                            3'b010:  fp_op = FOP_SGNJX;
+                            default: illegal = 1'b1;
+                        endcase
+                        fp_rm = 3'b000;          // no rounding takes place
+                    end
+                    5'b00101: begin
+                        case (funct3)
+                            3'b000:  fp_op = FOP_MIN;
+                            3'b001:  fp_op = FOP_MAX;
+                            default: illegal = 1'b1;
+                        endcase
+                        fp_rm = 3'b000;
+                    end
+                    5'b01000: begin              // between the two formats
+                        use_fs2 = 1'b0;
+                        if (insn[25]) begin      // FCVT.D.S : source single
+                            fp_op  = FOP_CVT_D_S;
+                            fp_fmt = 1'b0;
+                            if (rs2 != 5'd0) illegal = 1'b1;
+                        end else begin           // FCVT.S.D : source double
+                            fp_op  = FOP_CVT_S_D;
+                            fp_fmt = 1'b1;
+                            if (rs2 != 5'd1) illegal = 1'b1;
+                        end
+                    end
+                    5'b10100: begin              // the comparisons
+                        case (funct3)
+                            3'b010:  fp_op = FOP_EQ;
+                            3'b001:  fp_op = FOP_LT;
+                            3'b000:  fp_op = FOP_LE;
+                            default: illegal = 1'b1;
+                        endcase
+                        fp_we_rd = 1'b0;
+                        we_rd    = 1'b1;
+                        fp_rm    = 3'b000;
+                    end
+                    5'b11000: begin              // floating point -> integer
+                        fp_op    = FOP_CVT_I_F;
+                        use_fs2  = 1'b0;
+                        fp_we_rd = 1'b0;
+                        we_rd    = 1'b1;
+                        if (rs2[4:2] != 3'b000) illegal = 1'b1;
+                    end
+                    5'b11010: begin              // integer -> floating point
+                        fp_op   = FOP_CVT_F_I;
+                        use_fs1 = 1'b0;
+                        use_fs2 = 1'b0;
+                        use_rs1 = 1'b1;
+                        if (rs2[4:2] != 3'b000) illegal = 1'b1;
+                    end
+                    5'b11100: begin
+                        use_fs2  = 1'b0;
+                        fp_we_rd = 1'b0;
+                        we_rd    = 1'b1;
+                        fp_rm    = 3'b000;
+                        case (funct3)
+                            3'b000:  fp_op = FOP_MV_X_F;
+                            3'b001:  fp_op = FOP_CLASS;
+                            default: illegal = 1'b1;
+                        endcase
+                        if (rs2 != 5'd0) illegal = 1'b1;
+                    end
+                    5'b11110: begin
+                        fp_op   = FOP_MV_F_X;
+                        use_fs1 = 1'b0;
+                        use_fs2 = 1'b0;
+                        use_rs1 = 1'b1;
+                        fp_rm   = 3'b000;
+                        if ((rs2 != 5'd0) || (funct3 != 3'b000)) illegal = 1'b1;
+                    end
+                    default: illegal = 1'b1;
+                endcase
             end
             //---------------------------------------------------------
             OP_FENCE: begin

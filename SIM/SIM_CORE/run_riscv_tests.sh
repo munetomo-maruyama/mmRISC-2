@@ -13,7 +13,7 @@
 #---------------------------------------------------------------------------
 cd "$(dirname "$0")"
 RVTESTS=${RVTESTS:-$HOME/RISCV/riscv-tests}
-SETS=${@:-"rv64ui rv64um rv64ua rv64uc rv64mi"}
+SETS=${@:-"rv64ui rv64um rv64ua rv64uc rv64uf rv64ud rv64mi"}
 OUT=rvtests
 PREFIX=/opt/riscv/bin/riscv64-unknown-elf-
 SIM=./obj_dir/Vtb_CORE
@@ -44,7 +44,7 @@ for set in $SETS; do
         name=$(basename $src .S)
         [ "$name" = "Makefrag" ] && continue
         elf=$OUT/$set-p-$name
-        if ! ${PREFIX}gcc -march=rv64imac_zicsr_zifencei -mabi=lp64 -static \
+        if ! ${PREFIX}gcc -march=rv64imafdc_zicsr_zifencei -mabi=lp64 -static \
                 -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
                 -Wl,--no-warn-rwx-segments \
                 -I$RVTESTS/isa/macros/scalar -I$RVTESTS/env/p -I$RVTESTS/env \

@@ -93,17 +93,12 @@ module CORE_FPU
     //   is_nan / is_snan / is_inf / is_zero say what kind of value it is;
     //   for those the exponent and the significand mean nothing.
 
-    function automatic logic [63:0] clz_norm(input logic [63:0] v, output int shift);
-        logic [63:0] r;
-        r = v;
-        shift = 0;
-        if (r != 64'd0) begin
-            while (r[63] == 1'b0) begin
-                r = r << 1;
-                shift = shift + 1;
-            end
-        end
-        return r;
+    // leading zeros; a function with an output port is not portable, so the
+    // shift is returned and the caller applies it
+    function automatic int clz64(input logic [63:0] v);
+        for (int i = 0; i < 64; i++)
+            if (v[63-i]) return i;
+        return 64;
     endfunction
 
     // the raw fields of the format
@@ -117,7 +112,7 @@ module CORE_FPU
                           output logic        o_snan);
         logic [63:0] raw;
         logic [11:0] ex;
-        logic [63:0] fr;
+        logic [63:0] fr, nrm;
         int          ew, pw, bs, sh;
         logic        boxed;
         begin
@@ -149,7 +144,9 @@ module CORE_FPU
                         // significand is fraction * 2^(64-pw+sh) and the
                         // value is fraction * 2^(1-bias-pw), so with
                         // value = sig * 2^(exp-63) the exponent is -bias-sh.
-                        o_sig = clz_norm(fr << (64 - pw), sh);
+                        nrm   = fr << (64 - pw);
+                        sh    = clz64(nrm);
+                        o_sig = nrm << sh;
                         o_exp = -bs - sh;
                     end
                 end else if (int'(ex) == ((1 << ew) - 1)) begin
@@ -185,9 +182,14 @@ module CORE_FPU
     logic [63:0] c_cval;
     assign c_cval = (fmt | (&c[63:32])) ? c : QNAN32;
 
-    always @(*) unpack(a, fmt, a_sign, a_exp, a_sig, a_zero, a_inf, a_nan, a_snan);
-    always @(*) unpack(b, fmt, b_sign, b_exp, b_sig, b_zero, b_inf, b_nan, b_snan);
-    always @(*) unpack(c, fmt, c_sign, c_exp, c_sig, c_zero, c_inf, c_nan, c_snan);
+    // The sensitivity list is written out on purpose. `unpack` is a task
+    // with output arguments, and with @(*) Icarus Verilog puts those outputs
+    // into the list as well, so the block keeps waking itself up; the whole
+    // core then runs about a thousand times slower. The task reads nothing
+    // but its two inputs, so naming them is exact as well as portable.
+    always @(a, fmt) unpack(a, fmt, a_sign, a_exp, a_sig, a_zero, a_inf, a_nan, a_snan);
+    always @(b, fmt) unpack(b, fmt, b_sign, b_exp, b_sig, b_zero, b_inf, b_nan, b_snan);
+    always @(c, fmt) unpack(c, fmt, c_sign, c_exp, c_sig, c_zero, c_inf, c_nan, c_snan);
 
     //=================================================================
     // the rounder, shared by everything that rounds
@@ -337,7 +339,8 @@ module CORE_FPU
         i2f_sign = int_signed & v[63];
         i2f_mag  = i2f_sign ? (~v + 64'd1) : v;
         i2f_zero = (i2f_mag == 64'd0);
-        i2f_norm = clz_norm(i2f_mag, i2f_shift);
+        i2f_shift = clz64(i2f_mag);
+        i2f_norm  = i2f_mag << i2f_shift;
     end
 
     // floating point -> integer
@@ -691,14 +694,22 @@ module CORE_FPU
     //=================================================================
     // what the answer is
     //=================================================================
-    logic [63:0] res_comb;
-    logic        res_int_comb;
-    logic [4:0]  flg_comb;
+    // The block below decides what the rounder is given and what the answer
+    // is when nothing has to be rounded. It must not read the output of the
+    // rounder: that would be a combinational loop through it, which costs
+    // nothing in a synthesised design but makes an event driven simulator
+    // evaluate the whole thing several times per cycle. Reading the rounder
+    // happens in the small block after it instead.
+    logic [63:0] sp_res, res_comb;
+    logic        sp_is_int, res_int_comb;
+    logic [4:0]  sp_flags, flg_comb;
+    logic        use_rnd;
 
     always @(*) begin
-        res_comb     = 64'd0;
-        res_int_comb = 1'b0;
-        flg_comb     = 5'd0;
+        sp_res    = 64'd0;
+        sp_is_int = 1'b0;
+        sp_flags  = 5'd0;
+        use_rnd   = 1'b0;
         rnd_sign     = 1'b0;
         rnd_exp      = 14'sd0;
         rnd_sig      = 128'd0;
@@ -706,119 +717,127 @@ module CORE_FPU
         rnd_fmt      = fmt;
 
         case (op)
-            FOP_SGNJ, FOP_SGNJN, FOP_SGNJX: res_comb = sgnj_res;
+            FOP_SGNJ, FOP_SGNJN, FOP_SGNJX: sp_res = sgnj_res;
 
             FOP_MIN, FOP_MAX: begin
-                res_comb = minmax_res;
-                flg_comb = minmax_flags;
+                sp_res = minmax_res;
+                sp_flags = minmax_flags;
             end
 
             FOP_EQ, FOP_LT, FOP_LE: begin
-                res_comb     = {63'd0, cmp_res};
-                res_int_comb = 1'b1;
-                flg_comb     = cmp_flags;
+                sp_res     = {63'd0, cmp_res};
+                sp_is_int = 1'b1;
+                sp_flags     = cmp_flags;
             end
 
             FOP_CLASS: begin
-                res_comb     = class_res;
-                res_int_comb = 1'b1;
+                sp_res     = class_res;
+                sp_is_int = 1'b1;
             end
 
             FOP_MV_X_F: begin
                 // the raw bits; a single is sign extended from bit 31
-                res_comb     = fmt ? a : {{32{a[31]}}, a[31:0]};
-                res_int_comb = 1'b1;
+                sp_res     = fmt ? a : {{32{a[31]}}, a[31:0]};
+                sp_is_int = 1'b1;
             end
 
-            FOP_MV_F_X: res_comb = fmt ? a : {32'hFFFF_FFFF, a[31:0]};
+            FOP_MV_F_X: sp_res = fmt ? a : {32'hFFFF_FFFF, a[31:0]};
 
             FOP_CVT_S_D: begin                    // double -> single
                 rnd_fmt = 1'b0;
-                if (a_nan)       res_comb = QNAN32;
-                else if (a_inf)  res_comb = {32'hFFFF_FFFF, a_sign, 8'hFF, 23'd0};
-                else if (a_zero) res_comb = {32'hFFFF_FFFF, a_sign, 31'd0};
+                if (a_nan)       sp_res = QNAN32;
+                else if (a_inf)  sp_res = {32'hFFFF_FFFF, a_sign, 8'hFF, 23'd0};
+                else if (a_zero) sp_res = {32'hFFFF_FFFF, a_sign, 31'd0};
                 else begin
                     rnd_sign = a_sign;
                     rnd_exp  = 14'(a_exp);
                     rnd_sig  = {a_sig, 64'd0};
-                    res_comb = rnd_result;
-                    flg_comb = rnd_flags;
+                    use_rnd  = 1'b1;
                 end
-                if (a_snan) flg_comb[F_NV] = 1'b1;
+                if (a_snan) sp_flags[F_NV] = 1'b1;
             end
 
             FOP_CVT_D_S: begin                    // single -> double, exact
                 rnd_fmt = 1'b1;
-                if (a_nan)       res_comb = QNAN64;
-                else if (a_inf)  res_comb = {a_sign, 11'h7FF, 52'd0};
-                else if (a_zero) res_comb = {a_sign, 63'd0};
+                if (a_nan)       sp_res = QNAN64;
+                else if (a_inf)  sp_res = {a_sign, 11'h7FF, 52'd0};
+                else if (a_zero) sp_res = {a_sign, 63'd0};
                 else begin
                     rnd_sign = a_sign;
                     rnd_exp  = 14'(a_exp);
                     rnd_sig  = {a_sig, 64'd0};
-                    res_comb = rnd_result;
-                    flg_comb = rnd_flags;
+                    use_rnd  = 1'b1;
                 end
-                if (a_snan) flg_comb[F_NV] = 1'b1;
+                if (a_snan) sp_flags[F_NV] = 1'b1;
             end
 
             FOP_CVT_F_I: begin                    // integer -> floating point
-                if (i2f_zero) res_comb = fmt ? 64'd0 : {32'hFFFF_FFFF, 32'd0};
+                if (i2f_zero) sp_res = fmt ? 64'd0 : {32'hFFFF_FFFF, 32'd0};
                 else begin
                     rnd_sign = i2f_sign;
                     rnd_exp  = 14'(63 - i2f_shift);
                     rnd_sig  = {i2f_norm, 64'd0};
-                    res_comb = rnd_result;
-                    flg_comb = rnd_flags;
+                    use_rnd  = 1'b1;
                 end
             end
 
             FOP_CVT_I_F: begin                    // floating point -> integer
-                res_comb     = f2i_res;
-                res_int_comb = 1'b1;
-                flg_comb     = f2i_flags;
+                sp_res     = f2i_res;
+                sp_is_int = 1'b1;
+                sp_flags     = f2i_flags;
             end
 
             FOP_DIV, FOP_SQRT: begin
                 if ((op == FOP_DIV) ? div_special : sqrt_special) begin
-                    res_comb = (op == FOP_DIV) ? div_sp_res   : sqrt_sp_res;
-                    flg_comb = (op == FOP_DIV) ? div_sp_flags : sqrt_sp_flags;
+                    sp_res = (op == FOP_DIV) ? div_sp_res   : sqrt_sp_res;
+                    sp_flags = (op == FOP_DIV) ? div_sp_flags : sqrt_sp_flags;
                 end else begin
                     rnd_sign   = ds_sign;
                     rnd_exp    = 14'(ds_exp);
                     rnd_sig    = ds_sig;
                     rnd_sticky = ds_sticky;
-                    res_comb   = rnd_result;
-                    flg_comb   = rnd_flags;
+                    use_rnd  = 1'b1;
                 end
             end
 
             FOP_ADD, FOP_SUB, FOP_MUL,
             FOP_MADD, FOP_MSUB, FOP_NMSUB, FOP_NMADD: begin
                 if (fma_special) begin
-                    res_comb = fma_sp_res;
-                    flg_comb = fma_sp_flags;
+                    sp_res = fma_sp_res;
+                    sp_flags = fma_sp_flags;
                 end else if (fma_zero) begin
                     // everything cancelled out
-                    res_comb = fmt ? {zero_sign, 63'd0}
+                    sp_res = fmt ? {zero_sign, 63'd0}
                                    : {32'hFFFF_FFFF, zero_sign, 31'd0};
                 end else begin
                     rnd_sign = sum_sign;
                     rnd_exp  = 14'(fma_exp);
                     rnd_sig  = fma_sig;
                     rnd_sticky = fma_sticky;
-                    res_comb = rnd_result;
-                    flg_comb = rnd_flags;
+                    use_rnd  = 1'b1;
                 end
             end
 
             default: begin
-                res_comb = 64'd0;
+                sp_res = 64'd0;
             end
         endcase
 
         // a NaN that arrives at an operation which produces a floating point
         // number turns into the canonical one; a signalling NaN is invalid
+    end
+
+
+    // the only place that reads the rounder
+    always @(*) begin
+        res_int_comb = sp_is_int;
+        if (use_rnd) begin
+            res_comb = rnd_result;
+            flg_comb = sp_flags | rnd_flags;
+        end else begin
+            res_comb = sp_res;
+            flg_comb = sp_flags;
+        end
     end
 
     //=================================================================

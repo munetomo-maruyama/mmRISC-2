@@ -65,12 +65,22 @@ module CORE_CSR
         output logic        irq_any,       // enabled and pending, whatever mstatus.MIE says (WFI)
 
         // counters
-        input  logic        instret_inc
+        input  logic        instret_inc,
+
+        // floating point state
+        input  logic        fflags_we,     // accumulate the flags of one op
+        input  logic [4:0]  fflags_set,
+        input  logic        fs_dirty,      // an FP register or fcsr was written
+        output logic [2:0]  frm_out,       // the dynamic rounding mode
+        output logic [1:0]  fs_out         // mstatus.FS
     );
 
     //-----------------------------------------------------------------
     // addresses
     //-----------------------------------------------------------------
+    localparam logic [11:0] CSR_FFLAGS    = 12'h001;
+    localparam logic [11:0] CSR_FRM       = 12'h002;
+    localparam logic [11:0] CSR_FCSR      = 12'h003;
     localparam logic [11:0] CSR_MSTATUS   = 12'h300;
     localparam logic [11:0] CSR_MISA      = 12'h301;
     localparam logic [11:0] CSR_MIE       = 12'h304;
@@ -106,6 +116,12 @@ module CORE_CSR
     logic        mie_msie, mie_mtie, mie_meie;
     logic [31:0] mcounteren;
     logic [63:0] mcycle, minstret;
+    logic [4:0]  fflags;
+    logic [2:0]  frm;
+    logic [1:0]  mstatus_fs;
+
+    assign frm_out = frm;
+    assign fs_out  = mstatus_fs;
 
     //-----------------------------------------------------------------
     // composed values
@@ -118,6 +134,8 @@ module CORE_CSR
         mstatus_val[3]     = mstatus_mie;     // MIE
         mstatus_val[7]     = mstatus_mpie;    // MPIE
         mstatus_val[12:11] = 2'b11;           // MPP
+        mstatus_val[14:13] = mstatus_fs;      // FS
+        mstatus_val[63]    = (mstatus_fs == 2'b11);   // SD
     end
 
     always @(*) begin
@@ -143,6 +161,9 @@ module CORE_CSR
         rd_data   = 64'd0;
         rd_exists = 1'b1;
         case (rd_addr)
+            CSR_FFLAGS    : rd_data = {59'd0, fflags};
+            CSR_FRM       : rd_data = {61'd0, frm};
+            CSR_FCSR      : rd_data = {56'd0, frm, fflags};
             CSR_MSTATUS   : rd_data = mstatus_val;
             CSR_MISA      : rd_data = MISA;
             CSR_MIE       : rd_data = mie_val;
@@ -212,9 +233,17 @@ module CORE_CSR
             mcounteren   <= 32'd0;
             mcycle       <= 64'd0;
             minstret     <= 64'd0;
+            fflags       <= 5'd0;
+            frm          <= 3'd0;
+            mstatus_fs   <= 2'b00;
         end else begin
             mcycle <= mcycle + 64'd1;
             if (instret_inc) minstret <= minstret + 64'd1;
+
+            // the flags of the operations pile up; a write of the CSR below
+            // takes precedence over the accumulation of the same cycle
+            if (fflags_we) fflags <= fflags | fflags_set;
+            if (fs_dirty)  mstatus_fs <= 2'b11;
 
             if (trap_en) begin
                 mepc         <= {trap_epc[63:1], 1'b0};
@@ -228,9 +257,23 @@ module CORE_CSR
                 mstatus_mpie <= 1'b1;
             end else if (wr_en) begin
                 case (wr_addr)
+                    CSR_FFLAGS: begin
+                        fflags     <= wr_data[4:0];
+                        mstatus_fs <= 2'b11;
+                    end
+                    CSR_FRM: begin
+                        frm        <= wr_data[2:0];
+                        mstatus_fs <= 2'b11;
+                    end
+                    CSR_FCSR: begin
+                        fflags     <= wr_data[4:0];
+                        frm        <= wr_data[7:5];
+                        mstatus_fs <= 2'b11;
+                    end
                     CSR_MSTATUS: begin
                         mstatus_mie  <= wr_data[3];
                         mstatus_mpie <= wr_data[7];
+                        mstatus_fs   <= wr_data[14:13];
                     end
                     CSR_MIE: begin
                         mie_msie <= wr_data[IRQ_M_SOFT];
