@@ -26,6 +26,7 @@
 | `make trace` | リタイアトレース付きで 1 本走らせる |
 | `make wave` | VCD を出す |
 | `make iverilog` | Icarus Verilog で同じ試験 |
+| `make clint` | `CPU_CLINT` を 4 ハート構成で直接叩く(`tb_CLINT.sv`)。単一コアのプログラムからは届かないレジスタマップの検査 |
 | `make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / mi)。`RVTESTS` でリポジトリの場所を指定 |
 | `make bugs` / `./bug_inject.sh` | バグ注入 76 種(背圧あり/なしの両方で判定) |
 | `make lint` | Verilator lint |

@@ -74,6 +74,7 @@ LitexRocket/        参考用(リポジトリには含めない)
 |---|---|---|
 | `cd SIM/SIM_CORE && make` | CPU コアの命令試験(RV64IMAC + Zicsr + トラップ + CLINT) | 全 PASS |
 | `cd SIM/SIM_CORE && make stress` | 両キャッシュポートに背圧を入れて同じ試験 | 全 PASS |
+| `cd SIM/SIM_CORE && make clint` | CLINT のマルチハート・レジスタマップ(4 ハート) | PASS 32 チェック |
 | `cd SIM/SIM_CORE && make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / mi) | 101 PASS、既知の不合格 6(未実装機能を要求する試験) |
 | `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 76 種 | 全て検出 |
 | `cd SIM/SIM_CACHE && make` | L1 キャッシュ全試験 | PASS 8817 チェック |

@@ -6,6 +6,7 @@
 #   make stress     : run them all with back pressure on both cache ports
 #   make bugs       : injected bug campaign (bug_inject.sh)
 #   make riscv-tests: the official riscv-tests (rv64ui, rv64mi)
+#   make clint      : CPU_CLINT with several harts (tb_CLINT)
 #   make trace      : run one test with the retirement trace
 #   make wave       : run one test and dump tb_CORE.vcd
 #   make iverilog   : run all tests with Icarus Verilog
@@ -32,10 +33,11 @@ SIM_SRCS := CORE_MEM_MODEL.sv $(TOP).sv
 SRCS     := $(RTL_SRCS) $(SIM_SRCS)
 
 VERILATOR       := verilator
-VERILATOR_FLAGS := --binary --timing -j 0 --top-module $(TOP) \
+VERILATOR_BASE  := --binary --timing -j 0 \
                    -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-UNUSEDSIGNAL \
                    -Wno-UNUSEDPARAM -Wno-DECLFILENAME -Wno-PINCONNECTEMPTY \
                    -Wno-BLKSEQ
+VERILATOR_FLAGS := $(VERILATOR_BASE) --top-module $(TOP)
 IVERILOG_FLAGS  := -g2012 -Wall -Wno-timescale -s $(TOP)
 
 # RISC-V toolchain for the test programs
@@ -56,7 +58,7 @@ HEXES    := $(addprefix tests/,$(addsuffix .hex,$(TESTS)))
 TEST     ?= $(firstword $(TESTS))
 PLUSARGS ?=
 
-.PHONY: all run run-all stress bugs riscv-tests trace wave lint iverilog clean tests
+.PHONY: all run run-all stress bugs riscv-tests clint trace wave lint iverilog clean tests
 
 # back pressure on both cache ports : ready is low in 40 % of the cycles
 STRESS_ARGS := +istall=40 +dstall=40
@@ -88,6 +90,15 @@ bugs: obj_dir/V$(TOP) $(HEXES)
 riscv-tests: obj_dir/V$(TOP)
 	./run_riscv_tests.sh
 
+# the multi hart register map of the CLINT cannot be reached from a program
+# on a single core, so it has a bench of its own
+obj_clint/Vtb_CLINT: $(RTL_DIR)/CPU/CPU_CLINT/CPU_CLINT.sv tb_CLINT.sv
+	$(VERILATOR) $(VERILATOR_BASE) --top-module tb_CLINT -Mdir obj_clint \
+	    $(RTL_DIR)/CPU/CPU_CLINT/CPU_CLINT.sv tb_CLINT.sv
+
+clint: obj_clint/Vtb_CLINT
+	./obj_clint/Vtb_CLINT
+
 run-all: obj_dir/V$(TOP) $(HEXES)
 	@fail=0; \
 	for t in $(TESTS); do \
@@ -113,4 +124,4 @@ iverilog: $(HEXES)
 	@for t in $(TESTS); do vvp $(TOP).vvp +hex=tests/$$t.hex +name=$$t | grep -E "PASS|FAIL"; done
 
 clean:
-	rm -rf obj_dir obj_trace bug_work rvtests $(TOP).vvp *.vcd *.log tests/*.elf tests/*.bin tests/*.hex tests/*.dis
+	rm -rf obj_dir obj_trace obj_clint bug_work rvtests $(TOP).vvp *.vcd *.log tests/*.elf tests/*.bin tests/*.hex tests/*.dis
