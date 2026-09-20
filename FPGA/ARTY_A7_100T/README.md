@@ -120,6 +120,9 @@ The same OpenOCD sequence was run against the RTL in simulation (`SIM/SIM_OCD`).
 
 ## 5. Memory access through the data cache
 
+Verified on the board on 2026-09-20 (JTAG, `cache_test.tcl`: PASS, also when
+repeated without power cycling).
+
 The D$ is 16KiB (64 sets x 4 ways x 64 byte), so a 64 byte line covers 16 words
 of `mdw`. The sequence below walks through miss, hit, write hit, write miss and
 a replacement; every step must return the value that was written.
