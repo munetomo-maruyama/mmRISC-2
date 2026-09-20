@@ -92,6 +92,7 @@ module tb_CACHE;
     logic [FETCH_WIDTH-1:0]  i_resp_data;
     logic                    i_flush_valid, i_flush_done;
     logic                    i_kill;
+    logic [PADDR_WIDTH-1:0]  i_req_paddr;     // physical address, one cycle later
 
     logic                    d_req_valid, d_req_ready;
     logic [PADDR_WIDTH-1:0]  d_req_addr;
@@ -100,6 +101,7 @@ module tb_CACHE;
     logic [XLEN-1:0]         d_req_wdata;
     logic                    d_resp_valid, d_resp_error;
     logic [XLEN-1:0]         d_resp_data;
+    logic [PADDR_WIDTH-1:0]  d_req_paddr;     // physical address, one cycle later
 
     // second port of the data cache (debug module in CPU_TOP)
     logic                    dbg_req_valid, dbg_req_ready;
@@ -109,6 +111,7 @@ module tb_CACHE;
     logic [XLEN-1:0]         dbg_req_wdata;
     logic                    dbg_resp_valid, dbg_resp_error;
     logic [XLEN-1:0]         dbg_resp_data;
+    logic [PADDR_WIDTH-1:0]  dbg_req_paddr;
 
     // AXI4 (memory bus, 40bit)
     logic [3:0]              m_axi4_awid;
@@ -159,6 +162,46 @@ module tb_CACHE;
     logic                    m_axil_rvalid, m_axil_rready;
 
     //=================================================================
+    // Fake MMU
+    //
+    // The tests work with physical addresses. With xlate_en set, the driver
+    // sends a different *virtual* address on the request port and the real
+    // one on the physical address port, so the cache has to take the index
+    // from the virtual address and the tag from the physical one (VIPT).
+    // The two differ in the tag only, the page offset is the same, which is
+    // what the index needs (only valid while SETS * BLOCK <= 4096).
+    //=================================================================
+    localparam logic [PADDR_WIDTH-1:0] XL_VBASE = MEM_BASE + 40'h0010_0000;
+    localparam logic [PADDR_WIDTH-1:0] XL_PBASE = MEM_BASE + 40'h0000_2000;
+    localparam int                     XL_SIZE  = 4096;
+
+    bit xlate_en = 1'b0;
+
+    // physical -> virtual (what the CPU would put on the request port)
+    function automatic logic [PADDR_WIDTH-1:0] to_virt(input logic [PADDR_WIDTH-1:0] pa);
+        if (xlate_en && (pa >= XL_PBASE) && (pa < XL_PBASE + PADDR_WIDTH'(XL_SIZE)))
+            return pa - XL_PBASE + XL_VBASE;
+        else
+            return pa;
+    endfunction
+
+    // the physical address of a request is presented one cycle after it was
+    // accepted (CPU_CACHE_SPEC.md 5.2)
+    logic [PADDR_WIDTH-1:0] d_req_pa_cur, i_req_pa_cur;
+
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            i_req_paddr   <= '0;
+            d_req_paddr   <= '0;
+            dbg_req_paddr <= '0;
+        end else begin
+            if (i_req_valid   && i_req_ready)   i_req_paddr   <= i_req_pa_cur;
+            if (d_req_valid   && d_req_ready)   d_req_paddr   <= d_req_pa_cur;
+            if (dbg_req_valid && dbg_req_ready) dbg_req_paddr <= dbg_req_addr;
+        end
+    end
+
+    //=================================================================
     // DUT
     //=================================================================
     CPU_CACHE
@@ -185,6 +228,7 @@ module tb_CACHE;
             .i_req_valid    (i_req_valid),
             .i_req_ready    (i_req_ready),
             .i_req_addr     (i_req_addr),
+            .i_req_paddr    (i_req_paddr),
             .i_resp_valid   (i_resp_valid),
             .i_resp_data    (i_resp_data),
             .i_resp_error   (i_resp_error),
@@ -198,6 +242,7 @@ module tb_CACHE;
             .d_req_size     (d_req_size),
             .d_req_cmd      (d_req_cmd),
             .d_req_wdata    (d_req_wdata),
+            .d_req_paddr    (d_req_paddr),
             .d_resp_valid   (d_resp_valid),
             .d_resp_data    (d_resp_data),
             .d_resp_error   (d_resp_error),
@@ -207,6 +252,7 @@ module tb_CACHE;
             .dbg_req_size   (dbg_req_size),
             .dbg_req_cmd    (dbg_req_cmd),
             .dbg_req_wdata  (dbg_req_wdata),
+            .dbg_req_paddr  (dbg_req_paddr),
             .dbg_resp_valid (dbg_resp_valid),
             .dbg_resp_data  (dbg_resp_data),
             .dbg_resp_error (dbg_resp_error),
@@ -581,7 +627,8 @@ module tb_CACHE;
             if (rq_rd != rq_wr) begin
                 d_req_valid <= 1'b1;
                 d_req_cmd   <= rq_cmd[rq_rd];
-                d_req_addr  <= rq_addr[rq_rd];
+                d_req_addr  <= to_virt(rq_addr[rq_rd]);
+                d_req_pa_cur<= rq_addr[rq_rd];
                 d_req_size  <= rq_size[rq_rd];
                 d_req_wdata <= rq_wdata[rq_rd];
                 rq_rd       <= (rq_rd + 1) % QDEPTH;
@@ -597,7 +644,8 @@ module tb_CACHE;
         end else if (!i_req_valid || i_req_ready) begin
             if (iq_rd_f != iq_wr_f) begin
                 i_req_valid <= 1'b1;
-                i_req_addr  <= iq_addr_f[iq_rd_f];
+                i_req_addr  <= to_virt(iq_addr_f[iq_rd_f]);
+                i_req_pa_cur<= iq_addr_f[iq_rd_f];
                 iq_rd_f     <= (iq_rd_f + 1) % QDEPTH;
             end else begin
                 i_req_valid <= 1'b0;

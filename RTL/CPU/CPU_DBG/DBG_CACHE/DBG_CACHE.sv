@@ -50,6 +50,10 @@ module DBG_CACHE
         output logic [1:0]            dc_req_size,
         output logic [3:0]            dc_req_cmd,
         output logic [63:0]           dc_req_wdata,
+        // the debug module works with physical addresses, so the cache gets
+        // the same value (it is held until the next access, which is what the
+        // cache needs in the cycle after the request was accepted)
+        output logic [ADDR_WIDTH-1:0] dc_req_paddr,
         input  logic                  dc_resp_valid,
         input  logic [63:0]           dc_resp_data,
         input  logic                  dc_resp_error,
@@ -69,7 +73,8 @@ module DBG_CACHE
     logic        c_wr;
     logic [31:0] tmo;
 
-    assign busy = (state != C_IDLE);
+    assign busy         = (state != C_IDLE);
+    assign dc_req_paddr = dc_req_addr;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin

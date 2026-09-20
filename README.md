@@ -18,6 +18,7 @@ RTL/
 │   │   ├── CACHE_PORT_ARB/ D$ ポートの調停(CPU 優先、デバッガと共有)
 │   │   ├── CACHE_TAG_ARRAY/    タグ + 有効 + ダーティ
 │   │   └── CACHE_DATA_ARRAY/   データ配列
+│   ├── CPU_CORE/       CPU コア(これから実装)  → CPU_CORE_SPEC.md
 │   ├── CPU_DBG/        デバッグ論理  → CPU_DBG_SPEC.md
 │   │   ├── CPU_DBG/        デバッグ論理のトップ
 │   │   ├── DBG_DTM/        JTAG DTM(Debug Spec 1.0)
@@ -52,6 +53,7 @@ LitexRocket/        参考用(リポジトリには含めない)
 |---|---|
 | [`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`](RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md) | L1 キャッシュ(パラメータ、インタフェース、動作、検証結果) |
 | [`RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`](RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md) | デバッグ論理(JTAG/cJTAG DTM、DM、認証、FPGA 確認結果) |
+| [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md) | CPU コア(命令セット、パイプライン、MMU、CSR、実装順序) |
 
 ## シミュレーション
 
@@ -88,5 +90,6 @@ vivado -mode batch -source build.tcl
 | JTAG / cJTAG デバッグ論理 | 完了(シミュレーション、FPGA 実機とも確認済み) |
 | L1 命令/データキャッシュ | 完了(掃引・バグ注入まで) |
 | CPU_TOP への組み込み | 完了(BFM がキャッシュを駆動、デバッガも D$ 経由)。FPGA 実機で OpenOCD から D$ 経由のアクセスを確認済み |
-| CPU コア(パイプライン)と MMU | これから |
+| CPU コア(パイプライン) | 仕様 Rev-1 策定済み、これから実装 |
+| MMU (Sv39) | コアが M-mode で動いたあと(CPU_CORE_SPEC.md M5) |
 | L2 キャッシュ | CPU ブロック完成後に検討 |

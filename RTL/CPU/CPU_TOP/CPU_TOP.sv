@@ -443,14 +443,14 @@ module CPU_TOP
 
     // cache ports
     logic                       bfm_i_req_valid, bfm_i_req_ready, bfm_i_kill;
-    logic [AXI4_ADDR_WIDTH-1:0] bfm_i_req_addr;
+    logic [AXI4_ADDR_WIDTH-1:0] bfm_i_req_addr, bfm_i_req_paddr;
     logic                       cc_i_resp_valid, cc_i_resp_error;
     logic [63:0]                cc_i_resp_data;
     logic                       cc_i_flush_valid, cc_i_flush_done;
     logic                       bfm_i_flush_valid;
 
     logic                       bfm_d_req_valid, bfm_d_req_ready;
-    logic [AXI4_ADDR_WIDTH-1:0] bfm_d_req_addr;
+    logic [AXI4_ADDR_WIDTH-1:0] bfm_d_req_addr, bfm_d_req_paddr;
     logic [1:0]                 bfm_d_req_size;
     logic [3:0]                 bfm_d_req_cmd;
     logic [63:0]                bfm_d_req_wdata;
@@ -459,7 +459,7 @@ module CPU_TOP
 
     // debug side of the data cache
     logic                       dbg_dc_req_valid, dbg_dc_req_ready;
-    logic [AXI4_ADDR_WIDTH-1:0] dbg_dc_req_addr;
+    logic [AXI4_ADDR_WIDTH-1:0] dbg_dc_req_addr, dbg_dc_req_paddr;
     logic [1:0]                 dbg_dc_req_size;
     logic [3:0]                 dbg_dc_req_cmd;
     logic [63:0]                dbg_dc_req_wdata;
@@ -571,6 +571,7 @@ module CPU_TOP
             .dc_req_valid    (dbg_dc_req_valid),
             .dc_req_ready    (dbg_dc_req_ready),
             .dc_req_addr     (dbg_dc_req_addr),
+            .dc_req_paddr    (dbg_dc_req_paddr),
             .dc_req_size     (dbg_dc_req_size),
             .dc_req_cmd      (dbg_dc_req_cmd),
             .dc_req_wdata    (dbg_dc_req_wdata),
@@ -628,6 +629,7 @@ module CPU_TOP
             .i_req_valid     (bfm_i_req_valid),
             .i_req_ready     (bfm_i_req_ready),
             .i_req_addr      (bfm_i_req_addr),
+            .i_req_paddr     (bfm_i_req_paddr),
             .i_resp_valid    (cc_i_resp_valid),
             .i_resp_data     (cc_i_resp_data),
             .i_resp_error    (cc_i_resp_error),
@@ -637,6 +639,7 @@ module CPU_TOP
             .d_req_valid     (bfm_d_req_valid),
             .d_req_ready     (bfm_d_req_ready),
             .d_req_addr      (bfm_d_req_addr),
+            .d_req_paddr     (bfm_d_req_paddr),
             .d_req_size      (bfm_d_req_size),
             .d_req_cmd       (bfm_d_req_cmd),
             .d_req_wdata     (bfm_d_req_wdata),
@@ -646,6 +649,7 @@ module CPU_TOP
             .dbg_req_valid   (dbg_dc_req_valid),
             .dbg_req_ready   (dbg_dc_req_ready),
             .dbg_req_addr    (dbg_dc_req_addr),
+            .dbg_req_paddr  (dbg_dc_req_paddr),
             .dbg_req_size    (dbg_dc_req_size),
             .dbg_req_cmd     (dbg_dc_req_cmd),
             .dbg_req_wdata   (dbg_dc_req_wdata),
@@ -1171,6 +1175,7 @@ module CPU_TOP
                     .i_req_valid     (bfm_i_req_valid),
                     .i_req_ready     (bfm_i_req_ready),
                     .i_req_addr      (bfm_i_req_addr),
+                    .i_req_paddr     (bfm_i_req_paddr),
                     .i_resp_valid    (cc_i_resp_valid),
                     .i_resp_data     (cc_i_resp_data),
                     .i_resp_error    (cc_i_resp_error),
@@ -1181,6 +1186,7 @@ module CPU_TOP
                     .d_req_valid     (bfm_d_req_valid),
                     .d_req_ready     (bfm_d_req_ready),
                     .d_req_addr      (bfm_d_req_addr),
+                    .d_req_paddr     (bfm_d_req_paddr),
                     .d_req_size      (bfm_d_req_size),
                     .d_req_cmd       (bfm_d_req_cmd),
                     .d_req_wdata     (bfm_d_req_wdata),
@@ -1193,10 +1199,12 @@ module CPU_TOP
             // no CPU: the cache ports stay idle
             assign bfm_i_req_valid   = 1'b0;
             assign bfm_i_req_addr    = '0;
+            assign bfm_i_req_paddr   = '0;
             assign bfm_i_kill        = 1'b0;
             assign bfm_i_flush_valid = 1'b0;
             assign bfm_d_req_valid   = 1'b0;
             assign bfm_d_req_addr    = '0;
+            assign bfm_d_req_paddr   = '0;
             assign bfm_d_req_size    = 2'd0;
             assign bfm_d_req_cmd     = 4'd0;
             assign bfm_d_req_wdata   = '0;

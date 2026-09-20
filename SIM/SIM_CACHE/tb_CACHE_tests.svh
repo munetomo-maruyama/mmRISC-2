@@ -15,6 +15,7 @@
 //   12. Final FLUSH and full memory image check
 //   13. Write through, no allocate (CMD_STWTHR, used by the debug port)
 //   14. Debug port : the second port of the data cache (CACHE_PORT_ARB)
+//   15. VIPT : virtual index with a physical tag (fake MMU in the driver)
 //
 //   Plusargs: +from=<n> +to=<n> run only sections n..m
 //             +perf[=<n>]        run the throughput patterns afterwards
@@ -610,6 +611,64 @@
             check_memory("memory image after the debug port tests");
 
             if (n_error == e0) ok("debug port: miss, hit, write through, sharing with the CPU");
+        end
+
+        //=============================================================
+        section("15. VIPT : index from the request, tag from the physical address");
+        //=============================================================
+        if (from_sec <= 15 && 15 <= to_sec) begin
+            e0 = n_error;
+            if ((DC_SETS * DC_BLOCK > 4096) || (IC_SETS * IC_BLOCK > 4096)) begin
+                $display("[%0t] [SKIP] index and offset do not fit into a 4KiB page",
+                         $time);
+            end else begin
+                // From here the driver puts a different virtual address on the
+                // request port (same page offset, different tag) and the real
+                // address on the physical address port. Everything below is
+                // written in physical addresses, as before.
+                d_flush("flush before the translated accesses");
+                d_drain();
+                i_flush_all();
+                xlate_en = 1'b1;
+
+                // load / store through the translated window
+                for (int i = 0; i < 16; i++)
+                    d_store($sformatf("translated store %0d", i),
+                            a_mem(1024 + i), 2'd3, 64'h7213_0000_0000_0000 + 64'(i));
+                for (int i = 0; i < 16; i++)
+                    d_load($sformatf("translated load %0d", i), a_mem(1024 + i), 2'd3);
+                d_drain();
+
+                // hit on a line that was brought in through the translation
+                d_load("translated load (hit)", a_mem(1024), 2'd3);
+                d_drain();
+
+                // byte lanes, AMO and LR/SC on translated addresses
+                d_store("translated byte",  a_mem(1040) + 40'd3, 2'd0, 64'h00000000000000C3);
+                d_load ("translated byte read", a_mem(1040) + 40'd3, 2'd0);
+                d_push("translated amoadd", CMD_AMOADD, a_mem(1041), 2'd3, 64'd100);
+                d_push("translated LR", CMD_LR, a_mem(1042), 2'd3, 64'd0);
+                d_push("translated SC", CMD_SC, a_mem(1042), 2'd3, 64'hAB_CDEF_0123_4567);
+                d_drain();
+
+                // instruction fetch through the translation
+                i_push("translated fetch 0", a_mem(1044));
+                i_push("translated fetch 1", a_mem(1045));
+                i_drain();
+
+                // the lines have to be written back to the *physical* address
+                d_flush("flush the translated lines");
+                d_drain();
+                xlate_en = 1'b0;
+                check_memory("memory image after the translated accesses");
+
+                // the same data is reachable without translation
+                for (int i = 0; i < 16; i++)
+                    d_load($sformatf("untranslated read back %0d", i),
+                           a_mem(1024 + i), 2'd3);
+                d_drain();
+            end
+            if (n_error == e0) ok("VIPT: index from the virtual, tag from the physical address");
         end
 
         //=============================================================

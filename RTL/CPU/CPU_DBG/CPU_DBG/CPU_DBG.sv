@@ -133,6 +133,7 @@ module CPU_DBG
         output logic [1:0]               dc_req_size,
         output logic [3:0]               dc_req_cmd,
         output logic [63:0]              dc_req_wdata,
+        output logic [ADDR_WIDTH-1:0]    dc_req_paddr,
         input  logic                     dc_resp_valid,
         input  logic [63:0]              dc_resp_data,
         input  logic                     dc_resp_error,
@@ -470,6 +471,7 @@ module CPU_DBG
                     .dc_req_size   (dc_req_size),
                     .dc_req_cmd    (dc_req_cmd),
                     .dc_req_wdata  (dc_req_wdata),
+                    .dc_req_paddr  (dc_req_paddr),
                     .dc_resp_valid (dc_resp_valid),
                     .dc_resp_data  (dc_resp_data),
                     .dc_resp_error (dc_resp_error),
@@ -485,6 +487,7 @@ module CPU_DBG
             assign dc_req_size  = 2'd0;
             assign dc_req_cmd   = 4'd0;
             assign dc_req_wdata = '0;
+            assign dc_req_paddr = '0;
             assign dc_wrote     = 1'b0;
         end
     endgenerate

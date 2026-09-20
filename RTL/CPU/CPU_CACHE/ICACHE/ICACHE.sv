@@ -46,6 +46,12 @@ module ICACHE
         input  logic                        i_req_valid,
         output logic                        i_req_ready,
         input  logic [PADDR_WIDTH-1:0]      i_req_addr,
+        // Physical address of the fetch, valid in the cycle the request is in
+        // stage 1 (the cycle after i_req_valid & i_req_ready). Index and
+        // offset come from i_req_addr, only the tag comes from here, so the
+        // CPU can start the array access before the translation is finished
+        // (VIPT). With no MMU, drive it with i_req_addr delayed by one cycle.
+        input  logic [PADDR_WIDTH-1:0]      i_req_paddr,
         output logic                        i_resp_valid,
         output logic [FETCH_WIDTH-1:0]      i_resp_data,
         output logic                        i_resp_error,
@@ -179,7 +185,17 @@ module ICACHE
 
     logic                    s1_valid;
     logic [PADDR_WIDTH-1:0]  s1_addr;
+    logic                    s1_ptag_v;
+    logic [TAG_BITS-1:0]     s1_ptag_r;
+    logic [TAG_BITS-1:0]     s1_ptag;
+    logic [PADDR_WIDTH-1:0]  s1_paddr;
     logic                    s1_cacheable;
+
+    // the physical address arrives one cycle after the request; the first
+    // stage 1 cycle uses the input, later cycles (miss, fill) the captured one
+    assign s1_ptag      = s1_ptag_v ? s1_ptag_r : addr_tag(i_req_paddr);
+    assign s1_paddr     = {s1_ptag, s1_addr[PADDR_WIDTH-TAG_BITS-1:0]};
+    assign s1_cacheable = (s1_paddr >= PADDR_WIDTH'(MEM_BASE));
 
     logic [WAYS-1:0]         hit_way_oh;
     logic                    hit;
@@ -188,7 +204,7 @@ module ICACHE
     always @(*) begin
         for (int w = 0; w < WAYS; w++)
             hit_way_oh[w] = tag_rd_valid[w] &&
-                            (tag_rd_tag[w*TAG_BITS +: TAG_BITS] == addr_tag(s1_addr));
+                            (tag_rd_tag[w*TAG_BITS +: TAG_BITS] == s1_ptag);
         hit     = s1_valid & s1_cacheable & (|hit_way_oh);
         hit_way = onehot_to_bin(hit_way_oh);
     end
@@ -228,7 +244,8 @@ module ICACHE
             state           <= S_IDLE;
             s1_valid        <= 1'b0;
             s1_addr         <= '0;
-            s1_cacheable    <= 1'b0;
+            s1_ptag_v       <= 1'b0;
+            s1_ptag_r       <= '0;
             fill_addr       <= '0;
             fill_way        <= '0;
             fill_beat       <= '0;
@@ -252,9 +269,15 @@ module ICACHE
             if (i_req_valid && i_req_ready) begin
                 s1_valid     <= 1'b1;
                 s1_addr      <= i_req_addr;
-                s1_cacheable <= (i_req_addr >= PADDR_WIDTH'(MEM_BASE));
+                s1_ptag_v    <= 1'b0;       // the physical tag arrives next cycle
             end else if (state == S_IDLE) begin
                 s1_valid     <= 1'b0;
+            end
+
+            // the physical address is valid in the first stage 1 cycle
+            if (s1_valid && !s1_ptag_v && !(i_req_valid && i_req_ready)) begin
+                s1_ptag_r <= addr_tag(i_req_paddr);
+                s1_ptag_v <= 1'b1;
             end
 
             case (state)
@@ -267,7 +290,7 @@ module ICACHE
                         i_resp_data  <= hit_data[FETCH_WIDTH-1:0];
                     end else if (s1_valid && s1_cacheable) begin
                         // miss : start a line fill
-                        fill_addr      <= s1_addr;
+                        fill_addr      <= s1_paddr;
                         fill_way       <= (REPLACE_RANDOM != 0) ? WAY_BITS'(lfsr[WAY_BITS-1:0])
                                                          : onehot_to_bin(rr_way);
                         fill_beat      <= '0;
@@ -275,14 +298,14 @@ module ICACHE
                         fill_kill      <= 1'b0;
                         fill_flushed   <= 1'b0;
                         fill_hold_valid<= 1'b0;
-                        m_axi4_araddr  <= {s1_addr[PADDR_WIDTH-1:OFF_BITS], {OFF_BITS{1'b0}}};
+                        m_axi4_araddr  <= {s1_paddr[PADDR_WIDTH-1:OFF_BITS], {OFF_BITS{1'b0}}};
                         m_axi4_arvalid <= 1'b1;
                         state          <= S_FILL;
                     end else if (s1_valid) begin
                         // uncached fetch
-                        fill_addr      <= s1_addr;
+                        fill_addr      <= s1_paddr;
                         fill_kill      <= 1'b0;
-                        m_axil_araddr  <= {s1_addr[PADDR_WIDTH-1:3], 3'b000};
+                        m_axil_araddr  <= {s1_paddr[PADDR_WIDTH-1:3], 3'b000};
                         m_axil_arvalid <= 1'b1;
                         state          <= S_UNC;
                     end
