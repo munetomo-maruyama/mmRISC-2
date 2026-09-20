@@ -102,7 +102,7 @@ mww 0x80000000 0xdeadbeef
 mdw 0x80000000
 mwd 0x12000000 0x1122334455667788
 mdd 0x12000000
-load_image test.bin 0x80001000 bin
+load_image test.bin 0x80001000 bin      ; any binary file, see chapter 5
 verify_image test.bin 0x80001000 bin
 step
 resume
@@ -138,15 +138,25 @@ mdw 0x80001000 16              ; one miss and 15 hits (one line)
 mdw 0x80001000 256             ; 16 lines : 16 misses, 240 hits
 ```
 
-Replacement and write-back of the lines the debugger filled:
+Replacement of the lines the debugger filled needs a block bigger than the
+16KiB cache. There is no binary file in the repository: `openocd/cache_test.tcl`
+generates one (`cache_test_image.bin`, 32KiB) and runs the whole sequence with
+automatic checks, so the steps above do not have to be typed by hand:
 
 ```
-mww 0x80000000 0xA5A5A5A5
-mdw 0x80000000                 ; fills the line
-load_image test.bin 0x80002000 bin      ; 32KiB of data = every set is refilled twice
-verify_image test.bin 0x80002000 bin    ; read back through the cache
-mdw 0x80000000                 ; the line was replaced: miss again -> 0xA5A5A5A5
+openocd -f openocd/ft2232h_jtag.cfg  -f openocd/cache_test.tcl
+openocd -f openocd/ft2232h_cjtag.cfg -f openocd/cache_test.tcl
 ```
+
+It checks a single line (write miss, read miss, read hit, write hit), eight
+lines in different sets, `load_image` / `verify_image` of 32KiB (which refills
+every set twice), that the first lines still read back correctly afterwards,
+that the values survive `reset halt` (debug writes are write through, so they
+are in memory and not in a dirty line), and an access to the peripheral bus.
+It prints `CACHE TEST RESULT : PASS` at the end and leaves OpenOCD running.
+
+Any file works for a manual `load_image`; for example
+`head -c 32768 /dev/urandom > test.bin`.
 
 Writes are write-through, so the value in memory is always the value the
 debugger wrote, no matter whether the line was in the cache or not. Whether a
