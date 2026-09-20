@@ -118,6 +118,7 @@ module CPU_BFM
         output logic                         i_req_valid,
         input  logic                         i_req_ready,
         output logic [AXI4_ADDR_WIDTH-1:0]   i_req_addr,
+        output logic [AXI4_ADDR_WIDTH-1:0]   i_req_paddr,
         input  logic                         i_resp_valid,
         input  logic [63:0]                  i_resp_data,
         input  logic                         i_resp_error,
@@ -128,6 +129,7 @@ module CPU_BFM
         output logic                         d_req_valid,
         input  logic                         d_req_ready,
         output logic [AXI4_ADDR_WIDTH-1:0]   d_req_addr,
+        output logic [AXI4_ADDR_WIDTH-1:0]   d_req_paddr,
         output logic [1:0]                   d_req_size,
         output logic [3:0]                   d_req_cmd,
         output logic [63:0]                  d_req_wdata,
@@ -247,6 +249,19 @@ module CPU_BFM
     end
     assign i_req_addr = ic_cmd_addr;
     assign i_kill     = 1'b0;
+
+    // No MMU yet: the physical address is the address of the request that was
+    // accepted in the previous cycle (CPU_CACHE_SPEC.md 5.2). This is where
+    // the TLB output goes once the MMU exists.
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            i_req_paddr <= '0;
+            d_req_paddr <= '0;
+        end else begin
+            if (i_req_valid && i_req_ready) i_req_paddr <= i_req_addr;
+            if (d_req_valid && d_req_ready) d_req_paddr <= d_req_addr;
+        end
+    end
 
     // fence.i : held until the cache reports it is done
     always_ff @(posedge clk or negedge rst_n) begin

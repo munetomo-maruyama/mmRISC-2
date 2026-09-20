@@ -47,6 +47,7 @@ module CPU_CACHE
         input  logic                     i_req_valid,
         output logic                     i_req_ready,
         input  logic [PADDR_WIDTH-1:0]   i_req_addr,
+        input  logic [PADDR_WIDTH-1:0]   i_req_paddr,
         output logic                     i_resp_valid,
         output logic [FETCH_WIDTH-1:0]   i_resp_data,
         output logic                     i_resp_error,
@@ -61,6 +62,7 @@ module CPU_CACHE
         input  logic [1:0]               d_req_size,
         input  logic [3:0]               d_req_cmd,
         input  logic [XLEN-1:0]          d_req_wdata,
+        input  logic [PADDR_WIDTH-1:0]   d_req_paddr,
         output logic                     d_resp_valid,
         output logic [XLEN-1:0]          d_resp_data,
         output logic                     d_resp_error,
@@ -73,6 +75,7 @@ module CPU_CACHE
         input  logic [1:0]               dbg_req_size,
         input  logic [3:0]               dbg_req_cmd,
         input  logic [XLEN-1:0]          dbg_req_wdata,
+        input  logic [PADDR_WIDTH-1:0]   dbg_req_paddr,
         output logic                     dbg_resp_valid,
         output logic [XLEN-1:0]          dbg_resp_data,
         output logic                     dbg_resp_error,
@@ -279,6 +282,7 @@ module CPU_CACHE
             .i_req_valid    (i_req_valid),
             .i_req_ready    (i_req_ready),
             .i_req_addr     (i_req_addr),
+            .i_req_paddr    (i_req_paddr),
             .i_resp_valid   (i_resp_valid),
             .i_resp_data    (i_resp_data),
             .i_resp_error   (i_resp_error),
@@ -343,6 +347,7 @@ module CPU_CACHE
     logic [1:0]             dc_req_size;
     logic [3:0]             dc_req_cmd;
     logic [XLEN-1:0]        dc_req_wdata;
+    logic [PADDR_WIDTH-1:0] dc_req_paddr;
     logic                   dc_resp_valid, dc_resp_error;
     logic [XLEN-1:0]        dc_resp_data;
 
@@ -362,6 +367,7 @@ module CPU_CACHE
             .s0_req_size    (d_req_size),
             .s0_req_cmd     (d_req_cmd),
             .s0_req_wdata   (d_req_wdata),
+            .s0_req_paddr   (d_req_paddr),
             .s0_resp_valid  (d_resp_valid),
             .s0_resp_data   (d_resp_data),
             .s0_resp_error  (d_resp_error),
@@ -371,6 +377,7 @@ module CPU_CACHE
             .s1_req_size    (dbg_req_size),
             .s1_req_cmd     (dbg_req_cmd),
             .s1_req_wdata   (dbg_req_wdata),
+            .s1_req_paddr   (dbg_req_paddr),
             .s1_resp_valid  (dbg_resp_valid),
             .s1_resp_data   (dbg_resp_data),
             .s1_resp_error  (dbg_resp_error),
@@ -380,6 +387,7 @@ module CPU_CACHE
             .m_req_size     (dc_req_size),
             .m_req_cmd      (dc_req_cmd),
             .m_req_wdata    (dc_req_wdata),
+            .m_req_paddr    (dc_req_paddr),
             .m_resp_valid   (dc_resp_valid),
             .m_resp_data    (dc_resp_data),
             .m_resp_error   (dc_resp_error)
@@ -414,6 +422,7 @@ module CPU_CACHE
             .d_req_size     (dc_req_size),
             .d_req_cmd      (dc_req_cmd),
             .d_req_wdata    (dc_req_wdata),
+            .d_req_paddr    (dc_req_paddr),
             .d_resp_valid   (dc_resp_valid),
             .d_resp_data    (dc_resp_data),
             .d_resp_error   (dc_resp_error),

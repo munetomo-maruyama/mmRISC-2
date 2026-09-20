@@ -62,6 +62,13 @@ module DCACHE
         input  logic [1:0]               d_req_size,
         input  logic [3:0]               d_req_cmd,
         input  logic [XLEN-1:0]          d_req_wdata,
+        // Physical address of the request. It has to be valid in the cycle
+        // the request is in stage 1, which is the cycle after d_req_valid &
+        // d_req_ready (CPU_CACHE_SPEC.md 5.2). The index and the offset are
+        // taken from d_req_addr, only the tag comes from here, so the CPU can
+        // present d_req_addr before the translation is finished (VIPT). With
+        // no MMU, drive it with d_req_addr delayed by one cycle.
+        input  logic [PADDR_WIDTH-1:0]   d_req_paddr,
         output logic                     d_resp_valid,
         output logic [XLEN-1:0]          d_resp_data,
         output logic                     d_resp_error,
@@ -258,7 +265,13 @@ module DCACHE
     logic [1:0]            u_size;
 
     // stage 1
-    logic                    s1_valid, s1_cacheable, s1_data_ok, s1_reread, s1_wait_fill;
+    logic                    s1_valid, s1_data_ok, s1_reread, s1_wait_fill;
+    logic                    s1_ptag_v;                 // the tag has been captured
+    logic [TAG_BITS-1:0]     s1_ptag_r;
+    logic [TAG_BITS-1:0]     s1_ptag;                   // tag of stage 1 (live or captured)
+    logic [PADDR_WIDTH-1:0]  s1_paddr;                  // full physical address of stage 1
+    logic [LINE_BITS-1:0]    s1_line;                   // physical line of stage 1
+    logic                    s1_cacheable;
     logic [PADDR_WIDTH-1:0]  s1_addr;
     logic [1:0]              s1_size;
     logic [3:0]              s1_cmd;
@@ -452,7 +465,7 @@ module DCACHE
     always @(*) begin
         for (int w = 0; w < WAYS; w++)
             hit_oh[w] = eff_valid[w] &&
-                        (eff_tag[w*TAG_BITS +: TAG_BITS] == addr_tag(s1_addr));
+                        (eff_tag[w*TAG_BITS +: TAG_BITS] == s1_ptag);
         hit     = s1_valid & s1_cacheable & s1_data_ok & (|hit_oh);
         hit_way = onehot_to_bin(hit_oh);
         hit_word = dat_rd_data[hit_way*64 +: 64];
@@ -468,7 +481,7 @@ module DCACHE
         ms_match    = 1'b0;
         ms_match_id = '0;
         for (int m = 0; m < NUM_MSHR; m++)
-            if (ms_valid[m] && (ms_line[m] == addr_line(s1_addr))) begin
+            if (ms_valid[m] && (ms_line[m] == s1_line)) begin
                 ms_match    = 1'b1;
                 ms_match_id = MSHR_BITS'(m);
             end
@@ -519,6 +532,14 @@ module DCACHE
         victim_tag   = eff_tag[victim_way*TAG_BITS +: TAG_BITS];
     end
 
+    // The physical address arrives one cycle after the request, so the first
+    // stage 1 cycle uses the input directly and every later cycle (re-read,
+    // waiting for a fill) uses the captured value.
+    assign s1_ptag     = s1_ptag_v ? s1_ptag_r : addr_tag(d_req_paddr);
+    assign s1_paddr    = {s1_ptag, s1_addr[PADDR_WIDTH-TAG_BITS-1:0]};
+    assign s1_line     = {s1_ptag, addr_index(s1_addr)};
+    assign s1_cacheable = (s1_paddr >= PADDR_WIDTH'(MEM_BASE));
+
     //=================================================================
     // Stage 1 decode
     //=================================================================
@@ -535,7 +556,7 @@ module DCACHE
     assign s1_is_flush = (s1_cmd == CMD_FLUSH);
     assign s1_is_stwthr = (s1_cmd == CMD_STWTHR);
     assign s1_needs_line = s1_is_amo | s1_is_lr | s1_is_sc;
-    assign sc_ok         = res_valid && (res_line == addr_line(s1_addr));
+    assign sc_ok         = res_valid && (res_line == s1_line);
     assign s1_writes     = s1_is_store | s1_is_amo | (s1_is_sc & sc_ok);
 
     assign all_idle = ms_empty && wb_empty && (f_state == F_IDLE) &&
@@ -638,7 +659,7 @@ module DCACHE
         tag_wr_en    = 1'b0;
         tag_wr_index = addr_index(s1_addr);
         tag_wr_way   = hit_way;
-        tag_wr_tag   = addr_tag(s1_addr);
+        tag_wr_tag   = s1_ptag;
         tag_wr_valid = 1'b1;
         tag_wr_dirty = 1'b1;
         if (fill_beat_now && m_axi4_rlast) begin
@@ -681,7 +702,8 @@ module DCACHE
             s1_cmd       <= CMD_LOAD;
             s1_wdata     <= '0;
             s1_rob       <= '0;
-            s1_cacheable <= 1'b0;
+            s1_ptag_v    <= 1'b0;
+            s1_ptag_r    <= '0;
             s1_data_ok   <= 1'b0;
             s1_reread    <= 1'b0;
             s1_wait_fill <= 1'b0;
@@ -807,7 +829,7 @@ module DCACHE
                 s1_size      <= d_req_size;
                 s1_cmd       <= d_req_cmd;
                 s1_wdata     <= d_req_wdata;
-                s1_cacheable <= (d_req_addr >= PADDR_WIDTH'(MEM_BASE));
+                s1_ptag_v    <= 1'b0;        // the physical tag arrives next cycle
                 s1_data_ok   <= 1'b1;
                 s1_rob       <= rob_tail;
                 rob_valid[rob_tail] <= 1'b1;
@@ -823,6 +845,12 @@ module DCACHE
             end else if (s1_valid && s1_can_retire) begin
                 s1_valid   <= 1'b0;
                 s1_data_ok <= 1'b0;
+            end
+
+            // the physical address is valid in the first stage 1 cycle
+            if (s1_valid && !s1_ptag_v && !(d_req_valid && d_req_ready)) begin
+                s1_ptag_r <= addr_tag(d_req_paddr);
+                s1_ptag_v <= 1'b1;
             end
 
             // the array outputs stop belonging to stage 1 when an engine
@@ -862,11 +890,11 @@ module DCACHE
                     u_lsb  <= s1_addr[2:0];
                     u_size <= s1_size;
                     if (s1_is_load) begin
-                        m_axil_araddr  <= {s1_addr[PADDR_WIDTH-1:3], 3'b000};
+                        m_axil_araddr  <= {s1_paddr[PADDR_WIDTH-1:3], 3'b000};
                         m_axil_arvalid <= 1'b1;
                         u_state        <= U_AR;
                     end else if (s1_is_store || s1_is_stwthr) begin
-                        m_axil_awaddr  <= {s1_addr[PADDR_WIDTH-1:3], 3'b000};
+                        m_axil_awaddr  <= {s1_paddr[PADDR_WIDTH-1:3], 3'b000};
                         m_axil_awvalid <= 1'b1;
                         m_axil_wdata   <= align_wdata(s1_addr[2:0], s1_wdata);
                         m_axil_wstrb   <= size_strb(s1_addr[2:0], s1_size);
@@ -881,12 +909,12 @@ module DCACHE
                     // the word goes to memory in any case; when the line is in
                     // the cache it was updated by s1_thr_hit in this cycle
                     sw_pend <= 1'b1;
-                    sw_addr <= {s1_addr[PADDR_WIDTH-1:3], 3'b000};
+                    sw_addr <= {s1_paddr[PADDR_WIDTH-1:3], 3'b000};
                     sw_data <= align_wdata(s1_addr[2:0], s1_wdata);
                     sw_strb <= size_strb(s1_addr[2:0], s1_size);
                     sw_rob  <= s1_rob;
                     rob_wait[s1_rob] <= 1'b1;
-                    if (res_valid && (res_line == addr_line(s1_addr))) res_valid <= 1'b0;
+                    if (res_valid && (res_line == s1_line)) res_valid <= 1'b0;
                 end
                 else if (hit) begin
                     rob_done[s1_rob] <= 1'b1;
@@ -894,12 +922,12 @@ module DCACHE
                         rob_data[s1_rob] <= extract(hit_word, s1_addr[2:0], s1_size);
                     if (s1_is_lr) begin
                         res_valid <= 1'b1;
-                        res_line  <= addr_line(s1_addr);
+                        res_line  <= s1_line;
                     end else if (s1_is_sc) begin
                         rob_data[s1_rob] <= sc_ok ? 64'd0 : 64'd1;
                         res_valid        <= 1'b0;
                     end else if (s1_writes) begin
-                        if (res_valid && (res_line == addr_line(s1_addr))) res_valid <= 1'b0;
+                        if (res_valid && (res_line == s1_line)) res_valid <= 1'b0;
                     end
                 end
                 else if (ms_match) begin
@@ -918,13 +946,13 @@ module DCACHE
                         rob_wait[s1_rob] <= 1'b1;
                         rob_st[s1_rob]   <= 1'b1;
                         rob_mshr[s1_rob] <= ms_match_id;
-                        if (res_valid && (res_line == addr_line(s1_addr))) res_valid <= 1'b0;
+                        if (res_valid && (res_line == s1_line)) res_valid <= 1'b0;
                     end
                 end
                 else begin
                     // new MSHR
                     ms_valid[ms_tail]      <= 1'b1;
-                    ms_line[ms_tail]       <= addr_line(s1_addr);
+                    ms_line[ms_tail]       <= s1_line;
                     ms_way[ms_tail]        <= victim_way;
                     ms_wb_needed[ms_tail]  <= victim_dirty;
                     ms_wb_tag[ms_tail]     <= victim_tag;
@@ -943,7 +971,7 @@ module DCACHE
                         rob_wait[s1_rob] <= 1'b1;
                         rob_st[s1_rob]   <= 1'b1;
                         rob_mshr[s1_rob] <= ms_tail;
-                        if (res_valid && (res_line == addr_line(s1_addr))) res_valid <= 1'b0;
+                        if (res_valid && (res_line == s1_line)) res_valid <= 1'b0;
                     end
                     if (victim_valid && res_valid &&
                         (res_line == {victim_tag, addr_index(s1_addr)}))
@@ -965,7 +993,7 @@ module DCACHE
                     s1_wait_fill <= 1'b1;
                 end else if (!ms_full && victim_avail && !(victim_dirty && wb_full)) begin
                     ms_valid[ms_tail]      <= 1'b1;
-                    ms_line[ms_tail]       <= addr_line(s1_addr);
+                    ms_line[ms_tail]       <= s1_line;
                     ms_way[ms_tail]        <= victim_way;
                     ms_wb_needed[ms_tail]  <= victim_dirty;
                     ms_wb_tag[ms_tail]     <= victim_tag;

@@ -33,6 +33,7 @@ module CACHE_PORT_ARB
         input  logic [1:0]             s0_req_size,
         input  logic [3:0]             s0_req_cmd,
         input  logic [XLEN-1:0]        s0_req_wdata,
+        input  logic [PADDR_WIDTH-1:0] s0_req_paddr,
         output logic                   s0_resp_valid,
         output logic [XLEN-1:0]        s0_resp_data,
         output logic                   s0_resp_error,
@@ -44,6 +45,7 @@ module CACHE_PORT_ARB
         input  logic [1:0]             s1_req_size,
         input  logic [3:0]             s1_req_cmd,
         input  logic [XLEN-1:0]        s1_req_wdata,
+        input  logic [PADDR_WIDTH-1:0] s1_req_paddr,
         output logic                   s1_resp_valid,
         output logic [XLEN-1:0]        s1_resp_data,
         output logic                   s1_resp_error,
@@ -55,6 +57,7 @@ module CACHE_PORT_ARB
         output logic [1:0]             m_req_size,
         output logic [3:0]             m_req_cmd,
         output logic [XLEN-1:0]        m_req_wdata,
+        output logic [PADDR_WIDTH-1:0] m_req_paddr,
         input  logic                   m_resp_valid,
         input  logic [XLEN-1:0]        m_resp_data,
         input  logic                   m_resp_error
@@ -93,6 +96,17 @@ module CACHE_PORT_ARB
 
     assign s0_req_ready = m_req_ready & ~full & ~s1_first;
     assign s1_req_ready = m_req_ready & ~full &  s1_first;
+
+    // The physical address of a request arrives one cycle after it was
+    // accepted, so it comes from the requester that won the last arbitration.
+    logic last_s1;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n)   last_s1 <= 1'b0;
+        else if (push) last_s1 <= s1_first;
+    end
+
+    assign m_req_paddr = last_s1 ? s1_req_paddr : s0_req_paddr;
 
     assign push = m_req_valid & m_req_ready;
     assign pop  = m_resp_valid;
