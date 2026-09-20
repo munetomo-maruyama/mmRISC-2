@@ -80,7 +80,7 @@ module tb_CORE;
             .PADDR_WIDTH  (PADDR_WIDTH),
             .RESET_VECTOR (MEM_BASE),
             .HART_ID      (64'd0),
-            .FQ_DEPTH     (4)
+            .PQ_DEPTH     (16)
         )
     u_core
         (

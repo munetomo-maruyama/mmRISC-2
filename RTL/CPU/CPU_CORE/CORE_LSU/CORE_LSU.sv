@@ -8,8 +8,11 @@
 //   flight at a time, which makes the load-use interlock fall out of the MA
 //   stall (the pipeline behind it cannot advance either).
 //
-//   Misaligned accesses are not split: the address is passed on as it is.
-//   Alignment checks and traps come with the trap logic (M2).
+//   The command comes from the decoder, so LR, SC and the atomic operations
+//   of the A extension go through the same path as a load or a store; the
+//   cache does the read modify write and the reservation.
+//
+//   Misaligned accesses never reach this unit: EX turns them into a trap.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -24,7 +27,7 @@ module CORE_LSU
 
         // request from EX
         input  logic                    req_valid,     // start an access
-        input  logic                    req_is_store,
+        input  logic [3:0]              req_cmd,       // command of the cache port
         input  logic [63:0]             req_addr,
         input  logic [1:0]              req_size,      // 0:byte 1:half 2:word 3:double
         input  logic                    req_signed,
@@ -52,20 +55,16 @@ module CORE_LSU
         input  logic                    d_resp_error
     );
 
-    localparam logic [3:0] CMD_LOAD  = 4'd0;
-    localparam logic [3:0] CMD_STORE = 4'd1;
-
     logic        busy;            // an access is in the cache
     logic [1:0]  size_r;
     logic        signed_r;
-    logic        is_store_r;
 
     // a new access may start in the very cycle the previous one answers, so
     // that back to back loads and stores do not lose a cycle
     assign d_req_valid = req_valid & (~busy | d_resp_valid);
     assign d_req_addr  = req_addr[PADDR_WIDTH-1:0];
     assign d_req_size  = req_size;
-    assign d_req_cmd   = req_is_store ? CMD_STORE : CMD_LOAD;
+    assign d_req_cmd   = req_cmd;
     // the data of a store is placed in its lane by the cache
     assign d_req_wdata = req_wdata;
     assign req_accept  = d_req_valid & d_req_ready;
@@ -75,14 +74,12 @@ module CORE_LSU
             busy        <= 1'b0;
             size_r      <= 2'd0;
             signed_r    <= 1'b0;
-            is_store_r  <= 1'b0;
             d_req_paddr <= '0;
         end else begin
             if (req_accept) begin
                 busy        <= 1'b1;        // wins over the answer of this cycle
                 size_r      <= req_size;
                 signed_r    <= req_signed;
-                is_store_r  <= req_is_store;
                 // no MMU yet (CPU_CACHE_SPEC.md 5.6)
                 d_req_paddr <= d_req_addr;
             end else if (d_resp_valid) begin
@@ -109,8 +106,10 @@ module CORE_LSU
         endcase
     end
 
+    // the answer is only looked at by an access that writes a register
+    // (load, LR, SC and the atomic operations)
     assign resp_valid = d_resp_valid;
-    assign resp_data  = is_store_r ? 64'd0 : ext;
+    assign resp_data  = ext;
     assign resp_error = d_resp_error;
 
 endmodule : CORE_LSU

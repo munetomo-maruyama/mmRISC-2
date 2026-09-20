@@ -95,15 +95,15 @@ _start:
     TEST_EQ(21, x29, 1)
     TEST_EQ(22, x28, 11)                 // environment call from machine mode
 
-    // ---- a jump to a misaligned address ----
+    // ---- with the C extension every even address is a legal target, and
+    //      JALR clears bit 0, so a jump never reports a misaligned address ----
     li   x29, 0
     la   x20, 2f
-    addi x20, x20, 2
-    jalr x21, x20, 0
-    TEST_EQ(23, x29, 1)
-    TEST_EQ(24, x28, 0)                  // instruction address misaligned
-    TEST_EQ_REG(25, x27, x20)            // mtval is the target
+    ori  x21, x20, 1                     // an odd target
+    jalr x22, x21, 0                     // bit 0 is cleared : no trap
+    j    fail
 2:
+    TEST_EQ(23, x29, 0)
 
     // ---- mstatus.MPIE holds the interrupt enable of the trap ----
     li   x22, 8                          // MIE

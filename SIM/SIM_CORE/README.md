@@ -26,8 +26,8 @@
 | `make trace` | リタイアトレース付きで 1 本走らせる |
 | `make wave` | VCD を出す |
 | `make iverilog` | Icarus Verilog で同じ試験 |
-| `make riscv-tests` | 公式 riscv-tests(rv64ui / rv64mi)。`RVTESTS` でリポジトリの場所を指定 |
-| `make bugs` / `./bug_inject.sh` | バグ注入 50 種(背圧あり/なしの両方で判定) |
+| `make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / mi)。`RVTESTS` でリポジトリの場所を指定 |
+| `make bugs` / `./bug_inject.sh` | バグ注入 76 種(背圧あり/なしの両方で判定) |
 | `make lint` | Verilator lint |
 
 プラスアーグ:
@@ -43,8 +43,11 @@
 
 ## 試験プログラム
 
-`tests/*.S` を `/opt/riscv/bin/riscv64-unknown-elf-gcc` で `-march=rv64i` として
-組み立てる。`tests/link.ld` は `.text` を 0x8000_0000、`.data` を 0x8000_1000、
+`tests/*.S` を `/opt/riscv/bin/riscv64-unknown-elf-gcc` で組み立てる。既定は
+`-march=rv64ima_zicsr_zifencei`(C なし)で、命令の幅が分かっている方が
+「トラップした命令を 4 足して飛ばす」ハンドラを書きやすいため。圧縮命令の
+試験 `t08_rvc` だけ `MARCH_t08_rvc` で C 付きにしている。公式 riscv-tests は
+全セットを C 付きでビルドするので、そちらが混在命令列の試験になる。`tests/link.ld` は `.text` を 0x8000_0000、`.data` を 0x8000_1000、
 `.tohost` を 0x8000_2000 に置く。
 
 riscv-tests と同じ約束で、`tohost` に 1 を書けば合格、`(チェック番号 << 1) | 1`
@@ -64,6 +67,9 @@ x10〜x30 だけを使うこと。`TEST_INIT` が既定のトラップハンド�
 | `t05_csr` | CSR 命令、WARL フィールド、カウンタの正確さ、不正な CSR アクセス |
 | `t06_irq` | CLINT(タイマ/ソフトウェア/外部)、マスク、WFI、ベクタ方式の mtvec |
 | `t07_trap` | バスのアクセスフォールト、不整列、`mtval`/`mepc`、トラップ後方の命令の抑止 |
+| `t08_rvc` | 圧縮命令、語境界をまたぐ 32bit 命令、語の途中への分岐、不正な圧縮命令 |
+| `t09_muldiv` | 乗除算の符号、ゼロ除算、オーバーフロー、32bit 形 |
+| `t10_atomic` | LR/SC と全 AMO の 32/64bit、不整列 |
 
 ## テストベンチが自動で見ているもの
 

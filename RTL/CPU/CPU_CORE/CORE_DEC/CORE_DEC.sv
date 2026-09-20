@@ -37,9 +37,14 @@ module CORE_DEC
         output logic        is_jalr,
         output logic [2:0]  br_op,        // funct3 of the branch
 
+        // multiply and divide (M)
+        output logic        is_mdu,
+        output logic [2:0]  mdu_op,       // funct3 of the instruction
+
         // memory
-        output logic        is_load,
-        output logic        is_store,
+        output logic        is_load,      // the result comes from the cache
+        output logic        is_store,     // the access changes memory
+        output logic [3:0]  mem_cmd,      // command of the cache port
         output logic [1:0]  mem_size,     // 0:byte 1:half 2:word 3:double
         output logic        mem_signed,
 
@@ -99,6 +104,13 @@ module CORE_DEC
     localparam logic [6:0] OP_REG32  = 7'b0111011;
     localparam logic [6:0] OP_FENCE  = 7'b0001111;
     localparam logic [6:0] OP_SYSTEM = 7'b1110011;
+    localparam logic [6:0] OP_AMO    = 7'b0101111;
+
+    // commands of the cache port (CPU_CACHE_SPEC.md 5)
+    localparam logic [3:0] CMD_LOAD  = 4'd0;
+    localparam logic [3:0] CMD_STORE = 4'd1;
+    localparam logic [3:0] CMD_LR    = 4'd2;
+    localparam logic [3:0] CMD_SC    = 4'd3;
 
     logic [6:0] opcode, funct7;
     logic [2:0] funct3;
@@ -137,8 +149,11 @@ module CORE_DEC
         is_jal     = 1'b0;
         is_jalr    = 1'b0;
         br_op      = funct3;
+        is_mdu     = 1'b0;
+        mdu_op     = funct3;
         is_load    = 1'b0;
         is_store   = 1'b0;
+        mem_cmd    = CMD_LOAD;
         mem_size   = funct3[1:0];
         mem_signed = ~funct3[2];
         is_fence   = 1'b0;
@@ -208,6 +223,7 @@ module CORE_DEC
                 case (funct3)
                     3'b000, 3'b001, 3'b010, 3'b011, 3'b100, 3'b101, 3'b110: begin
                         is_load = 1'b1;
+                        mem_cmd = CMD_LOAD;
                         we_rd   = 1'b1;
                         use_rs1 = 1'b1;
                         imm     = imm_i;
@@ -219,6 +235,7 @@ module CORE_DEC
                 case (funct3)
                     3'b000, 3'b001, 3'b010, 3'b011: begin
                         is_store = 1'b1;
+                        mem_cmd  = CMD_STORE;
                         use_rs1  = 1'b1;
                         use_rs2  = 1'b1;
                         imm      = imm_s;
@@ -277,6 +294,9 @@ module CORE_DEC
                 use_rs1 = 1'b1;
                 use_rs2 = 1'b1;
                 b_sel   = B_RS2;
+                if (funct7 == 7'b0000001) begin
+                    is_mdu = 1'b1;               // MUL .. REMU
+                end else
                 case ({funct7, funct3})
                     {7'b0000000, 3'b000}: alu_op = ALU_ADD;
                     {7'b0100000, 3'b000}: alu_op = ALU_SUB;
@@ -297,6 +317,11 @@ module CORE_DEC
                 use_rs2 = 1'b1;
                 b_sel   = B_RS2;
                 word_op = 1'b1;
+                if (funct7 == 7'b0000001) begin
+                    // MULW, DIVW, DIVUW, REMW, REMUW
+                    if ((funct3 == 3'b000) || funct3[2]) is_mdu = 1'b1;
+                    else                                 illegal = 1'b1;
+                end else
                 case ({funct7, funct3})
                     {7'b0000000, 3'b000}: alu_op = ALU_ADD;         // ADDW
                     {7'b0100000, 3'b000}: alu_op = ALU_SUB;         // SUBW
@@ -305,6 +330,38 @@ module CORE_DEC
                     {7'b0100000, 3'b101}: alu_op = ALU_SRA;         // SRAW
                     default: illegal = 1'b1;
                 endcase
+            end
+            //---------------------------------------------------------
+            // A : LR / SC and the atomic memory operations. The address is
+            // rs1 without an offset, and aq / rl need nothing on a single
+            // hart that finishes one access before it starts the next.
+            OP_AMO: begin
+                if ((funct3 == 3'b010) || (funct3 == 3'b011)) begin
+                    we_rd   = 1'b1;
+                    use_rs1 = 1'b1;
+                    use_rs2 = 1'b1;
+                    is_load = 1'b1;              // rs2 is the source of the
+                    is_store= 1'b1;              // access, rd takes the answer
+                    case (insn[31:27])
+                        5'b00010: begin                     // LR
+                            mem_cmd  = CMD_LR;
+                            use_rs2  = 1'b0;
+                            is_store = 1'b0;
+                            if (rs2 != 5'd0) illegal = 1'b1;
+                        end
+                        5'b00011: mem_cmd = CMD_SC;
+                        5'b00001: mem_cmd = 4'd4;           // AMOSWAP
+                        5'b00000: mem_cmd = 4'd5;           // AMOADD
+                        5'b00100: mem_cmd = 4'd6;           // AMOXOR
+                        5'b01100: mem_cmd = 4'd7;           // AMOAND
+                        5'b01000: mem_cmd = 4'd8;           // AMOOR
+                        5'b10000: mem_cmd = 4'd9;           // AMOMIN
+                        5'b10100: mem_cmd = 4'd10;          // AMOMAX
+                        5'b11000: mem_cmd = 4'd11;          // AMOMINU
+                        5'b11100: mem_cmd = 4'd12;          // AMOMAXU
+                        default:  illegal = 1'b1;           // AMOCAS is Zacas
+                    endcase
+                end else illegal = 1'b1;
             end
             //---------------------------------------------------------
             OP_FENCE: begin
