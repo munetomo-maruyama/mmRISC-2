@@ -546,10 +546,30 @@ make wave-perf       # VCD 4 本 + .gtkw を生成
 make gtkwave-dmiss   # GTKWave で開く(ihit / imiss / dhit / dmiss)
 ```
 
-### 7.5 FPGA での確認(次フェーズ)
+### 7.5 FPGA での確認(2026-09-20、Arty A7-100T 実機)
 
-CPU コア実装後、OpenOCD からのメモリアクセスでキャッシュ経由の読み書きと
-一貫性(4.7)を確認する。
+`FPGA/ARTY_A7_100T/openocd/cache_test.tcl` を JTAG 経由の OpenOCD から実行し、
+**CACHE TEST RESULT : PASS**。確認した内容:
+
+| # | 内容 |
+|---|---|
+| 1 | 1 ライン: 書き込みミス → 読み出しミス(ライン確保)→ 読み出しヒット → 同一ライン内の別ワードのヒット → 書き込みヒット |
+| 2 | 別セットの 8 ライン |
+| 3 | 32KiB の `load_image` / `verify_image`(全セットが 2 周入れ替わる)。そのあと 1., 2. のアドレスを読み直して値が正しいこと |
+| 4 | `reset halt` 後もメモリの値が残っていること(デバッグ書き込みがライトスルーである証拠) |
+| 5 | 周辺バス(非キャッシュ)のアクセス |
+
+電源を入れたまま繰り返し実行しても PASS する(`reset halt` でキャッシュは空に
+なるが RAM は保持される)。
+
+`verify_image` 実行時の `No working memory available` / `not enough working
+area` は想定どおり。OpenOCD はターゲット上で CRC ルーチンを実行しようとする
+が、コードを実行できるハートがまだ無い(`progbufsize=0`)ため、JTAG 経由で
+全データを読み戻す方式にフォールバックする。CPU コア実装まで work area は
+設定しないこと。
+
+CPU コア実装後は、コアからのアクセスとデバッガからのアクセスの一貫性(4.7)を
+実機でも確認する。
 
 ---
 
