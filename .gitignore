@@ -17,3 +17,9 @@ cache_test_image.bin
 # (TOP.bit / TOP.bin and the *.rpt reports are kept)
 FPGA/*/output/*.dcp
 FPGA/*/output/*.backup.*
+
+# test programs built from the .S files
+SIM/*/tests/*.elf
+SIM/*/tests/*.bin
+SIM/*/tests/*.hex
+SIM/*/tests/*.dis

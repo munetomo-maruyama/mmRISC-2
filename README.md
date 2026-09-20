@@ -18,7 +18,13 @@ RTL/
 │   │   ├── CACHE_PORT_ARB/ D$ ポートの調停(CPU 優先、デバッガと共有)
 │   │   ├── CACHE_TAG_ARRAY/    タグ + 有効 + ダーティ
 │   │   └── CACHE_DATA_ARRAY/   データ配列
-│   ├── CPU_CORE/       CPU コア(これから実装)  → CPU_CORE_SPEC.md
+│   ├── CPU_CORE/       CPU コア  → CPU_CORE_SPEC.md
+│   │   ├── CPU_CORE/       コアのトップ(IF1/IF2/ID/EX/MA/WB、フォワーディング)
+│   │   ├── CORE_IFU/       命令フェッチ(PC、未処理要求 FIFO、フェッチキュー)
+│   │   ├── CORE_DEC/       命令デコーダ
+│   │   ├── CORE_RF/        整数レジスタファイル(32×64bit、2R1W)
+│   │   ├── CORE_EXU/       ALU、分岐条件、アドレス生成
+│   │   └── CORE_LSU/       ロード/ストアユニット(データキャッシュポート)
 │   ├── CPU_DBG/        デバッグ論理  → CPU_DBG_SPEC.md
 │   │   ├── CPU_DBG/        デバッグ論理のトップ
 │   │   ├── DBG_DTM/        JTAG DTM(Debug Spec 1.0)
@@ -37,6 +43,7 @@ RTL/
     └── AXIL_RAM/           シミュレーション/FPGA 用 RAM(周辺バス)
 
 SIM/
+├── SIM_CORE/       CPU コアの検証(アセンブラ試験、背圧注入、バグ注入)
 ├── SIM_CACHE/      L1 キャッシュの検証(参照モデル、パラメータ掃引、バグ注入)
 ├── SIM_DBG/        デバッグ論理の検証(JTAG / cJTAG)
 ├── SIM_CPU/        CPU_TOP のバス検証
@@ -61,11 +68,14 @@ LitexRocket/        参考用(リポジトリには含めない)
 
 | コマンド | 内容 | 結果 |
 |---|---|---|
+| `cd SIM/SIM_CORE && make` | CPU コアの命令試験(RV64I) | 全 PASS |
+| `cd SIM/SIM_CORE && make stress` | 両キャッシュポートに背圧を入れて同じ試験 | 全 PASS |
+| `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 28 種 | 全て検出 |
 | `cd SIM/SIM_CACHE && make` | L1 キャッシュ全試験 | PASS 8817 チェック |
 | `cd SIM/SIM_CACHE && make perf` | ヒット連続 / ミス連続のスループット | ヒット 1.0、ミス 12〜13、追い出し 22 サイクル/アクセス |
 | `cd SIM/SIM_CACHE && make wave-perf` | 同上の波形(VCD + GTKWave 用 .gtkw) | 4 パターン |
 | `cd SIM/SIM_CACHE && ./sweep.sh` | パラメータ掃引 18 構成 | 全 PASS |
-| `cd SIM/SIM_CACHE && ./bug_inject.sh` | バグ注入 18 種 | 全て検出 |
+| `cd SIM/SIM_CACHE && ./bug_inject.sh` | バグ注入 20 種 | 全て検出 |
 | `cd SIM/SIM_DBG && make` | デバッグ論理 | PASS 3010 チェック |
 | `cd SIM/SIM_DBG && ./bug_inject.sh` | バグ注入 15 種 | 全て検出 |
 | `cd SIM/SIM_CPU && make` | CPU_TOP のバスと L1 キャッシュ経路 | PASS |
