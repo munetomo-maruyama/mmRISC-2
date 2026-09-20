@@ -22,7 +22,9 @@ RTL/
 │   │   ├── CPU_CORE/       コアのトップ(IF1/IF2/ID/EX/MA/WB、フォワーディング)
 │   │   ├── CORE_IFU/       命令フェッチ(PC、未処理要求 FIFO、フェッチキュー)
 │   │   ├── CORE_DEC/       命令デコーダ
+│   │   ├── CORE_DECOMP/    圧縮命令(C)を 32bit 命令に伸張
 │   │   ├── CORE_CSR/       CSR ファイルとトラップ状態(M-mode)
+│   │   ├── CORE_MDU/       乗除算器(M)
 │   │   ├── CORE_RF/        整数レジスタファイル(32×64bit、2R1W)
 │   │   ├── CORE_EXU/       ALU、分岐条件、アドレス生成
 │   │   └── CORE_LSU/       ロード/ストアユニット(データキャッシュポート)
@@ -70,10 +72,10 @@ LitexRocket/        参考用(リポジトリには含めない)
 
 | コマンド | 内容 | 結果 |
 |---|---|---|
-| `cd SIM/SIM_CORE && make` | CPU コアの命令試験(RV64I + Zicsr + トラップ + CLINT) | 全 PASS |
+| `cd SIM/SIM_CORE && make` | CPU コアの命令試験(RV64IMAC + Zicsr + トラップ + CLINT) | 全 PASS |
 | `cd SIM/SIM_CORE && make stress` | 両キャッシュポートに背圧を入れて同じ試験 | 全 PASS |
-| `cd SIM/SIM_CORE && make riscv-tests` | 公式 riscv-tests(rv64ui / rv64mi) | 68 PASS、既知の不合格 3(未実装機能を要求する試験) |
-| `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 50 種 | 全て検出 |
+| `cd SIM/SIM_CORE && make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / mi) | 101 PASS、既知の不合格 6(未実装機能を要求する試験) |
+| `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 76 種 | 全て検出 |
 | `cd SIM/SIM_CACHE && make` | L1 キャッシュ全試験 | PASS 8817 チェック |
 | `cd SIM/SIM_CACHE && make perf` | ヒット連続 / ミス連続のスループット | ヒット 1.0、ミス 12〜13、追い出し 22 サイクル/アクセス |
 | `cd SIM/SIM_CACHE && make wave-perf` | 同上の波形(VCD + GTKWave 用 .gtkw) | 4 パターン |

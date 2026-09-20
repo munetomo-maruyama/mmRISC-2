@@ -8,6 +8,9 @@
 //   - a trap or an MRET arrives from the same commit point and has priority
 //     over the write of the instruction (a trapping instruction writes nothing)
 //
+//   IALIGN is 16 because the C extension is implemented, so only bit 0 of
+//   mepc is dropped.
+//
 //   M2 implements machine mode only. `mstatus.MPP` is therefore WARL with the
 //   single legal value 3, and there is no delegation, no `satp` and no PMP:
 //   those addresses do not exist and are answered with an illegal instruction
@@ -214,7 +217,7 @@ module CORE_CSR
             if (instret_inc) minstret <= minstret + 64'd1;
 
             if (trap_en) begin
-                mepc         <= {trap_epc[63:2], 2'b00};
+                mepc         <= {trap_epc[63:1], 1'b0};
                 mcause_int   <= trap_int;
                 mcause_code  <= trap_cause;
                 mtval        <= trap_tval;
@@ -240,7 +243,7 @@ module CORE_CSR
                                                 ? wr_data : {wr_data[63:2], 2'b00};
                     CSR_MCOUNTEREN: mcounteren <= wr_data[31:0];
                     CSR_MSCRATCH  : mscratch   <= wr_data;
-                    CSR_MEPC      : mepc       <= {wr_data[63:2], 2'b00};
+                    CSR_MEPC      : mepc       <= {wr_data[63:1], 1'b0};
                     CSR_MCAUSE    : begin
                         mcause_int  <= wr_data[63];
                         mcause_code <= wr_data[4:0];

@@ -13,7 +13,7 @@
 #---------------------------------------------------------------------------
 cd "$(dirname "$0")"
 RVTESTS=${RVTESTS:-$HOME/RISCV/riscv-tests}
-SETS=${@:-"rv64ui rv64mi"}
+SETS=${@:-"rv64ui rv64um rv64ua rv64uc rv64mi"}
 OUT=rvtests
 PREFIX=/opt/riscv/bin/riscv64-unknown-elf-
 SIM=./obj_dir/Vtb_CORE
@@ -32,7 +32,9 @@ if [ ! -x $SIM ]; then echo "build the simulator first (make)"; exit 1; fi
 #                (rv64mi-p-ma_addr checks the trapping side and passes)
 #   breakpoint : wants the debug triggers (tselect / tdata*)
 #   pmpaddr    : wants PMP, which comes with the supervisor mode (M5)
-EXPECTED_FAIL="rv64ui-p-ma_data rv64mi-p-breakpoint rv64mi-p-pmpaddr"
+#   amocas_*   : the compare and swap of Zacas, which is not part of A
+EXPECTED_FAIL="rv64ui-p-ma_data rv64mi-p-breakpoint rv64mi-p-pmpaddr \
+rv64ua-p-amocas_w rv64ua-p-amocas_d rv64ua-p-amocas_q"
 
 mkdir -p $OUT
 pass=0; fail=0; xfail=0; failed=""
@@ -42,7 +44,7 @@ for set in $SETS; do
         name=$(basename $src .S)
         [ "$name" = "Makefrag" ] && continue
         elf=$OUT/$set-p-$name
-        if ! ${PREFIX}gcc -march=rv64i_zicsr_zifencei -mabi=lp64 -static \
+        if ! ${PREFIX}gcc -march=rv64imac_zicsr_zifencei -mabi=lp64 -static \
                 -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
                 -Wl,--no-warn-rwx-segments \
                 -I$RVTESTS/isa/macros/scalar -I$RVTESTS/env/p -I$RVTESTS/env \

@@ -7,6 +7,8 @@
 //
 //   - LOAD  : the answer is right aligned and zero extended, like the cache
 //   - STORE : byte strobes from the size and the offset
+//   - LR / SC and the atomic operations of the A extension, with the
+//     reservation kept per cache line, exactly as DCACHE does it
 //   - FENCE / FLUSH : answered immediately
 //   - addresses outside a known region return an error (access fault)
 //
@@ -29,6 +31,7 @@ module CORE_MEM_MODEL
         parameter int          WORDS       = 8192,      // 64 KiB
         parameter logic [63:0] CLINT_BASE  = 64'h0000_0000_0200_0000,
         parameter logic [63:0] TBREG_BASE  = 64'h0000_0000_0300_0000,
+        parameter int          LINE_BYTES  = 64,         // like the data cache
         parameter int          I_LATENCY   = 2,
         parameter int          D_LATENCY   = 3
     )
@@ -73,10 +76,14 @@ module CORE_MEM_MODEL
         output logic                    prot_error
     );
 
-    localparam logic [3:0] CMD_LOAD  = 4'd0;
-    localparam logic [3:0] CMD_STORE = 4'd1;
-    localparam logic [3:0] CMD_FENCE = 4'd13;
-    localparam logic [3:0] CMD_FLUSH = 4'd14;
+    localparam logic [3:0] CMD_LOAD   = 4'd0;
+    localparam logic [3:0] CMD_STORE  = 4'd1;
+    localparam logic [3:0] CMD_LR     = 4'd2;
+    localparam logic [3:0] CMD_SC     = 4'd3;
+    localparam logic [3:0] CMD_AMO_LO = 4'd4;
+    localparam logic [3:0] CMD_AMO_HI = 4'd12;
+    localparam logic [3:0] CMD_FENCE  = 4'd13;
+    localparam logic [3:0] CMD_FLUSH  = 4'd14;
 
     // the memory is cleared and loaded by the test bench (one initial block,
     // so that the order is defined)
@@ -120,6 +127,35 @@ module CORE_MEM_MODEL
             2'd1:    return 8'h03 << lsb;
             2'd2:    return 8'h0F << lsb;
             default: return 8'hFF;
+        endcase
+    endfunction
+
+    // DCACHE.sv amo_calc
+    function automatic logic [63:0] amo_calc(input logic [3:0]  cmd,
+                                             input logic [1:0]  size,
+                                             input logic [63:0] old_v,
+                                             input logic [63:0] src);
+        logic signed [63:0] so, ss;
+        logic [63:0] o, s;
+        if (size == 2'd2) begin
+            o  = {32'd0, old_v[31:0]};
+            s  = {32'd0, src[31:0]};
+            so = {{32{old_v[31]}}, old_v[31:0]};
+            ss = {{32{src[31]}},   src[31:0]};
+        end else begin
+            o  = old_v;  s  = src;
+            so = old_v;  ss = src;
+        end
+        case (cmd)
+            4'd4:    return s;
+            4'd5:    return o + s;
+            4'd6:    return o ^ s;
+            4'd7:    return o & s;
+            4'd8:    return o | s;
+            4'd9:    return (so < ss) ? o : s;
+            4'd10:   return (so < ss) ? s : o;
+            4'd11:   return (o  < s)  ? o : s;
+            default: return (o  < s)  ? s : o;
         endcase
     endfunction
 
@@ -201,12 +237,26 @@ module CORE_MEM_MODEL
 
     logic [63:0] rd_word, wr_word;
     logic [63:0] wr_data;
+    logic        sc_hit;
+
+    // the reservation of LR / SC, per cache line as in DCACHE
+    logic                    res_valid;
+    logic [PADDR_WIDTH-1:0]  res_line;
+    function automatic logic [PADDR_WIDTH-1:0] lidx(input logic [PADDR_WIDTH-1:0] a);
+        return a / PADDR_WIDTH'(LINE_BYTES);
+    endfunction
 
     // an access takes place this cycle
-    logic       d_acc;
+    logic       d_acc, d_is_amo, d_is_lr, d_is_sc, d_writes, d_reads;
     logic [7:0] wr_strb;
-    assign d_acc   = d_req_valid & d_req_ready &
-                     ((d_req_cmd == CMD_LOAD) || (d_req_cmd == CMD_STORE));
+    assign d_is_amo = (d_req_cmd >= CMD_AMO_LO) && (d_req_cmd <= CMD_AMO_HI);
+    assign d_is_lr  = (d_req_cmd == CMD_LR);
+    assign d_is_sc  = (d_req_cmd == CMD_SC);
+    assign d_acc    = d_req_valid & d_req_ready &
+                      ((d_req_cmd == CMD_LOAD) || (d_req_cmd == CMD_STORE) ||
+                       d_is_lr || d_is_sc || d_is_amo);
+    assign d_reads  = (d_req_cmd == CMD_LOAD) || d_is_lr || d_is_amo;
+    assign d_writes = (d_req_cmd == CMD_STORE) || d_is_amo;
     assign wr_strb = strb(d_req_addr[2:0], d_req_size);
 
     // the CLINT sees the access in the cycle it is taken
@@ -224,7 +274,9 @@ module CORE_MEM_MODEL
             dp_error <= '0;
             for (int i = 0; i <= I_LATENCY; i++) ip_data[i] <= 64'd0;
             for (int i = 0; i <= D_LATENCY; i++) dp_data[i] <= 64'd0;
-            irq_ext  <= 1'b0;
+            irq_ext   <= 1'b0;
+            res_valid <= 1'b0;
+            res_line  <= '0;
         end else begin
             //---------------------------------------------------------
             // instruction port
@@ -248,20 +300,40 @@ module CORE_MEM_MODEL
                 dp_error[i] <= dp_error[i+1];
             end
             dp_valid[D_LATENCY] <= d_req_valid & d_req_ready;
-            dp_error[D_LATENCY] <= d_req_valid & d_req_ready & ~mapped(d_req_addr) &
-                                   ((d_req_cmd == CMD_LOAD) || (d_req_cmd == CMD_STORE));
+            dp_error[D_LATENCY] <= d_acc & ~mapped(d_req_addr);
             dp_data[D_LATENCY]  <= 64'd0;
 
             if (d_acc && in_range(d_req_addr)) begin
-                rd_word = mem[widx(d_req_addr)];
-                if (d_req_cmd == CMD_LOAD) begin
+                rd_word  = mem[widx(d_req_addr)];
+                sc_hit   = res_valid && (res_line == lidx(d_req_addr));
+                wr_word  = rd_word;
+                if (d_reads)
                     dp_data[D_LATENCY] <= extract(rd_word, d_req_addr[2:0], d_req_size);
-                end else if (d_req_cmd == CMD_STORE) begin
-                    wr_word = rd_word;
-                    wr_data = align_wdata(d_req_addr[2:0], d_req_wdata);
+                if (d_is_sc)
+                    dp_data[D_LATENCY] <= sc_hit ? 64'd0 : 64'd1;
+
+                if (d_writes || (d_is_sc && sc_hit)) begin
+                    if (d_is_amo)
+                        wr_data = align_wdata(d_req_addr[2:0],
+                                     amo_calc(d_req_cmd, d_req_size,
+                                              extract(rd_word, d_req_addr[2:0], d_req_size),
+                                              d_req_wdata));
+                    else
+                        wr_data = align_wdata(d_req_addr[2:0], d_req_wdata);
                     for (int b = 0; b < 8; b++)
                         if (wr_strb[b]) wr_word[8*b +: 8] = wr_data[8*b +: 8];
                     mem[widx(d_req_addr)] <= wr_word;
+                end
+
+                // the reservation, kept per line like the cache
+                if (d_is_lr) begin
+                    res_valid <= 1'b1;
+                    res_line  <= lidx(d_req_addr);
+                end else if (d_is_sc) begin
+                    res_valid <= 1'b0;
+                end else if (d_writes && res_valid &&
+                             (res_line == lidx(d_req_addr))) begin
+                    res_valid <= 1'b0;
                 end
             end else if (d_acc && in_clint(d_req_addr) && (d_req_cmd == CMD_LOAD)) begin
                 dp_data[D_LATENCY] <= extract(clint_rdata, d_req_addr[2:0], d_req_size);

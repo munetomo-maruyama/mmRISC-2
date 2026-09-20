@@ -11,7 +11,7 @@
 //               a trap, an MRET and a CSR write happen here
 //   WB        : register write back and trace
 //
-//   M2 : RV64I + Zicsr + machine mode traps. No MMU and no S / U mode yet,
+//   M3 : RV64IMAC + Zicsr + machine mode traps. No MMU and no S / U mode yet,
 //   so mstatus.MPP is WARL with the single value 3 and there is no
 //   delegation.
 //
@@ -29,7 +29,7 @@ module CPU_CORE
         parameter int          PADDR_WIDTH  = 40,
         parameter logic [63:0] RESET_VECTOR = 64'h0000_0000_8000_0000,
         parameter logic [63:0] HART_ID      = 64'd0,
-        parameter int          FQ_DEPTH     = 4
+        parameter int          PQ_DEPTH     = 16      // parcels in the fetch queue
     )
     (
         input  logic                    clk,
@@ -97,15 +97,15 @@ module CPU_CORE
     //=================================================================
     // ID : fetch queue, decoder, register file
     //=================================================================
-    logic        fq_valid, fq_ready, fq_error;
+    logic        fq_valid, fq_ready, fq_error, fq_is_rvc;
     logic [63:0] fq_pc;
-    logic [31:0] fq_insn;
+    logic [31:0] fq_insn;          // raw, 16 bit in the low half when compressed
 
     logic        redirect_valid;
     logic [63:0] redirect_pc;
 
     CORE_IFU
-        #(.PADDR_WIDTH(PADDR_WIDTH), .RESET_VECTOR(RESET_VECTOR), .FQ_DEPTH(FQ_DEPTH))
+        #(.PADDR_WIDTH(PADDR_WIDTH), .RESET_VECTOR(RESET_VECTOR), .PQ_DEPTH(PQ_DEPTH))
     u_ifu
         (
             .clk            (clk),
@@ -124,9 +124,24 @@ module CPU_CORE
             .fq_ready       (fq_ready),
             .fq_pc          (fq_pc),
             .fq_insn        (fq_insn),
+            .fq_is_rvc      (fq_is_rvc),
             .fq_error       (fq_error)
         );
 
+
+    // a compressed instruction is turned into the 32 bit one that means the
+    // same, so that there is only one decoder
+    logic [31:0] decomp_insn, id_insn;
+    logic        decomp_illegal;
+
+    CORE_DECOMP u_decomp
+        (
+            .insn_c  (fq_insn[15:0]),
+            .insn    (decomp_insn),
+            .illegal (decomp_illegal)
+        );
+
+    assign id_insn = fq_is_rvc ? decomp_insn : fq_insn;
 
     // decoder
     logic [4:0]  dec_rs1, dec_rs2, dec_rd;
@@ -137,7 +152,10 @@ module CPU_CORE
     logic        dec_b_sel, dec_word_op;
     logic        dec_is_branch, dec_is_jal, dec_is_jalr;
     logic [2:0]  dec_br_op;
+    logic        dec_is_mdu;
+    logic [2:0]  dec_mdu_op;
     logic        dec_is_load, dec_is_store;
+    logic [3:0]  dec_mem_cmd;
     logic [1:0]  dec_mem_size;
     logic        dec_mem_signed;
     logic        dec_is_fence, dec_is_fence_i, dec_is_ecall, dec_is_ebreak;
@@ -148,7 +166,7 @@ module CPU_CORE
 
     CORE_DEC u_dec
         (
-            .insn        (fq_insn),
+            .insn        (id_insn),
             .rs1         (dec_rs1),
             .rs2         (dec_rs2),
             .rd          (dec_rd),
@@ -164,8 +182,11 @@ module CPU_CORE
             .is_jal      (dec_is_jal),
             .is_jalr     (dec_is_jalr),
             .br_op       (dec_br_op),
+            .is_mdu      (dec_is_mdu),
+            .mdu_op      (dec_mdu_op),
             .is_load     (dec_is_load),
             .is_store    (dec_is_store),
+            .mem_cmd     (dec_mem_cmd),
             .mem_size    (dec_mem_size),
             .mem_signed  (dec_mem_signed),
             .is_fence    (dec_is_fence),
@@ -212,8 +233,11 @@ module CPU_CORE
     logic [3:0]  ex_alu_op;
     logic [1:0]  ex_a_sel;
     logic [2:0]  ex_br_op;
-    logic        ex_is_branch, ex_is_jal, ex_is_jalr;
+    logic        ex_is_branch, ex_is_jal, ex_is_jalr, ex_is_rvc;
+    logic        ex_is_mdu;
+    logic [2:0]  ex_mdu_op;
     logic        ex_is_load, ex_is_store;
+    logic [3:0]  ex_mem_cmd;
     logic [1:0]  ex_mem_size;
     logic        ex_mem_signed;
     logic        ex_is_csr, ex_csr_imm_sel, ex_csr_wr;
@@ -233,7 +257,7 @@ module CPU_CORE
     logic [63:0] ma_pc, ma_result;
     logic [31:0] ma_insn;
     logic [4:0]  ma_rd;
-    logic        ma_is_mret, ma_is_fencei;
+    logic        ma_is_mret, ma_is_fencei, ma_is_rvc;
     logic        ma_csr_wr;
     logic [11:0] ma_csr_addr;
     logic [63:0] ma_csr_wdata;
@@ -289,12 +313,39 @@ module CPU_CORE
             .is_branch  (ex_is_branch),
             .is_jal     (ex_is_jal),
             .is_jalr    (ex_is_jalr),
+            .is_rvc     (ex_is_rvc),
             .alu_result (alu_result),
             .link_pc    (link_pc),
             .target_pc  (target_pc),
             .take_branch(take_branch),
             .mem_addr   (mem_addr)
         );
+
+    //=================================================================
+    // multiply and divide (M)
+    //=================================================================
+    logic        mdu_active, mdu_start, mdu_busy, mdu_done, mdu_ack;
+    logic [63:0] mdu_result;
+
+    CORE_MDU u_mdu
+        (
+            .clk      (clk),
+            .rst_n    (rst_n),
+            .start    (mdu_start),
+            .kill     (flush),
+            .op       (ex_mdu_op),
+            .word_op  (ex_word_op),
+            .rs1_data (ex_a_fwd),
+            .rs2_data (ex_b_fwd),
+            .busy     (mdu_busy),
+            .done     (mdu_done),
+            .ack      (mdu_ack),
+            .result   (mdu_result)
+        );
+
+    assign mdu_active = ex_valid & ex_is_mdu & ~ex_exc;
+    assign mdu_start  = mdu_active & ~mdu_busy & ~mdu_done & ~flush;
+    assign mdu_ack    = mdu_active & mdu_done & ex_advance;
 
     //=================================================================
     // CSR file
@@ -311,7 +362,11 @@ module CPU_CORE
     logic [4:0]  irq_cause;
     logic        commit;
 
-    CORE_CSR #(.HART_ID(HART_ID)) u_csr
+    // misa : bit 0 is 'A' ... bit 8 is 'I' ... bit 12 is 'M'
+    localparam logic [63:0] MISA_VAL = (64'd2 << 62) | (64'd1 << 0) | (64'd1 << 2) |
+                                       (64'd1 << 8)  | (64'd1 << 12);
+
+    CORE_CSR #(.HART_ID(HART_ID), .MISA(MISA_VAL)) u_csr
         (
             .clk         (clk),
             .rst_n       (rst_n),
@@ -378,8 +433,8 @@ module CPU_CORE
             if (ex_is_csr && (!csr_exists || (ex_csr_wr && csr_readonly))) begin
                 ex_exc       = 1'b1;
                 ex_exc_cause = EXC_ILLEGAL;
-                ex_exc_tval  = {32'd0, ex_insn};
-            end else if (take_branch && (|target_pc[1:0])) begin
+                ex_exc_tval  = ex_is_rvc ? {48'd0, ex_insn[15:0]} : {32'd0, ex_insn};
+            end else if (take_branch && target_pc[0]) begin
                 ex_exc       = 1'b1;
                 ex_exc_cause = EXC_IADDR;
                 ex_exc_tval  = target_pc;
@@ -401,7 +456,7 @@ module CPU_CORE
             .clk          (clk),
             .rst_n        (rst_n),
             .req_valid    (lsu_req_valid),
-            .req_is_store (ex_is_store),
+            .req_cmd      (ex_mem_cmd),
             .req_addr     (mem_addr),
             .req_size     (ex_mem_size),
             .req_signed   (ex_mem_signed),
@@ -472,7 +527,8 @@ module CPU_CORE
     // traps, because the cache cannot take the write back
     assign lsu_req_valid = ex_is_mem & ~stall_ma & ~flush;
     assign stall_ma      = ma_valid & ma_mem & ~lsu_resp_valid;
-    assign stall_ex      = stall_ma | (ex_is_mem & ~lsu_accept & ~flush);
+    assign stall_ex      = stall_ma | (ex_is_mem & ~lsu_accept & ~flush)
+                                    | (mdu_active & ~mdu_done & ~flush);
     assign ex_advance    = ~stall_ex;
 
     // a CSR access, an MRET and the fences are serialising: they are only
@@ -494,7 +550,7 @@ module CPU_CORE
     always @(*) begin
         if      (trap_taken)   redirect_pc = trap_vector;
         else if (mret_taken)   redirect_pc = mret_target;
-        else if (fencei_taken) redirect_pc = ma_pc + 64'd4;
+        else if (fencei_taken) redirect_pc = ma_pc + (ma_is_rvc ? 64'd2 : 64'd4);
         else                   redirect_pc = target_pc;
     end
 
@@ -531,10 +587,10 @@ module CPU_CORE
                 id_exc       = 1'b1;
                 id_exc_cause = EXC_IFAULT;
                 id_exc_tval  = fq_pc;
-            end else if (dec_illegal) begin
+            end else if (dec_illegal || (fq_is_rvc && decomp_illegal)) begin
                 id_exc       = 1'b1;
                 id_exc_cause = EXC_ILLEGAL;
-                id_exc_tval  = {32'd0, fq_insn};
+                id_exc_tval  = fq_is_rvc ? {48'd0, fq_insn[15:0]} : {32'd0, fq_insn};
             end else if (dec_is_ecall) begin
                 id_exc       = 1'b1;
                 id_exc_cause = EXC_ECALL_M;
@@ -569,8 +625,12 @@ module CPU_CORE
             ex_is_branch  <= 1'b0;
             ex_is_jal     <= 1'b0;
             ex_is_jalr    <= 1'b0;
+            ex_is_rvc     <= 1'b0;
+            ex_is_mdu     <= 1'b0;
+            ex_mdu_op     <= 3'd0;
             ex_is_load    <= 1'b0;
             ex_is_store   <= 1'b0;
+            ex_mem_cmd    <= 4'd0;
             ex_mem_size   <= 2'd0;
             ex_mem_signed <= 1'b0;
             ex_is_csr     <= 1'b0;
@@ -597,6 +657,7 @@ module CPU_CORE
             ma_rd         <= 5'd0;
             ma_is_mret    <= 1'b0;
             ma_is_fencei  <= 1'b0;
+            ma_is_rvc     <= 1'b0;
             ma_csr_wr     <= 1'b0;
             ma_csr_addr   <= 12'd0;
             ma_csr_wdata  <= 64'd0;
@@ -635,8 +696,12 @@ module CPU_CORE
                 ex_is_branch  <= dec_is_branch;
                 ex_is_jal     <= dec_is_jal;
                 ex_is_jalr    <= dec_is_jalr;
+                ex_is_rvc     <= fq_is_rvc;
+                ex_is_mdu     <= dec_is_mdu;
+                ex_mdu_op     <= dec_mdu_op;
                 ex_is_load    <= dec_is_load;
                 ex_is_store   <= dec_is_store;
+                ex_mem_cmd    <= dec_mem_cmd;
                 ex_mem_size   <= dec_mem_size;
                 ex_mem_signed <= dec_mem_signed;
                 ex_is_csr     <= dec_is_csr;
@@ -674,6 +739,7 @@ module CPU_CORE
                 ma_is_store   <= ex_is_store;
                 ma_is_mret    <= ex_is_mret;
                 ma_is_fencei  <= ex_is_fencei;
+                ma_is_rvc     <= ex_is_rvc;
                 ma_csr_wr     <= ex_is_csr & ex_csr_wr & ~ex_exc;
                 ma_csr_addr   <= ex_csr_addr;
                 ma_csr_wdata  <= csr_wval;
@@ -682,6 +748,7 @@ module CPU_CORE
                 ma_exc_cause_r<= ex_exc_cause;
                 ma_exc_tval_r <= ex_exc_tval;
                 if      (ex_is_csr)                ma_result <= csr_rdata;
+                else if (ex_is_mdu)                ma_result <= mdu_result;
                 else if (ex_is_jal || ex_is_jalr)  ma_result <= link_pc;
                 else                               ma_result <= alu_result;
             end else if (!stall_ma) begin

@@ -68,11 +68,11 @@ _start:
     andi x14, x14, 0x88
     TEST_EQ(16, x14, 0)
 
-    // ---- mepc drops the low two bits (there is no C extension yet) ----
-    li   x15, 0x80001006
+    // ---- mepc drops bit 0 only : IALIGN is 16 with the C extension ----
+    li   x15, 0x80001007
     csrw mepc, x15
     csrr x16, mepc
-    TEST_EQ(17, x16, 0x80001004)
+    TEST_EQ(17, x16, 0x80001006)
 
     // ---- mtvec : mode 0 and 1 are kept, the reserved ones are not ----
     la   x17, default_trap

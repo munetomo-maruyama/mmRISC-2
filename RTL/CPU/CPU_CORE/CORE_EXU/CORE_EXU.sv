@@ -24,6 +24,7 @@ module CORE_EXU
         input  logic        is_branch,
         input  logic        is_jal,
         input  logic        is_jalr,
+        input  logic        is_rvc,       // the instruction is 16 bit wide
 
         output logic [63:0] alu_result,
         output logic [63:0] link_pc,      // PC + 4, the result of JAL / JALR
@@ -99,7 +100,7 @@ module CORE_EXU
         if (is_jal || is_jalr) take_branch = 1'b1;
     end
 
-    assign link_pc  = pc + 64'd4;
+    assign link_pc  = pc + (is_rvc ? 64'd2 : 64'd4);
     assign mem_addr = rs1_data + imm;
 
     always @(*) begin

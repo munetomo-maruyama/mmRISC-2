@@ -18,7 +18,9 @@ RTL_DIR  := ../../RTL
 
 RTL_SRCS := \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_DEC/CORE_DEC.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CORE_DECOMP/CORE_DECOMP.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_CSR/CORE_CSR.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CORE_MDU/CORE_MDU.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_RF/CORE_RF.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_IFU/CORE_IFU.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_EXU/CORE_EXU.sv \
@@ -41,8 +43,13 @@ RVPREFIX := /opt/riscv/bin/riscv64-unknown-elf-
 RVCC     := $(RVPREFIX)gcc
 RVOBJCOPY:= $(RVPREFIX)objcopy
 RVOBJDUMP:= $(RVPREFIX)objdump
-RVFLAGS  := -march=rv64i_zicsr_zifencei -mabi=lp64 -mcmodel=medany -nostdlib -nostartfiles \
-            -Wl,--no-warn-rwx-segments -T tests/link.ld
+# the tests are built without the C extension so that the size of every
+# instruction is known (a handler that steps over one adds 4); t08 is the one
+# about compressed instructions and gets C
+MARCH_DEFAULT := rv64ima_zicsr_zifencei
+MARCH_t08_rvc := rv64imac_zicsr_zifencei
+RVFLAGS   = -march=$(or $(MARCH_$*),$(MARCH_DEFAULT)) -mabi=lp64 -mcmodel=medany \
+            -nostdlib -nostartfiles -Wl,--no-warn-rwx-segments -T tests/link.ld
 
 TESTS    := $(basename $(notdir $(wildcard tests/t*.S)))
 HEXES    := $(addprefix tests/,$(addsuffix .hex,$(TESTS)))
