@@ -155,9 +155,24 @@ wave: $(HEXES)
 lint:
 	$(VERILATOR) --lint-only -Wall --timing --top-module $(TOP) $(SRCS)
 
+# The watchdog of the test bench counts clock cycles, so it cannot end a run
+# in which simulation time never advances at all -- a delta cycle storm, as
+# an always block that wakes itself up produces. Such a run would sit at a
+# hundred percent of a core for ever, so the wall clock limit is here.
 iverilog: $(HEXES)
 	iverilog $(IVERILOG_FLAGS) -o $(TOP).vvp $(SRCS)
-	@for t in $(TESTS); do vvp $(TOP).vvp +hex=tests/$$t.hex +name=$$t | grep -E "PASS|FAIL"; done
+	@fail=0; \
+	for t in $(TESTS); do \
+	    out=`timeout 120 vvp $(TOP).vvp +hex=tests/$$t.hex +name=$$t | grep -E "PASS|FAIL"`; \
+	    if [ -z "$$out" ]; then \
+	        echo " $$t : FAIL   (no result in 120 s of wall clock: time is not advancing)"; \
+	        fail=1; \
+	    else \
+	        echo "$$out"; \
+	        echo "$$out" | grep -q PASS || fail=1; \
+	    fi; \
+	done; \
+	exit $$fail
 
 clean:
 	rm -rf obj_dir obj_trace obj_clint bug_work rvtests $(TOP).vvp *.vcd *.log tests/*.elf tests/*.bin tests/*.hex tests/*.dis
