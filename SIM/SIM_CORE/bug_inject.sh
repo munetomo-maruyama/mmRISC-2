@@ -162,6 +162,20 @@ MUTATIONS=(
 "128#CPU_MMU/MMU_PTW/MMU_PTW.sv#s+2'd1:    misaligned = .pte_ppn\[8:0\];+2'd1:    misaligned = 1'b0;+#PTW: a two megabyte page need not be aligned"
 "129#CPU_MMU/MMU_PTW/MMU_PTW.sv#s|assign pte_leaf = pte_r . pte_x;|assign pte_leaf = pte_r;|#PTW: a page that may only be executed is not a leaf"
 "130#CPU_MMU/MMU_PTW/MMU_PTW.sv#s|assign m_req_addr  = {8'd0, table_ppn, 12'd0} . {52'd0, vpn_sel, 3'd0};|assign m_req_addr  = {8'd0, table_ppn, 12'd0};|#PTW: every entry of a table is read as the first one"
+"150#CPU_PLIC/CPU_PLIC.sv#s%for (int s = SOURCES; s >= 1; s--) begin%for (int s = 1; s <= SOURCES; s++) begin%#PLIC: a tie of equal priorities is broken by the highest number"
+"151#CPU_PLIC/CPU_PLIC.sv#s+(prio\[s\] > threshold\[c\])+(prio[s] >= threshold[c])+#PLIC: the threshold lets its own priority through"
+"152#CPU_PLIC/CPU_PLIC.sv#s+(prio\[s\] >= best_prio\[c\])+(prio[s] <= best_prio[c])+#PLIC: the lowest priority is served first"
+"153#CPU_PLIC/CPU_PLIC.sv#s+pending\[best_id\[ctx_ctl\]\] <= 1'b0;+;+#PLIC: a claim does not take the source out of the pending set"
+"154#CPU_PLIC/CPU_PLIC.sv#s+if (src\[s\] \&\& gw_ready\[s\]) begin+if (src[s]) begin+#PLIC: the gateway forwards again before the completion"
+"155#CPU_PLIC/CPU_PLIC.sv#s+gw_ready\[done_id\] <= 1'b1;+;+#PLIC: a completion does not reopen the gateway"
+"156#CPU_PLIC/CPU_PLIC.sv#s+enable\[ctx_ctl\]\[done_id\])+1'b1)+#PLIC: a context may complete a source it has not enabled"
+"157#CPU_PLIC/CPU_PLIC.sv#s%enable\[ctx_en\]\[bit_word . 32 . b\] <= wr32\[b\];%enable[0][bit_word * 32 + b] <= wr32[b];%#PLIC: an enable written for one context lands in all of them"
+"158#CPU_PLIC/CPU_PLIC.sv#s+irq\[c\] = (best_id\[c\] != '0);+irq[c] = 1'b0;+#PLIC: no interrupt line is ever raised"
+"159#CPU_PLIC/CPU_PLIC.sv#s+rd32 = {{(32-ID_BITS){1'b0}}, best_id\[ctx_ctl\]};+rd32 = 32'd0;+#PLIC: a claim always reads zero"
+"160#CPU_PLIC/CPU_PLIC.sv#s+assign claim_now = sel \&\& !we \&\& ok_ctx \&\& is_claim+assign claim_now = sel \&\& !we \&\& ok_ctx+#PLIC: reading the threshold claims as well"
+"161#CPU_PLIC/CPU_PLIC.sv#s+assign is_claim     = in_context \&\& ((int'(addr) % 32'h1000) == 4);+assign is_claim     = in_context \&\& ((int'(addr) % 32'h1000) == 0);+#PLIC: the claim register is at the wrong offset"
+"162#CPU_PLIC/CPU_PLIC.sv#s+assign ctx_ctl      = (int'(addr) - 32'h20_0000) / 32'h1000;+assign ctx_ctl      = 0;+#PLIC: every context uses the claim register of context zero"
+"163#CPU_PLIC/CPU_PLIC.sv#s+assign ctx_en       = (int'(addr) - 32'h00_2000) / 32'h80;+assign ctx_en       = 0;+#PLIC: every enable word belongs to context zero"
 )
 
 # every mutation is run without and with back pressure on both cache ports
@@ -188,6 +202,7 @@ $R/CORE_MDU/CORE_MDU.sv \
 $R/CORE_FRF/CORE_FRF.sv $d/CPU/CPU_FPU/FPU_ROUND/FPU_ROUND.sv \
 $d/CPU/CPU_FPU/CORE_FPU/CORE_FPU.sv \
 $R/CPU_CORE/CPU_CORE.sv $d/CPU/CPU_CLINT/CPU_CLINT.sv \
+$d/CPU/CPU_PLIC/CPU_PLIC.sv \
 CORE_MEM_MODEL.sv tb_CORE.sv"
     if ! verilator $VFLAGS -Mdir $d/obj $SRCS > $d/build.log 2>&1; then
         sleep 5                       # retry once (transient resource failure)

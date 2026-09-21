@@ -12,9 +12,11 @@
 //   - FENCE / FLUSH : answered immediately
 //   - addresses outside a known region return an error (access fault)
 //
-//   Besides the memory the data port reaches two more regions, which is what
-//   the system looks like: the CLINT of the core and one register of the test
-//   bench that drives the external interrupt line.
+//   Besides the memory the data port reaches three more regions, which is
+//   what the system looks like: the CLINT of the core, the PLIC, and two
+//   registers of the test bench. The first of those raises the external
+//   interrupt lines by hand (for the tests that want no controller in the
+//   way), the second is the source vector that goes into the PLIC.
 //
 //   The port presents the virtual address with the request and the physical
 //   one in the cycle after the request was taken (CPU_CACHE_SPEC.md 5.6).
@@ -38,6 +40,7 @@ module CORE_MEM_MODEL
         parameter int          WORDS       = 8192,      // 64 KiB
         parameter logic [63:0] CLINT_BASE  = 64'h0000_0000_0200_0000,
         parameter logic [63:0] TBREG_BASE  = 64'h0000_0000_0300_0000,
+        parameter logic [63:0] PLIC_BASE   = 64'h0000_0000_0C00_0000,
         parameter int          LINE_BYTES  = 64,         // like the data cache
         parameter int          I_LATENCY   = 2,
         parameter int          D_LATENCY   = 3
@@ -78,6 +81,19 @@ module CORE_MEM_MODEL
         output logic [7:0]              clint_wstrb,
         input  logic [63:0]             clint_rdata,
 
+        // PLIC, the same kind of port
+        output logic                    plic_sel,
+        output logic                    plic_we,
+        output logic [21:0]             plic_addr,
+        output logic [63:0]             plic_wdata,
+        output logic [7:0]              plic_wstrb,
+        input  logic [63:0]             plic_rdata,
+
+        // the interrupt lines the bench raises by hand: bit 0 and 1 go
+        // straight to the core, the second word is the source vector of the
+        // PLIC
+        output logic [31:0]             plic_src,
+
         // register of the test bench: bit 0 is the external interrupt
         output logic                    irq_ext,      // bit 0 : machine
         output logic                    irq_s_ext,    // bit 1 : supervisor
@@ -110,11 +126,16 @@ module CORE_MEM_MODEL
         return (a >= CLINT_BASE[PADDR_WIDTH-1:0]) &&
                (a <  CLINT_BASE[PADDR_WIDTH-1:0] + PADDR_WIDTH'(65536));
     endfunction
+    function automatic bit in_plic(input logic [PADDR_WIDTH-1:0] a);
+        return (a >= PLIC_BASE[PADDR_WIDTH-1:0]) &&
+               (a <  PLIC_BASE[PADDR_WIDTH-1:0] + PADDR_WIDTH'(4*1024*1024));
+    endfunction
+
     function automatic bit in_tbreg(input logic [PADDR_WIDTH-1:0] a);
-        return (a[PADDR_WIDTH-1:3] == TBREG_BASE[PADDR_WIDTH-1:3]);
+        return (a[PADDR_WIDTH-1:4] == TBREG_BASE[PADDR_WIDTH-1:4]);
     endfunction
     function automatic bit mapped(input logic [PADDR_WIDTH-1:0] a);
-        return in_range(a) || in_clint(a) || in_tbreg(a);
+        return in_range(a) || in_clint(a) || in_tbreg(a) || in_plic(a);
     endfunction
 
     // right align and zero extend, as the cache does
@@ -308,6 +329,12 @@ module CORE_MEM_MODEL
     assign d_writes = (s1d_cmd == CMD_STORE) || d_is_amo;
     assign wr_strb = strb(s1d_addr[2:0], s1d_size);
 
+    assign plic_sel    = d_acc & in_plic(s1d_addr);
+    assign plic_we     = (s1d_cmd == CMD_STORE);
+    assign plic_addr   = s1d_addr[21:0];
+    assign plic_wdata  = align_wdata(s1d_addr[2:0], s1d_wdata);
+    assign plic_wstrb  = wr_strb;
+
     assign clint_sel   = d_acc & in_clint(s1d_addr);
     assign clint_we    = (s1d_cmd == CMD_STORE);
     assign clint_addr  = s1d_addr[15:0];
@@ -324,6 +351,7 @@ module CORE_MEM_MODEL
             for (int i = 0; i <= D_LATENCY; i++) dp_data[i] <= 64'd0;
             irq_ext   <= 1'b0;
             irq_s_ext <= 1'b0;
+            plic_src  <= 32'd0;
             res_valid <= 1'b0;
             res_line  <= '0;
         end else begin
@@ -386,13 +414,22 @@ module CORE_MEM_MODEL
                 end
             end else if (d_acc && in_clint(s1d_addr) && (s1d_cmd == CMD_LOAD)) begin
                 dp_data[D_LATENCY] <= extract(clint_rdata, s1d_addr[2:0], s1d_size);
+            end else if (d_acc && in_plic(s1d_addr) && (s1d_cmd == CMD_LOAD)) begin
+                dp_data[D_LATENCY] <= extract(plic_rdata, s1d_addr[2:0], s1d_size);
             end else if (d_acc && in_tbreg(s1d_addr)) begin
+                // the first word drives the two lines directly, the second
+                // the source vector of the PLIC
                 if (s1d_cmd == CMD_LOAD)
-                    dp_data[D_LATENCY] <= extract({62'd0, irq_s_ext, irq_ext},
-                                                  s1d_addr[2:0], s1d_size);
+                    dp_data[D_LATENCY] <= s1d_addr[3]
+                        ? extract({32'd0, plic_src}, s1d_addr[2:0], s1d_size)
+                        : extract({62'd0, irq_s_ext, irq_ext},
+                                  s1d_addr[2:0], s1d_size);
                 else if ((s1d_cmd == CMD_STORE) && wr_strb[0]) begin
-                    irq_ext   <= clint_wdata[0];
-                    irq_s_ext <= clint_wdata[1];
+                    if (s1d_addr[3]) plic_src <= clint_wdata[31:0];
+                    else begin
+                        irq_ext   <= clint_wdata[0];
+                        irq_s_ext <= clint_wdata[1];
+                    end
                 end
             end
         end

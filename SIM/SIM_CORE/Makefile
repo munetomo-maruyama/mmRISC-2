@@ -8,6 +8,7 @@
 #   make riscv-tests: the official riscv-tests, physical environment
 #   make riscv-tests-v : the same tests under Sv39 in user mode (env/v)
 #   make clint      : CPU_CLINT with several harts (tb_CLINT)
+#   make plic       : CPU_PLIC with several contexts (tb_PLIC)
 #   make trace      : run one test with the retirement trace
 #   make wave       : run one test and dump tb_CORE.vcd
 #   make iverilog   : run all tests with Icarus Verilog
@@ -35,10 +36,12 @@ RTL_SRCS := \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_EXU/CORE_EXU.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_LSU/CORE_LSU.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CPU_CORE/CPU_CORE.sv \
-	$(RTL_DIR)/CPU/CPU_CLINT/CPU_CLINT.sv
+	$(RTL_DIR)/CPU/CPU_CLINT/CPU_CLINT.sv \
+	$(RTL_DIR)/CPU/CPU_PLIC/CPU_PLIC.sv
 
 SIM_SRCS := CORE_MEM_MODEL.sv $(TOP).sv
 CLINT_SRCS := $(RTL_DIR)/CPU/CPU_CLINT/CPU_CLINT.sv tb_CLINT.sv
+PLIC_SRCS  := $(RTL_DIR)/CPU/CPU_PLIC/CPU_PLIC.sv tb_PLIC.sv
 SRCS     := $(RTL_SRCS) $(SIM_SRCS)
 
 VERILATOR       := verilator
@@ -67,8 +70,8 @@ HEXES    := $(addprefix tests/,$(addsuffix .hex,$(TESTS)))
 TEST     ?= $(firstword $(TESTS))
 PLUSARGS ?=
 
-.PHONY: all run run-all stress bugs riscv-tests riscv-tests-v clint trace \
-        wave lint iverilog clean tests
+.PHONY: all run run-all stress bugs riscv-tests riscv-tests-v clint plic \
+        trace wave lint iverilog clean tests
 
 # back pressure on both cache ports : ready is low in 40 % of the cycles
 STRESS_ARGS := +istall=40 +dstall=40
@@ -98,6 +101,12 @@ obj_dir/.srchash: FORCE
 	@h=`cat $(SRCS) | md5sum | cut -d' ' -f1`; \
 	 if [ "`cat $@ 2>/dev/null`" != "$$h" ]; then \
 	     rm -f obj_dir/V$(TOP); echo "$$h" > $@; fi
+
+obj_plic/.srchash: FORCE
+	@mkdir -p obj_plic
+	@h=`cat $(PLIC_SRCS) | md5sum | cut -d' ' -f1`; \
+	 if [ "`cat $@ 2>/dev/null`" != "$$h" ]; then \
+	     rm -f obj_plic/Vtb_PLIC; echo "$$h" > $@; fi
 
 obj_clint/.srchash: FORCE
 	@mkdir -p obj_clint
@@ -134,6 +143,13 @@ obj_clint/Vtb_CLINT: obj_clint/.srchash
 
 clint: obj_clint/Vtb_CLINT
 	./obj_clint/Vtb_CLINT
+
+obj_plic/Vtb_PLIC: obj_plic/.srchash
+	$(VERILATOR) $(VERILATOR_BASE) --top-module tb_PLIC -Mdir obj_plic \
+	    $(PLIC_SRCS)
+
+plic: obj_plic/Vtb_PLIC
+	./obj_plic/Vtb_PLIC
 
 run-all: obj_dir/V$(TOP) $(HEXES)
 	@fail=0; \
@@ -175,4 +191,4 @@ iverilog: $(HEXES)
 	exit $$fail
 
 clean:
-	rm -rf obj_dir obj_trace obj_clint bug_work rvtests $(TOP).vvp *.vcd *.log tests/*.elf tests/*.bin tests/*.hex tests/*.dis
+	rm -rf obj_dir obj_trace obj_clint obj_plic bug_work rvtests $(TOP).vvp *.vcd *.log tests/*.elf tests/*.bin tests/*.hex tests/*.dis
