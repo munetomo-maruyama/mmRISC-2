@@ -10,6 +10,7 @@
 #   make clint      : CPU_CLINT with several harts (tb_CLINT)
 #   make plic       : CPU_PLIC with several contexts (tb_PLIC)
 #   make trace      : run one test with the retirement trace
+#   make profile    : run one test and print where the cycles went
 #   make wave       : run one test and dump tb_CORE.vcd
 #   make iverilog   : run all tests with Icarus Verilog
 #   make lint       : Verilator lint
@@ -72,7 +73,7 @@ TEST     ?= $(firstword $(TESTS))
 PLUSARGS ?=
 
 .PHONY: all run run-all stress bugs riscv-tests riscv-tests-v clint plic \
-        trace wave lint iverilog clean tests
+        trace profile wave lint iverilog clean tests
 
 # back pressure on both cache ports : ready is low in 40 % of the cycles
 STRESS_ARGS := +istall=40 +dstall=40
@@ -164,6 +165,12 @@ run-all: obj_dir/V$(TOP) $(HEXES)
 
 trace:
 	$(MAKE) run PLUSARGS="+trace"
+
+# Every cycle in which nothing reaches write back is charged to one reason,
+# so the parts add up to the whole. t16_bench also prints the cycles of each
+# of its three loops with +bench.
+profile:
+	$(MAKE) run PLUSARGS="+profile +bench"
 
 wave: $(HEXES)
 	$(VERILATOR) $(VERILATOR_FLAGS) --trace -DDUMP_VCD -Mdir obj_trace $(SRCS)
