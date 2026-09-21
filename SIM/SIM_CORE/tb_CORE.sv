@@ -263,6 +263,21 @@ module tb_CORE;
     logic [4:0]  last_trap_cause;
     logic [63:0] last_trap_epc, last_trap_tval;
 
+    // a branch, a jump, or one of their compressed forms
+    function automatic bit is_ctrl(input logic [31:0] insn);
+        if (insn[1:0] == 2'b11)
+            return (insn[6:0] == 7'h63) || (insn[6:0] == 7'h6F) ||
+                   (insn[6:0] == 7'h67);
+        else if (insn[1:0] == 2'b01)
+            return (insn[15:13] == 3'b101) ||        // c.j
+                   (insn[15:13] == 3'b110) ||        // c.beqz
+                   (insn[15:13] == 3'b111);          // c.bnez
+        else if (insn[1:0] == 2'b10)
+            return (insn[15:13] == 3'b100) && (insn[6:2] == 5'd0);  // c.jr/jalr
+        else
+            return 1'b0;
+    endfunction
+
     initial begin
         tohost           = 64'd0;
         n_retired        = 0;
@@ -324,9 +339,14 @@ module tb_CORE;
             last_trace_pc    <= trace_pc;
             if (trace_valid) begin
                 n_retired <= n_retired + 1;
-                // none of the test programs is a one instruction loop, so the
-                // same PC twice in a row means the pipeline retired it twice
-                if (last_trace_valid && (trace_pc == last_trace_pc)) begin
+                // The same PC twice in a row means the pipeline retired it
+                // twice -- unless it is a branch to itself, which t06 uses
+                // to wait for an interrupt. Before the branch predictor
+                // there was always a refetch between two turns of such a
+                // loop; now there is not, so control transfers are left out
+                // of the check.
+                if (last_trace_valid && (trace_pc == last_trace_pc) &&
+                    !is_ctrl(trace_insn)) begin
                     retire_error <= 1'b1;
                     $display("[%0t] tb_CORE: pc %010h retired twice in a row",
                              $time, trace_pc);
@@ -361,6 +381,8 @@ module tb_CORE;
             $display("          no trap was taken");
     endtask
 
+    logic [63:0] bench_v;
+
     initial begin
         if (!$value$plusargs("maxcycles=%d", max_cycles)) max_cycles = 200000;
 
@@ -389,6 +411,14 @@ module tb_CORE;
             $display(" %s : FAIL   (check %0d, tohost=%016h)",
                      test_name, tohost >> 1, tohost);
             report_trap();
+        end
+        if ($test$plusargs("bench")) begin
+            // the four words a benchmark leaves at BENCH_SLOT
+            for (int k = 0; k < 4; k++) begin
+                bench_v = u_mem.mem[((64'h8000_2100 - MEM_BASE) >> 3) + k];
+                if (bench_v != 64'd0)
+                    $display(" part %0d : %0d cycles", k, bench_v);
+            end
         end
         $display("==========================================================");
         $finish;

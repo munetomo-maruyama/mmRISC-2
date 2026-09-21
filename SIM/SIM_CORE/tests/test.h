@@ -27,6 +27,15 @@
     li   t0, 0x1F;                  \
     csrw pmpcfg0, t0;
 
+// Four words the test bench prints with +bench. A benchmark drops the cycle
+// count of each of its parts here; the address is fixed so that the bench
+// needs no symbol from the ELF file.
+#define BENCH_SLOT 0x80002100
+
+#define BENCH_MARK(slot, reg)       \
+    li   t0, BENCH_SLOT + 8*(slot); \
+    sd   reg, 0(t0);
+
 #define TEST_EQ(n, reg, value)      \
     li   gp, n;                     \
     li   t6, value;                 \
