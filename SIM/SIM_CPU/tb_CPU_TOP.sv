@@ -706,6 +706,12 @@ module tb_CPU_TOP;
     // Test control
     //-----------------------------------------------------------------
     int error_count = 0;
+    // The number of checks is not a figure to compare across RTL changes.
+    // Three sections draw their stimulus at random (16, 23 and 26, the ones
+    // "with stalls"), and the stall injection of the slave models draws from
+    // the same global generator, so anything that shifts the timing by a
+    // cycle reshuffles the draws and changes how many beats get compared.
+    // What has to stay at zero is error_count.
     int check_count = 0;
 
     // A single BFM transaction taking longer than this is reported as hung

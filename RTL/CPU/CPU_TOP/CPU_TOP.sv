@@ -17,9 +17,11 @@
 //     through AXI4_ADDR_NARROW / AXIL_ADDR_NARROW (RTL/BUS), which return
 //     DECERR when any of the upper bits [39:32] is non-zero.
 //
-// Current contents (CPU core not yet implemented):
+// Current contents:
 //   CPU_DBG  : debug logic with a pseudo hart and a debug bus master
 //   BUS_ARB  : arbitration of the debug bus master and the CPU
+//   CPU_CORE : the CPU core (USE_BFM=0)
+//   CPU_MMIO : the peripheral bus with the CLINT and the PLIC on it
 //   CPU_BFM  : temporary bus function model standing in for the CPU
 //              (simulation only, USE_BFM=1)
 //
@@ -78,7 +80,19 @@ module CPU_TOP
         // 1: memory bus accesses of the debugger go through the data cache
         parameter int          DBG_VIA_CACHE = 1,
 
-        // 1: instantiate the temporary BFM (simulation)
+        // the two blocks of the core on the peripheral bus
+        parameter logic [39:0] CLINT_BASE     = 40'h00_0200_0000,
+        parameter logic [39:0] PLIC_BASE      = 40'h00_0C00_0000,
+        parameter int          CLINT_TICK_DIV = 1,
+
+        // branch target buffer, TLBs, PMP
+        parameter int          BTB_ENTRIES  = 64,
+        parameter int          ITLB_ENTRIES = 16,
+        parameter int          DTLB_ENTRIES = 16,
+        parameter int          PMP_ENTRIES  = 16,
+        parameter int          PQ_DEPTH     = 16,
+
+        // 1: instantiate the temporary BFM (simulation) instead of the core
         parameter int          USE_BFM      = 1
     )
     (
@@ -441,19 +455,19 @@ module CPU_TOP
     logic                          cc_axil_rvalid;
     logic                          cc_axil_rready;
 
-    // cache ports
-    logic                       bfm_i_req_valid, bfm_i_req_ready, bfm_i_kill;
-    logic [AXI4_ADDR_WIDTH-1:0] bfm_i_req_addr, bfm_i_req_paddr;
+    // cache ports : driven by the core, or by the BFM while USE_BFM is set
+    logic                       cpu_i_req_valid, cpu_i_req_ready, cpu_i_kill;
+    logic [AXI4_ADDR_WIDTH-1:0] cpu_i_req_addr, cpu_i_req_paddr;
     logic                       cc_i_resp_valid, cc_i_resp_error;
     logic [63:0]                cc_i_resp_data;
     logic                       cc_i_flush_valid, cc_i_flush_done;
-    logic                       bfm_i_flush_valid;
+    logic                       cpu_i_flush_valid;
 
-    logic                       bfm_d_req_valid, bfm_d_req_ready;
-    logic [AXI4_ADDR_WIDTH-1:0] bfm_d_req_addr, bfm_d_req_paddr;
-    logic [1:0]                 bfm_d_req_size;
-    logic [3:0]                 bfm_d_req_cmd;
-    logic [63:0]                bfm_d_req_wdata;
+    logic                       cpu_d_req_valid, cpu_d_req_ready;
+    logic [AXI4_ADDR_WIDTH-1:0] cpu_d_req_addr, cpu_d_req_paddr;
+    logic [1:0]                 cpu_d_req_size;
+    logic [3:0]                 cpu_d_req_cmd;
+    logic [63:0]                cpu_d_req_wdata;
     logic                       cc_d_resp_valid, cc_d_resp_error;
     logic [63:0]                cc_d_resp_data;
 
@@ -466,6 +480,20 @@ module CPU_TOP
     logic                       dbg_dc_resp_valid, dbg_dc_resp_error;
     logic [63:0]                dbg_dc_resp_data;
     logic                       dbg_dc_wrote;
+
+    // the peripheral bus between the arbiter and CPU_MMIO
+    logic [AXIL_ADDR_WIDTH-1:0]   pb_awaddr, pb_araddr;
+    logic [2:0]                   pb_awprot, pb_arprot;
+    logic                         pb_awvalid, pb_awready, pb_arvalid, pb_arready;
+    logic [AXIL_DATA_WIDTH-1:0]   pb_wdata, pb_rdata;
+    logic [AXIL_DATA_WIDTH/8-1:0] pb_wstrb;
+    logic                         pb_wvalid, pb_wready;
+    logic [1:0]                   pb_bresp, pb_rresp;
+    logic                         pb_bvalid, pb_bready, pb_rvalid, pb_rready;
+
+    // from the CLINT and the PLIC to the hart
+    logic [0:0]  irq_m_soft, irq_m_timer, irq_m_ext, irq_s_ext;
+    logic [63:0] mtime;
 
     logic rst_bus_n;   // system reset synchronized to clk, includes ndmreset
 
@@ -594,7 +622,7 @@ module CPU_TOP
         else if (ic_inv_req && cc_i_flush_done)    ic_inv_req <= 1'b0;
     end
 
-    assign cc_i_flush_valid = ic_inv_req | bfm_i_flush_valid;
+    assign cc_i_flush_valid = ic_inv_req | cpu_i_flush_valid;
 
     //=================================================================
     // L1 caches (CPU_CACHE_SPEC.md)
@@ -626,23 +654,23 @@ module CPU_TOP
         (
             .clk             (clk),
             .rst_n           (rst_bus_n),
-            .i_req_valid     (bfm_i_req_valid),
-            .i_req_ready     (bfm_i_req_ready),
-            .i_req_addr      (bfm_i_req_addr),
-            .i_req_paddr     (bfm_i_req_paddr),
+            .i_req_valid     (cpu_i_req_valid),
+            .i_req_ready     (cpu_i_req_ready),
+            .i_req_addr      (cpu_i_req_addr),
+            .i_req_paddr     (cpu_i_req_paddr),
             .i_resp_valid    (cc_i_resp_valid),
             .i_resp_data     (cc_i_resp_data),
             .i_resp_error    (cc_i_resp_error),
             .i_flush_valid   (cc_i_flush_valid),
             .i_flush_done    (cc_i_flush_done),
-            .i_kill          (bfm_i_kill),
-            .d_req_valid     (bfm_d_req_valid),
-            .d_req_ready     (bfm_d_req_ready),
-            .d_req_addr      (bfm_d_req_addr),
-            .d_req_paddr     (bfm_d_req_paddr),
-            .d_req_size      (bfm_d_req_size),
-            .d_req_cmd       (bfm_d_req_cmd),
-            .d_req_wdata     (bfm_d_req_wdata),
+            .i_kill          (cpu_i_kill),
+            .d_req_valid     (cpu_d_req_valid),
+            .d_req_ready     (cpu_d_req_ready),
+            .d_req_addr      (cpu_d_req_addr),
+            .d_req_paddr     (cpu_d_req_paddr),
+            .d_req_size      (cpu_d_req_size),
+            .d_req_cmd       (cpu_d_req_cmd),
+            .d_req_wdata     (cpu_d_req_wdata),
             .d_resp_valid    (cc_d_resp_valid),
             .d_resp_data     (cc_d_resp_data),
             .d_resp_error    (cc_d_resp_error),
@@ -1070,25 +1098,94 @@ module CPU_TOP
             .s1_axil_rresp   (cpu_axil_rresp),
             .s1_axil_rvalid  (cpu_axil_rvalid),
             .s1_axil_rready  (cpu_axil_rready),
-            .m_axil_awaddr   (m_axil_awaddr),
-            .m_axil_awprot   (m_axil_awprot),
-            .m_axil_awvalid  (m_axil_awvalid),
-            .m_axil_awready  (m_axil_awready),
-            .m_axil_wdata    (m_axil_wdata),
-            .m_axil_wstrb    (m_axil_wstrb),
-            .m_axil_wvalid   (m_axil_wvalid),
-            .m_axil_wready   (m_axil_wready),
-            .m_axil_bresp    (m_axil_bresp),
-            .m_axil_bvalid   (m_axil_bvalid),
-            .m_axil_bready   (m_axil_bready),
-            .m_axil_araddr   (m_axil_araddr),
-            .m_axil_arprot   (m_axil_arprot),
-            .m_axil_arvalid  (m_axil_arvalid),
-            .m_axil_arready  (m_axil_arready),
-            .m_axil_rdata    (m_axil_rdata),
-            .m_axil_rresp    (m_axil_rresp),
-            .m_axil_rvalid   (m_axil_rvalid),
-            .m_axil_rready   (m_axil_rready)
+            .m_axil_awaddr   (pb_awaddr),
+            .m_axil_awprot   (pb_awprot),
+            .m_axil_awvalid  (pb_awvalid),
+            .m_axil_awready  (pb_awready),
+            .m_axil_wdata    (pb_wdata),
+            .m_axil_wstrb    (pb_wstrb),
+            .m_axil_wvalid   (pb_wvalid),
+            .m_axil_wready   (pb_wready),
+            .m_axil_bresp    (pb_bresp),
+            .m_axil_bvalid   (pb_bvalid),
+            .m_axil_bready   (pb_bready),
+            .m_axil_araddr   (pb_araddr),
+            .m_axil_arprot   (pb_arprot),
+            .m_axil_arvalid  (pb_arvalid),
+            .m_axil_arready  (pb_arready),
+            .m_axil_rdata    (pb_rdata),
+            .m_axil_rresp    (pb_rresp),
+            .m_axil_rvalid   (pb_rvalid),
+            .m_axil_rready   (pb_rready)
+        );
+
+    //=================================================================
+    // The peripheral bus, with the CLINT and the PLIC on it
+    //
+    //   Everything below MEM_BASE leaves the caches uncached on this bus,
+    //   so the two blocks of the core sit here and the rest goes out of the
+    //   chip. The debugger reaches them the same way, which is what lets it
+    //   read the timer while the hart is halted.
+    //=================================================================
+    CPU_MMIO
+        #(
+            .ADDR_WIDTH     (AXIL_ADDR_WIDTH),
+            .CLINT_BASE     (CLINT_BASE),
+            .PLIC_BASE      (PLIC_BASE),
+            .NUM_HARTS      (1),
+            .CLINT_TICK_DIV (CLINT_TICK_DIV),
+            .PLIC_SOURCES   (NUM_IRQ - 1),
+            .PLIC_CONTEXTS  (2),
+            .PLIC_PRIO_BITS (3)
+        )
+    u_mmio
+        (
+            .clk         (clk),
+            .rst_n       (rst_bus_n),
+            .s_awaddr    (pb_awaddr),
+            .s_awprot    (pb_awprot),
+            .s_awvalid   (pb_awvalid),
+            .s_awready   (pb_awready),
+            .s_wdata     (pb_wdata),
+            .s_wstrb     (pb_wstrb),
+            .s_wvalid    (pb_wvalid),
+            .s_wready    (pb_wready),
+            .s_bresp     (pb_bresp),
+            .s_bvalid    (pb_bvalid),
+            .s_bready    (pb_bready),
+            .s_araddr    (pb_araddr),
+            .s_arprot    (pb_arprot),
+            .s_arvalid   (pb_arvalid),
+            .s_arready   (pb_arready),
+            .s_rdata     (pb_rdata),
+            .s_rresp     (pb_rresp),
+            .s_rvalid    (pb_rvalid),
+            .s_rready    (pb_rready),
+            .m_awaddr    (m_axil_awaddr),
+            .m_awprot    (m_axil_awprot),
+            .m_awvalid   (m_axil_awvalid),
+            .m_awready   (m_axil_awready),
+            .m_wdata     (m_axil_wdata),
+            .m_wstrb     (m_axil_wstrb),
+            .m_wvalid    (m_axil_wvalid),
+            .m_wready    (m_axil_wready),
+            .m_bresp     (m_axil_bresp),
+            .m_bvalid    (m_axil_bvalid),
+            .m_bready    (m_axil_bready),
+            .m_araddr    (m_axil_araddr),
+            .m_arprot    (m_axil_arprot),
+            .m_arvalid   (m_axil_arvalid),
+            .m_arready   (m_axil_arready),
+            .m_rdata     (m_axil_rdata),
+            .m_rresp     (m_axil_rresp),
+            .m_rvalid    (m_axil_rvalid),
+            .m_rready    (m_axil_rready),
+            .ext_irq     (ext_irq),
+            .irq_m_soft  (irq_m_soft),
+            .irq_m_timer (irq_m_timer),
+            .irq_m_ext   (irq_m_ext),
+            .irq_s_ext   (irq_s_ext),
+            .mtime       (mtime)
         );
 
     //=================================================================
@@ -1172,42 +1269,92 @@ module CPU_TOP
                     .m_axil_rvalid   (bfm_axil_rvalid),
                     .m_axil_rready   (bfm_axil_rready),
 
-                    .i_req_valid     (bfm_i_req_valid),
-                    .i_req_ready     (bfm_i_req_ready),
-                    .i_req_addr      (bfm_i_req_addr),
-                    .i_req_paddr     (bfm_i_req_paddr),
+                    .i_req_valid     (cpu_i_req_valid),
+                    .i_req_ready     (cpu_i_req_ready),
+                    .i_req_addr      (cpu_i_req_addr),
+                    .i_req_paddr     (cpu_i_req_paddr),
                     .i_resp_valid    (cc_i_resp_valid),
                     .i_resp_data     (cc_i_resp_data),
                     .i_resp_error    (cc_i_resp_error),
-                    .i_flush_valid   (bfm_i_flush_valid),
+                    .i_flush_valid   (cpu_i_flush_valid),
                     .i_flush_done    (cc_i_flush_done),
-                    .i_kill          (bfm_i_kill),
+                    .i_kill          (cpu_i_kill),
 
-                    .d_req_valid     (bfm_d_req_valid),
-                    .d_req_ready     (bfm_d_req_ready),
-                    .d_req_addr      (bfm_d_req_addr),
-                    .d_req_paddr     (bfm_d_req_paddr),
-                    .d_req_size      (bfm_d_req_size),
-                    .d_req_cmd       (bfm_d_req_cmd),
-                    .d_req_wdata     (bfm_d_req_wdata),
+                    .d_req_valid     (cpu_d_req_valid),
+                    .d_req_ready     (cpu_d_req_ready),
+                    .d_req_addr      (cpu_d_req_addr),
+                    .d_req_paddr     (cpu_d_req_paddr),
+                    .d_req_size      (cpu_d_req_size),
+                    .d_req_cmd       (cpu_d_req_cmd),
+                    .d_req_wdata     (cpu_d_req_wdata),
                     .d_resp_valid    (cc_d_resp_valid),
                     .d_resp_data     (cc_d_resp_data),
                     .d_resp_error    (cc_d_resp_error)
                 );
-        end else begin : g_no_bfm
+        end else begin : g_core
 
-            // no CPU: the cache ports stay idle
-            assign bfm_i_req_valid   = 1'b0;
-            assign bfm_i_req_addr    = '0;
-            assign bfm_i_req_paddr   = '0;
-            assign bfm_i_kill        = 1'b0;
-            assign bfm_i_flush_valid = 1'b0;
-            assign bfm_d_req_valid   = 1'b0;
-            assign bfm_d_req_addr    = '0;
-            assign bfm_d_req_paddr   = '0;
-            assign bfm_d_req_size    = 2'd0;
-            assign bfm_d_req_cmd     = 4'd0;
-            assign bfm_d_req_wdata   = '0;
+            //---------------------------------------------------------
+            // the CPU core
+            //
+            //   It drives the two cache ports directly. Its own raw bus
+            //   master signals do not exist: everything it does goes
+            //   through the caches, and the caches decide from MEM_BASE
+            //   whether it lands on the memory bus or the peripheral one.
+            //---------------------------------------------------------
+            CPU_CORE
+                #(
+                    .PADDR_WIDTH  (AXI4_ADDR_WIDTH),
+                    .RESET_VECTOR (RESET_VECTOR),
+                    .HART_ID      (MHARTID),
+                    .PQ_DEPTH     (PQ_DEPTH),
+                    .PMP_ENTRIES  (PMP_ENTRIES),
+                    .ITLB_ENTRIES (ITLB_ENTRIES),
+                    .DTLB_ENTRIES (DTLB_ENTRIES),
+                    .BTB_ENTRIES  (BTB_ENTRIES)
+                )
+            u_cpu_core
+                (
+                    .clk           (clk),
+                    .rst_n         (rst_bus_n),
+                    .i_req_valid   (cpu_i_req_valid),
+                    .i_req_ready   (cpu_i_req_ready),
+                    .i_req_addr    (cpu_i_req_addr),
+                    .i_req_paddr   (cpu_i_req_paddr),
+                    .i_resp_valid  (cc_i_resp_valid),
+                    .i_resp_data   (cc_i_resp_data),
+                    .i_resp_error  (cc_i_resp_error),
+                    .i_flush_valid (cpu_i_flush_valid),
+                    .i_flush_done  (cc_i_flush_done),
+                    .i_kill        (cpu_i_kill),
+                    .d_req_valid   (cpu_d_req_valid),
+                    .d_req_ready   (cpu_d_req_ready),
+                    .d_req_addr    (cpu_d_req_addr),
+                    .d_req_paddr   (cpu_d_req_paddr),
+                    .d_req_size    (cpu_d_req_size),
+                    .d_req_cmd     (cpu_d_req_cmd),
+                    .d_req_wdata   (cpu_d_req_wdata),
+                    .d_resp_valid  (cc_d_resp_valid),
+                    .d_resp_data   (cc_d_resp_data),
+                    .d_resp_error  (cc_d_resp_error),
+                    .irq_m_soft    (irq_m_soft[0]),
+                    .irq_m_timer   (irq_m_timer[0]),
+                    .irq_m_ext     (irq_m_ext[0]),
+                    .irq_s_ext     (irq_s_ext[0]),
+                    .mtime         (mtime),
+                    .trace_valid   (),
+                    .trace_pc      (),
+                    .trace_insn    (),
+                    .trace_rd_we   (),
+                    .trace_rd      (),
+                    .trace_rd_data (),
+                    .trace_priv    (),
+                    .trap_valid    (),
+                    .trap_is_int   (),
+                    .trap_cause    (),
+                    .trap_epc      (),
+                    .trap_tval     (),
+                    .trap_to_s     ()
+                );
 
             assign bfm_axi4_awid     = '0;
             assign bfm_axi4_awaddr   = '0;
@@ -1250,8 +1397,10 @@ module CPU_TOP
     endgenerate
 
     //=================================================================
-    // Not yet implemented
+    // Not yet connected
     //=================================================================
-    // ext_irq : to the internal PLIC (CPU core phase)
+    // The debug module still talks to DBG_HART_STUB and not to the core:
+    // halt, resume, single step and the abstract commands of a real hart
+    // are chapter 11 of CPU_CORE_SPEC.md. The core runs free for now.
 
 endmodule : CPU_TOP

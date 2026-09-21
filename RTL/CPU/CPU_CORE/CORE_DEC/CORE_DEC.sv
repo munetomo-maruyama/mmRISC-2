@@ -160,6 +160,7 @@ module CORE_DEC
     localparam logic [3:0] CMD_LOAD  = 4'd0;
     localparam logic [3:0] CMD_STORE = 4'd1;
     localparam logic [3:0] CMD_LR    = 4'd2;
+    localparam logic [3:0] CMD_FLUSH = 4'd14;
     localparam logic [3:0] CMD_SC    = 4'd3;
 
     logic [6:0] opcode, funct7;
@@ -577,7 +578,17 @@ module CORE_DEC
             OP_FENCE: begin
                 case (funct3)
                     3'b000: is_fence   = 1'b1;
-                    3'b001: is_fence_i = 1'b1;
+                    3'b001: begin
+                        is_fence_i = 1'b1;
+                        // The data cache has to be written back before the
+                        // instruction cache is invalidated, or the fetch
+                        // that follows reads the old bytes from memory
+                        // (CPU_CACHE_SPEC.md 5.3). The core issues it on
+                        // the data port like an access, so the commit point
+                        // waits for the answer before it touches the
+                        // instruction side.
+                        mem_cmd    = CMD_FLUSH;
+                    end
                     default: illegal = 1'b1;
                 endcase
             end
