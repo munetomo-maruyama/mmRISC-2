@@ -27,7 +27,9 @@ module tb_CORE;
 
     localparam int          PADDR_WIDTH = 40;
     localparam logic [63:0] MEM_BASE    = 64'h0000_0000_8000_0000;
-    localparam int          MEM_WORDS   = 8192;                  // 64 KiB
+    // Two megabytes. The riscv-tests virtual memory environment maps a whole
+    // megapage of them and hands out pages out of the first half of it.
+    localparam int          MEM_WORDS   = 262144;                // 2 MiB
     localparam logic [63:0] CLINT_BASE  = 64'h0000_0000_0200_0000;
 
     //=================================================================
@@ -154,6 +156,7 @@ module tb_CORE;
             .i_req_valid  (i_req_valid),
             .i_req_ready  (i_req_ready),
             .i_req_addr   (i_req_addr),
+            .i_req_paddr  (i_req_paddr),
             .i_kill       (i_kill),
             .i_resp_valid (i_resp_valid),
             .i_resp_data  (i_resp_data),
@@ -161,6 +164,7 @@ module tb_CORE;
             .d_req_valid  (d_req_valid),
             .d_req_ready  (d_req_ready),
             .d_req_addr   (d_req_addr),
+            .d_req_paddr  (d_req_paddr),
             .d_req_size   (d_req_size),
             .d_req_cmd    (d_req_cmd),
             .d_req_wdata  (d_req_wdata),
@@ -234,11 +238,40 @@ module tb_CORE;
         seen_trap        = 1'b0;
     end
 
+    //-----------------------------------------------------------------
+    // The write is caught by its physical address, one cycle behind the
+    // request, because the virtual memory environment writes the word
+    // through a kernel mapping and not at the address it was linked at.
+    //
+    // The value follows the HTIF convention: the top byte is the device and
+    // the one below it the command. Device 0 ends the test, device 1 is the
+    // console, and the word has to be put back to zero afterwards because
+    // the caller waits for that before it writes the next one.
+    //-----------------------------------------------------------------
+    logic        th_write, th_pending;
+    logic [63:0] th_value;
+    logic [7:0]  th_dev, th_cmd;
+
+    assign th_write = u_mem.s1d_valid && (u_mem.s1d_cmd == 4'd1) &&
+                      ({24'd0, u_mem.s1d_addr} == tohost_addr);
+    assign th_value = u_mem.s1d_wdata;
+    assign th_dev   = th_value[63:56];
+    assign th_cmd   = th_value[55:48];
+
     always @(posedge clk) begin
         if (rst_n) begin
-            if (d_req_valid && d_req_ready && (d_req_cmd == 4'd1) &&
-                ({24'd0, d_req_addr} == tohost_addr) && (d_req_wdata != 64'd0))
-                tohost <= d_req_wdata;
+            th_pending <= th_write && (th_value != 64'd0) && (th_dev != 8'd0);
+            if (th_write && (th_value != 64'd0)) begin
+                if (th_dev == 8'd0)
+                    tohost <= th_value;                  // the test is over
+                else if ((th_dev == 8'd1) && (th_cmd == 8'd1))
+                    $write("%c", th_value[7:0]);         // the console
+            end
+            // One cycle later, so that it does not race with the write of
+            // the memory model itself: the program waits for the word to go
+            // back to zero before it sends the next one.
+            if (th_pending)
+                u_mem.mem[(tohost_addr - MEM_BASE) >> 3] <= 64'd0;
 
             if (trap_valid) begin
                 seen_trap       <= 1'b1;

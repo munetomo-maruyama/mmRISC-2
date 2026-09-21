@@ -30,7 +30,9 @@ module CPU_CORE
         parameter logic [63:0] RESET_VECTOR = 64'h0000_0000_8000_0000,
         parameter logic [63:0] HART_ID      = 64'd0,
         parameter int          PQ_DEPTH     = 16,     // parcels in the fetch queue
-        parameter int          PMP_ENTRIES  = 16      // 0 removes PMP
+        parameter int          PMP_ENTRIES  = 16,     // 0 removes PMP
+        parameter int          ITLB_ENTRIES = 16,
+        parameter int          DTLB_ENTRIES = 16
     )
     (
         input  logic                    clk,
@@ -111,7 +113,7 @@ module CPU_CORE
     //=================================================================
     // ID : fetch queue, decoder, register file
     //=================================================================
-    logic        fq_valid, fq_ready, fq_is_rvc;
+    logic        fq_valid, fq_ready, fq_is_rvc, fq_fault_hi;
     logic [1:0]  fq_fault;
     logic [63:0] fq_pc;
 
@@ -122,6 +124,17 @@ module CPU_CORE
     logic        d_tr_req, d_tr_ready;
     logic [63:0] d_tr_paddr;
     logic [1:0]  d_tr_fault;
+
+    // the data cache port, shared between the load store unit and the walker
+    logic                   lsu_idle, ptw_active;
+    logic                   lsu_d_req_valid, lsu_d_req_ready;
+    logic [PADDR_WIDTH-1:0] lsu_d_req_addr, lsu_d_req_paddr;
+    logic [1:0]             lsu_d_req_size;
+    logic [3:0]             lsu_d_req_cmd;
+    logic [63:0]            lsu_d_req_wdata;
+    logic                   lsu_d_resp_valid;
+    logic                   ptw_req_valid, ptw_req_ready, ptw_resp_valid;
+    logic [63:0]            ptw_req_addr, ptw_req_paddr;
     logic [31:0] fq_insn;          // raw, 16 bit in the low half when compressed
 
     logic        redirect_valid;
@@ -153,7 +166,8 @@ module CPU_CORE
             .fq_pc          (fq_pc),
             .fq_insn        (fq_insn),
             .fq_is_rvc      (fq_is_rvc),
-            .fq_fault       (fq_fault)
+            .fq_fault       (fq_fault),
+            .fq_fault_hi    (fq_fault_hi)
         );
 
 
@@ -695,7 +709,9 @@ module CPU_CORE
     //=================================================================
     // the MMU
     //=================================================================
-    CORE_MMU #(.PMP_ENTRIES(PMP_ENTRIES)) u_mmu
+    CORE_MMU #(.PMP_ENTRIES  (PMP_ENTRIES),
+               .ITLB_ENTRIES (ITLB_ENTRIES),
+               .DTLB_ENTRIES (DTLB_ENTRIES)) u_mmu
         (
             .clk          (clk),
             .rst_n        (rst_n),
@@ -722,8 +738,37 @@ module CPU_CORE
             .d_fault      (d_tr_fault),
             .sfence_valid (sfence_taken),
             .sfence_vaddr (ma_sfence_vaddr),
-            .sfence_asid  (ma_sfence_asid)
+            .sfence_asid  (ma_sfence_asid),
+            .kill         (flush),
+            .lsu_idle     (lsu_idle),
+            .ptw_active   (ptw_active),
+            .m_req_valid  (ptw_req_valid),
+            .m_req_ready  (ptw_req_ready),
+            .m_req_addr   (ptw_req_addr),
+            .m_req_paddr  (ptw_req_paddr),
+            .m_resp_valid (ptw_resp_valid),
+            .m_resp_data  (d_resp_data),
+            .m_resp_error (d_resp_error)
         );
+
+    //=================================================================
+    // the data cache port : the pipeline or the page table walker
+    //
+    //   The walker is only granted the port while the load store unit has
+    //   nothing in flight, and it keeps it until its read has come back, so
+    //   there is never one access of each in the cache at the same time.
+    //=================================================================
+    assign d_req_valid  = ptw_active ? ptw_req_valid : lsu_d_req_valid;
+    assign d_req_addr   = ptw_active ? ptw_req_addr[PADDR_WIDTH-1:0]  : lsu_d_req_addr;
+    assign d_req_paddr  = ptw_active ? ptw_req_paddr[PADDR_WIDTH-1:0] : lsu_d_req_paddr;
+    assign d_req_size   = ptw_active ? 2'd3  : lsu_d_req_size;   // eight bytes
+    assign d_req_cmd    = ptw_active ? 4'd0  : lsu_d_req_cmd;    // a plain load
+    assign d_req_wdata  = ptw_active ? 64'd0 : lsu_d_req_wdata;
+
+    assign ptw_req_ready   = ptw_active & d_req_ready;
+    assign ptw_resp_valid  = ptw_active & d_resp_valid;
+    assign lsu_d_req_ready = ~ptw_active & d_req_ready;
+    assign lsu_d_resp_valid= ~ptw_active & d_resp_valid;
 
     //=================================================================
     // load / store unit
@@ -749,14 +794,15 @@ module CPU_CORE
                                        // a memory access moves to MA in the
                                        // cycle it is issued, and the younger
                                        // instructions are killed before EX
-            .d_req_valid  (d_req_valid),
-            .d_req_ready  (d_req_ready),
-            .d_req_addr   (d_req_addr),
-            .d_req_paddr  (d_req_paddr),
-            .d_req_size   (d_req_size),
-            .d_req_cmd    (d_req_cmd),
-            .d_req_wdata  (d_req_wdata),
-            .d_resp_valid (d_resp_valid),
+            .idle         (lsu_idle),
+            .d_req_valid  (lsu_d_req_valid),
+            .d_req_ready  (lsu_d_req_ready),
+            .d_req_addr   (lsu_d_req_addr),
+            .d_req_paddr  (lsu_d_req_paddr),
+            .d_req_size   (lsu_d_req_size),
+            .d_req_cmd    (lsu_d_req_cmd),
+            .d_req_wdata  (lsu_d_req_wdata),
+            .d_resp_valid (lsu_d_resp_valid),
             .d_resp_data  (d_resp_data),
             .d_resp_error (d_resp_error)
         );
@@ -805,7 +851,8 @@ module CPU_CORE
     //=================================================================
     // pipeline control
     //=================================================================
-    assign ex_is_mem     = ex_valid & (ex_is_load | ex_is_store) & ~ex_exc;
+    assign ex_is_mem     = ex_valid & (ex_is_load | ex_is_store) & ~ex_exc
+                                    & d_tr_ready;
     // a memory access must not be started when the instruction in front of it
     // traps, because the cache cannot take the write back
     assign lsu_req_valid = ex_is_mem & ~stall_ma & ~flush;
@@ -898,7 +945,10 @@ module CPU_CORE
             end else if (fq_fault != 2'd0) begin
                 id_exc       = 1'b1;
                 id_exc_cause = (fq_fault == 2'd2) ? EXC_IPAGE : EXC_IFAULT;
-                id_exc_tval  = fq_pc;
+                // mepc is the instruction, but mtval is the address that
+                // could not be fetched, which is the second half when the
+                // instruction lies across a page boundary
+                id_exc_tval  = fq_pc + (fq_fault_hi ? 64'd2 : 64'd0);
             end else if (dec_illegal || (fq_is_rvc && decomp_illegal) ||
                          (dec_is_fp & fp_off) ||
                          (dec_is_csr & csr_is_fp & fp_off) ||

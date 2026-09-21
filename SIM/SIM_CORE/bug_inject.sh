@@ -12,9 +12,8 @@
 # Not listed, because they cannot change the behaviour of this bench:
 #   - the guards against x0 in CORE_RF (the read side and the write side each
 #     make the other one invisible)
-#   - i_req_paddr / d_req_paddr, which the memory model ignores (it answers
-#     from the virtual address; the two address ports are exercised in
-#     SIM_CACHE section 15)
+#   - the write back path of the data cache, which this bench has no model of
+#     (it is exercised in SIM_CACHE)
 #   - the inside of MMU_PMP, which has its own bench and its own campaign in
 #     SIM_MMU; what is listed here is the way the core uses it
 #   - a redirect issued while EX is stalled: the front end is redirected to
@@ -23,6 +22,14 @@
 cd "$(dirname "$0")"
 WORK=bug_work
 mkdir -p $WORK
+
+# built by run_riscv_tests.sh -v; without it the campaign still runs, but the
+# mutations that only the virtual memory environment can see are not covered
+VTEST=rvtests/rv64ui-v-add
+VTOHOST=$(/opt/riscv/bin/riscv64-unknown-elf-nm $VTEST 2>/dev/null | awk '$3=="tohost"{print $1}')
+if [ ! -f $VTEST.hex ]; then
+    echo "note: $VTEST.hex is missing; run ./run_riscv_tests.sh -v rv64ui first"
+fi
 
 # -j 2 (not -j 0): four mutations are built in parallel
 VFLAGS="--binary --timing -j 2 --top-module tb_CORE -Wno-fatal"
@@ -88,7 +95,8 @@ MUTATIONS=(
 "43#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                                       dec_is_fence_i) \& pipe_busy)/                                       dec_is_fence_i) \& 1'b0)/#core: a CSR access is issued into a pipeline that is not empty"
 "44#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/    assign wfi_wait    = fq_valid \& dec_is_wfi \& ~irq_any;/    assign wfi_wait    = 1'b0;/#core: WFI does not wait"
 "45#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/            2'd3:    misaligned = |mem_addr\[2:0\];/            2'd3:    misaligned = 1'b0;/#core: a misaligned double word is not detected"
-"46#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign ex_is_mem     = ex_valid \& (ex_is_load | ex_is_store) \& ~ex_exc;/assign ex_is_mem     = ex_valid \& (ex_is_load | ex_is_store);/#core: an instruction that trapped still touches memory"
+"46#CPU_CORE/CPU_CORE/CPU_CORE.sv#s+assign ex_is_mem     = ex_valid \& (ex_is_load . ex_is_store) \& ~ex_exc+assign ex_is_mem     = ex_valid \& (ex_is_load | ex_is_store)+#core: an instruction that trapped still touches memory"
+"146#CPU_CORE/CPU_CORE/CPU_CORE.sv#s+                                    \& d_tr_ready;+                                    ;+#core: an access is issued before its address is translated"
 "47#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign trap_epc_c   = ma_pc;/assign trap_epc_c   = ma_pc + 64'd4;/#core: mepc points behind the instruction that trapped"
 "48#CPU_CORE/CPU_CORE/CPU_CORE.sv#s|                                             : {32'd0, ex_insn};|                                             : 64'd0;|#core: mtval of an illegal CSR access is empty"
 "49#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/csr_wr = (funct3\[1:0\] == 2'b01) || (rs1 != 5'd0);/csr_wr = 1'b1;/#decoder: CSRRS with x0 writes the CSR"
@@ -119,9 +127,9 @@ MUTATIONS=(
 "74#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign fq_is_rvc = (p0\[1:0\] != 2'b11);/assign fq_is_rvc = 1'b0;/#IFU: every instruction is taken to be 32 bit wide"
 "75#CPU_CORE/CORE_EXU/CORE_EXU.sv#s/assign link_pc  = pc + (is_rvc ? 64'd2 : 64'd4);/assign link_pc  = pc + 64'd4;/#EXU: the link address of a compressed jump is four bytes on"
 "76#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/                mepc         <= {trap_epc\[63:1\], 1'b0};/                mepc         <= {trap_epc[63:2], 2'b00};/#CSR: mepc drops bit 1, which is wrong with the C extension"
-"91#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|assign d_fault = (d_req \& d_pmp_fail) ? FAULT_ACC : FAULT_NONE;|assign d_fault = FAULT_NONE;|#MMU: a load or store is never refused"
-"92#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|assign i_fault = (i_req \& i_pmp_fail) ? FAULT_ACC : FAULT_NONE;|assign i_fault = FAULT_NONE;|#MMU: a fetch is never refused"
-"93#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|assign d_priv = mstatus_mprv ? mstatus_mpp : priv;|assign d_priv = priv;|#MMU: MPRV is ignored"
+"91#CPU_MMU/CORE_MMU/CORE_MMU.sv#s+end else if (d_pmp_fail) begin+end else if (1'b0) begin+#MMU: a load or store is never refused by the protection"
+"92#CPU_MMU/CORE_MMU/CORE_MMU.sv#s+end else if (i_pmp_fail) begin+end else if (1'b0) begin+#MMU: a fetch is never refused by the protection"
+"93#CPU_MMU/CORE_MMU/CORE_MMU.sv#s+if (lsu_idle \&\& ptw_need \&\& !kill) begin+if (ptw_need \&\& !kill) begin+#MMU: the walker takes the cache port while the pipeline is using it"
 "94#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|.is_exec  (1'b1),|.is_exec  (1'b0),|#MMU: a fetch is checked against no permission at all"
 "95#CPU_CORE/CPU_CORE/CPU_CORE.sv#s|id_exc_cause = EXC_ECALL_U + {3'd0, priv};|id_exc_cause = 5'd11;|#core: ECALL always reports machine mode"
 "96#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|assign trap_to_s = deleg \& (priv_r != PRIV_M);|assign trap_to_s = 1'b0;|#CSR: nothing is ever delegated"
@@ -133,6 +141,27 @@ MUTATIONS=(
 "102#CPU_CORE/CPU_CORE/CPU_CORE.sv#s|(dec_is_sfence \& ((priv == PRIV_U) . ((priv == PRIV_S) \& st_tvm)))|1'b0|#core: TVM does not catch SFENCE.VMA"
 "103#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|assign s_enabled   = (priv_r == PRIV_U) . ((priv_r == PRIV_S) \& mstatus_sie);|assign s_enabled   = mstatus_sie;|#CSR: a supervisor interrupt in user mode needs SIE"
 
+"110#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|assign d_u_ok    = (d_priv == PRIV_U) ? d_tperm\[4\]|assign d_u_ok    = (d_priv == PRIV_U) ? 1'b1|#MMU: user mode may use a supervisor page"
+"111#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|: (~d_tperm\[4\] . mstatus_sum);|: 1'b1;|#MMU: the supervisor may use a user page without SUM"
+"112#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|assign d_perm_ok = d_u_ok \& d_tperm\[6\]|assign d_perm_ok = d_u_ok \& 1'b1|#MMU: the accessed bit is not checked"
+"113#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|(d_is_store ? (d_tperm\[2\] \& d_tperm\[7\]) : 1'b1)|(d_is_store ? d_tperm[7] : 1'b1)|#MMU: a store does not need write permission"
+"114#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|(d_is_store ? (d_tperm\[2\] \& d_tperm\[7\]) : 1'b1)|(d_is_store ? d_tperm[2] : 1'b1)|#MMU: a store does not need the dirty bit"
+"115#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|assign d_rd_ok   = d_tperm\[1\] . (mstatus_mxr \& d_tperm\[3\]);|assign d_rd_ok   = d_tperm[1] \| d_tperm[3];|#MMU: an execute only page is readable without MXR"
+"116#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|assign i_perm_ok = i_tperm\[3\] \& i_tperm\[6\]|assign i_perm_ok = i_tperm[6]|#MMU: a page without execute permission may be executed"
+"117#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|2'd1:    merge_pa = {8'd0, ppn_in\[43:9\],  va\[20:0\]};   // 2M|2'd1:    merge_pa = {8'd0, ppn_in, va[11:0]};|#MMU: a two megabyte page is put together like a small one"
+"118#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|2'd2:    merge_pa = {8'd0, ppn_in\[43:18\], va\[29:0\]};   // 1G|2'd2:    merge_pa = {8'd0, ppn_in, va[11:0]};|#MMU: a gigabyte page is put together like a small one"
+"119#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|assign d_va_ok = (d_vaddr\[63:39\] == {25{d_vaddr\[38\]}});|assign d_va_ok = 1'b1;|#MMU: a virtual address that is not sign extended is accepted"
+"120#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|assign i_trans = sv39 \& (priv   != PRIV_M);|assign i_trans = sv39;|#MMU: machine mode fetches are translated too"
+"121#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|assign d_priv  = mstatus_mprv ? mstatus_mpp : priv;|assign d_priv  = priv;|#MMU: MPRV is ignored"
+"122#CPU_MMU/MMU_TLB/MMU_TLB.sv#s|default: vpn_match = (a == b);                 // 4K|default: vpn_match = (a[26:9] == b[26:9]);|#TLB: a four kilobyte entry compares too few bits and aliases"
+"123#CPU_MMU/MMU_TLB/MMU_TLB.sv#s|inv_hit\[i\] = (inv_all_addr ..|inv_hit[i] = (1'b0 \&\&|#TLB: SFENCE.VMA with an address invalidates nothing"
+"124#CPU_MMU/MMU_TLB/MMU_TLB.sv#s|if (inv_hit\[i\]) e_valid\[i\] <= 1'b0;|if (1'b0) e_valid[i] <= 1'b0;|#TLB: SFENCE.VMA invalidates nothing at all"
+"125#CPU_MMU/MMU_PTW/MMU_PTW.sv#s|assign pte_bad  = ~pte_v .|assign pte_bad  = 1'b0 \&|#PTW: an entry that is not valid is walked anyway"
+"126#CPU_MMU/MMU_PTW/MMU_PTW.sv#s|2'd1:    vpn_sel = vpn_r\[17:9\];|2'd1:    vpn_sel = vpn_r[8:0];|#PTW: the index of the middle level is taken from the wrong bits"
+"127#CPU_MMU/MMU_PTW/MMU_PTW.sv#s+2'd2:    misaligned = .pte_ppn\[17:0\];+2'd2:    misaligned = 1'b0;+#PTW: a gigabyte page need not be aligned"
+"128#CPU_MMU/MMU_PTW/MMU_PTW.sv#s+2'd1:    misaligned = .pte_ppn\[8:0\];+2'd1:    misaligned = 1'b0;+#PTW: a two megabyte page need not be aligned"
+"129#CPU_MMU/MMU_PTW/MMU_PTW.sv#s|assign pte_leaf = pte_r . pte_x;|assign pte_leaf = pte_r;|#PTW: a page that may only be executed is not a leaf"
+"130#CPU_MMU/MMU_PTW/MMU_PTW.sv#s|assign m_req_addr  = {8'd0, table_ppn, 12'd0} . {52'd0, vpn_sel, 3'd0};|assign m_req_addr  = {8'd0, table_ppn, 12'd0};|#PTW: every entry of a table is read as the first one"
 )
 
 # every mutation is run without and with back pressure on both cache ports
@@ -150,6 +179,7 @@ run_one() {
     fi
     local R=$d/CPU/CPU_CORE
     local SRCS="$d/CPU/CPU_MMU/MMU_PMP/MMU_PMP.sv \
+$d/CPU/CPU_MMU/MMU_TLB/MMU_TLB.sv $d/CPU/CPU_MMU/MMU_PTW/MMU_PTW.sv \
 $d/CPU/CPU_MMU/CORE_MMU/CORE_MMU.sv \
 $R/CORE_DEC/CORE_DEC.sv $R/CORE_DECOMP/CORE_DECOMP.sv $R/CORE_CSR/CORE_CSR.sv \
 $R/CORE_RF/CORE_RF.sv \
@@ -172,6 +202,17 @@ CORE_MEM_MODEL.sv tb_CORE.sv"
             timeout 300 ./$d/obj/Vtb_CORE +hex=tests/$t.hex +name=$t $mode > $d/$t.$m.log 2>&1
             if grep -q ": PASS" $d/$t.$m.log; then passes=$((passes+1)); else fails=$((fails+1)); fi
         done
+        # One test out of the virtual memory environment. The tests above all
+        # run out of a single gigabyte page, so their instruction TLB never
+        # misses while a load is in the cache; this one is mapped four
+        # kilobytes at a time and does that all the time, which is the only
+        # way the arbitration of the cache port between the pipeline and the
+        # page table walker is exercised.
+        if [ -f $VTEST.hex ]; then
+            timeout 300 ./$d/obj/Vtb_CORE +hex=$VTEST.hex +name=vtest \
+                +tohost=$VTOHOST +maxcycles=3000000 $mode > $d/vtest.$m.log 2>&1
+            if grep -q ": PASS" $d/vtest.$m.log; then passes=$((passes+1)); else fails=$((fails+1)); fi
+        fi
     done
     if [ $fails -eq 0 ]; then
         echo "M$id [NOT DETECTED] $desc"

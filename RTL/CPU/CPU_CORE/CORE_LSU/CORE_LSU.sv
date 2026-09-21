@@ -45,6 +45,10 @@ module CORE_LSU
         // flush (exception / redirect while an access is outstanding)
         input  logic                    kill,
 
+        // nothing of this unit is in the cache : the page table walker may
+        // borrow the port
+        output logic                    idle,
+
         // data cache port
         output logic                    d_req_valid,
         input  logic                    d_req_ready,
@@ -59,6 +63,9 @@ module CORE_LSU
     );
 
     logic        busy;            // an access is in the cache
+
+    // an access that is accepted this cycle counts as in flight already
+    assign idle = ~busy & ~req_accept;
     logic [1:0]  size_r;
     logic        signed_r;
 

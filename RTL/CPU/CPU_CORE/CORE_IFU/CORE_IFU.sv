@@ -69,7 +69,8 @@ module CORE_IFU
         output logic [63:0]             fq_pc,
         output logic [31:0]             fq_insn,     // raw; 16 bit in the low half
         output logic                    fq_is_rvc,
-        output logic [1:0]              fq_fault
+        output logic [1:0]              fq_fault,
+        output logic                    fq_fault_hi  // in the second parcel
     );
 
     localparam int OS_DEPTH = 4;                  // outstanding requests
@@ -137,9 +138,12 @@ module CORE_IFU
     assign fq_valid  = (pq_count != '0) &&
                        (fq_is_rvc || (pq_count >= (PQ_BITS+1)'(2)));
     assign fq_insn   = fq_is_rvc ? {16'd0, p0} : {p1, p0};
-    // a 32 bit instruction across two words takes the fault of whichever
-    // half has one
-    assign fq_fault  = fq_is_rvc ? e0 : ((e0 != 2'd0) ? e0 : e1);
+    // A 32 bit instruction across two pages takes the fault of whichever
+    // half has one. Which half it was has to be passed on: the exception
+    // reports the address that faulted, which is two bytes on when only the
+    // second half did.
+    assign fq_fault    = fq_is_rvc ? e0 : ((e0 != 2'd0) ? e0 : e1);
+    assign fq_fault_hi = ~fq_is_rvc & (e0 == 2'd0) & (e1 != 2'd0);
     assign fq_pc     = head_pc;
     assign pop_q     = fq_valid & fq_ready;
 

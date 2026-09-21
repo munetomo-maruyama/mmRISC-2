@@ -16,6 +16,13 @@
 //   the system looks like: the CLINT of the core and one register of the test
 //   bench that drives the external interrupt line.
 //
+//   The port presents the virtual address with the request and the physical
+//   one in the cycle after the request was taken (CPU_CACHE_SPEC.md 5.6).
+//   This model does what the cache does with that: it takes the request into
+//   a register and resolves it from the physical address one cycle later.
+//   Without it a test that turns the MMU on would look for its data at the
+//   virtual address.
+//
 //   +istall=<n> / +dstall=<n> hold the ready line of the port low in about
 //   n percent of the cycles, which exercises the back pressure paths of the
 //   core. The data port also checks the rule of M1 that the core keeps at
@@ -43,6 +50,7 @@ module CORE_MEM_MODEL
         input  logic                    i_req_valid,
         output logic                    i_req_ready,
         input  logic [PADDR_WIDTH-1:0]  i_req_addr,
+        input  logic [PADDR_WIDTH-1:0]  i_req_paddr,
         // like the instruction cache: a kill drops every answer that is in
         // flight, nothing is returned for those requests
         input  logic                    i_kill,
@@ -54,6 +62,7 @@ module CORE_MEM_MODEL
         input  logic                    d_req_valid,
         output logic                    d_req_ready,
         input  logic [PADDR_WIDTH-1:0]  d_req_addr,
+        input  logic [PADDR_WIDTH-1:0]  d_req_paddr,
         input  logic [1:0]              d_req_size,
         input  logic [3:0]              d_req_cmd,
         input  logic [63:0]             d_req_wdata,
@@ -236,6 +245,45 @@ module CORE_MEM_MODEL
         end
     end
 
+    //-----------------------------------------------------------------
+    // stage 1 : the request, and the address the cache would use
+    //
+    //   Only the page offset is taken from the virtual address, the rest
+    //   from the physical one, which is what DCACHE builds s1_paddr from.
+    //-----------------------------------------------------------------
+    logic                   s1i_valid;
+    logic [PADDR_WIDTH-1:0] s1i_vaddr, s1i_addr;
+    logic                   s1d_valid;
+    logic [PADDR_WIDTH-1:0] s1d_vaddr, s1d_addr;
+    logic [1:0]             s1d_size;
+    logic [3:0]             s1d_cmd;
+    logic [63:0]            s1d_wdata;
+
+    assign s1i_addr = {i_req_paddr[PADDR_WIDTH-1:12], s1i_vaddr[11:0]};
+    assign s1d_addr = {d_req_paddr[PADDR_WIDTH-1:12], s1d_vaddr[11:0]};
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            s1i_valid <= 1'b0;
+            s1d_valid <= 1'b0;
+            s1i_vaddr <= '0;
+            s1d_vaddr <= '0;
+            s1d_size  <= 2'd0;
+            s1d_cmd   <= 4'd0;
+            s1d_wdata <= 64'd0;
+        end else begin
+            s1i_valid <= i_req_valid & i_req_ready & ~i_kill;
+            if (i_req_valid & i_req_ready) s1i_vaddr <= i_req_addr;
+            s1d_valid <= d_req_valid & d_req_ready;
+            if (d_req_valid & d_req_ready) begin
+                s1d_vaddr <= d_req_addr;
+                s1d_size  <= d_req_size;
+                s1d_cmd   <= d_req_cmd;
+                s1d_wdata <= d_req_wdata;
+            end
+        end
+    end
+
     logic [63:0] rd_word, wr_word;
     logic [63:0] wr_data;
     logic        sc_hit;
@@ -250,21 +298,20 @@ module CORE_MEM_MODEL
     // an access takes place this cycle
     logic       d_acc, d_is_amo, d_is_lr, d_is_sc, d_writes, d_reads;
     logic [7:0] wr_strb;
-    assign d_is_amo = (d_req_cmd >= CMD_AMO_LO) && (d_req_cmd <= CMD_AMO_HI);
-    assign d_is_lr  = (d_req_cmd == CMD_LR);
-    assign d_is_sc  = (d_req_cmd == CMD_SC);
-    assign d_acc    = d_req_valid & d_req_ready &
-                      ((d_req_cmd == CMD_LOAD) || (d_req_cmd == CMD_STORE) ||
+    assign d_is_amo = (s1d_cmd >= CMD_AMO_LO) && (s1d_cmd <= CMD_AMO_HI);
+    assign d_is_lr  = (s1d_cmd == CMD_LR);
+    assign d_is_sc  = (s1d_cmd == CMD_SC);
+    assign d_acc    = s1d_valid &
+                      ((s1d_cmd == CMD_LOAD) || (s1d_cmd == CMD_STORE) ||
                        d_is_lr || d_is_sc || d_is_amo);
-    assign d_reads  = (d_req_cmd == CMD_LOAD) || d_is_lr || d_is_amo;
-    assign d_writes = (d_req_cmd == CMD_STORE) || d_is_amo;
-    assign wr_strb = strb(d_req_addr[2:0], d_req_size);
+    assign d_reads  = (s1d_cmd == CMD_LOAD) || d_is_lr || d_is_amo;
+    assign d_writes = (s1d_cmd == CMD_STORE) || d_is_amo;
+    assign wr_strb = strb(s1d_addr[2:0], s1d_size);
 
-    // the CLINT sees the access in the cycle it is taken
-    assign clint_sel   = d_acc & in_clint(d_req_addr);
-    assign clint_we    = (d_req_cmd == CMD_STORE);
-    assign clint_addr  = d_req_addr[15:0];
-    assign clint_wdata = align_wdata(d_req_addr[2:0], d_req_wdata);
+    assign clint_sel   = d_acc & in_clint(s1d_addr);
+    assign clint_we    = (s1d_cmd == CMD_STORE);
+    assign clint_addr  = s1d_addr[15:0];
+    assign clint_wdata = align_wdata(s1d_addr[2:0], s1d_wdata);
     assign clint_wstrb = wr_strb;
 
     always_ff @(posedge clk or negedge rst_n) begin
@@ -288,10 +335,10 @@ module CORE_MEM_MODEL
                 ip_data[i]  <= ip_data[i+1];
                 ip_error[i] <= ip_error[i+1];
             end
-            ip_valid[I_LATENCY] <= i_req_valid & i_req_ready & ~i_kill;
-            ip_error[I_LATENCY] <= i_req_valid & i_req_ready & ~in_range(i_req_addr);
-            ip_data[I_LATENCY]  <= (i_req_valid & i_req_ready & in_range(i_req_addr))
-                                   ? mem[widx(i_req_addr)] : 64'd0;
+            ip_valid[I_LATENCY] <= s1i_valid & ~i_kill;
+            ip_error[I_LATENCY] <= s1i_valid & ~in_range(s1i_addr);
+            ip_data[I_LATENCY]  <= (s1i_valid & in_range(s1i_addr))
+                                   ? mem[widx(s1i_addr)] : 64'd0;
 
             //---------------------------------------------------------
             // data port
@@ -301,51 +348,52 @@ module CORE_MEM_MODEL
                 dp_data[i]  <= dp_data[i+1];
                 dp_error[i] <= dp_error[i+1];
             end
-            dp_valid[D_LATENCY] <= d_req_valid & d_req_ready;
-            dp_error[D_LATENCY] <= d_acc & ~mapped(d_req_addr);
+            dp_valid[D_LATENCY] <= s1d_valid;
+            dp_error[D_LATENCY] <= d_acc & ~mapped(s1d_addr);
             dp_data[D_LATENCY]  <= 64'd0;
 
-            if (d_acc && in_range(d_req_addr)) begin
-                rd_word  = mem[widx(d_req_addr)];
-                sc_hit   = res_valid && (res_line == lidx(d_req_addr));
+            if (d_acc && in_range(s1d_addr)) begin
+                rd_word  = mem[widx(s1d_addr)];
+                sc_hit   = res_valid && (res_line == lidx(s1d_addr));
                 wr_word  = rd_word;
                 if (d_reads)
-                    dp_data[D_LATENCY] <= extract(rd_word, d_req_addr[2:0], d_req_size);
+                    dp_data[D_LATENCY] <= extract(rd_word, s1d_addr[2:0], s1d_size);
                 if (d_is_sc)
                     dp_data[D_LATENCY] <= sc_hit ? 64'd0 : 64'd1;
 
                 if (d_writes || (d_is_sc && sc_hit)) begin
                     if (d_is_amo)
-                        wr_data = align_wdata(d_req_addr[2:0],
-                                     amo_calc(d_req_cmd, d_req_size,
-                                              extract(rd_word, d_req_addr[2:0], d_req_size),
-                                              d_req_wdata));
+                        wr_data = align_wdata(s1d_addr[2:0],
+                                     amo_calc(s1d_cmd, s1d_size,
+                                              extract(rd_word, s1d_addr[2:0], s1d_size),
+                                              s1d_wdata));
                     else
-                        wr_data = align_wdata(d_req_addr[2:0], d_req_wdata);
+                        wr_data = align_wdata(s1d_addr[2:0], s1d_wdata);
                     for (int b = 0; b < 8; b++)
                         if (wr_strb[b]) wr_word[8*b +: 8] = wr_data[8*b +: 8];
-                    mem[widx(d_req_addr)] <= wr_word;
+                    mem[widx(s1d_addr)] <= wr_word;
                 end
 
                 // the reservation, kept per line like the cache
                 if (d_is_lr) begin
                     res_valid <= 1'b1;
-                    res_line  <= lidx(d_req_addr);
+                    res_line  <= lidx(s1d_addr);
                 end else if (d_is_sc) begin
                     res_valid <= 1'b0;
                 end else if (d_writes && res_valid &&
-                             (res_line == lidx(d_req_addr))) begin
+                             (res_line == lidx(s1d_addr))) begin
                     res_valid <= 1'b0;
                 end
-            end else if (d_acc && in_clint(d_req_addr) && (d_req_cmd == CMD_LOAD)) begin
-                dp_data[D_LATENCY] <= extract(clint_rdata, d_req_addr[2:0], d_req_size);
-            end else if (d_acc && in_tbreg(d_req_addr)) begin
-                if (d_req_cmd == CMD_LOAD)
+            end else if (d_acc && in_clint(s1d_addr) && (s1d_cmd == CMD_LOAD)) begin
+                dp_data[D_LATENCY] <= extract(clint_rdata, s1d_addr[2:0], s1d_size);
+            end else if (d_acc && in_tbreg(s1d_addr)) begin
+                if (s1d_cmd == CMD_LOAD)
                     dp_data[D_LATENCY] <= extract({62'd0, irq_s_ext, irq_ext},
-                                                  d_req_addr[2:0], d_req_size);
-                else if ((d_req_cmd == CMD_STORE) && wr_strb[0])
+                                                  s1d_addr[2:0], s1d_size);
+                else if ((s1d_cmd == CMD_STORE) && wr_strb[0]) begin
                     irq_ext   <= clint_wdata[0];
                     irq_s_ext <= clint_wdata[1];
+                end
             end
         end
     end
