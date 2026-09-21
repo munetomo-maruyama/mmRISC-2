@@ -3,6 +3,8 @@ LitexRocket/
 
 # LiteX SoC build output (regenerate with LitexSystem/scripts/build_soc.sh)
 LitexSystem/build/
+LitexSystem/software/boot/*.bin
+LitexSystem/software/*.dtb
 __pycache__/
 
 # simulation build artifacts
