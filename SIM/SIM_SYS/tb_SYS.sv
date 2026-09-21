@@ -28,12 +28,21 @@
 
 `timescale 1ns/1ps
 
-module tb_SYS;
+module tb_SYS
+    #(
+        // Where the core starts. The default is main memory, which is
+        // cached. Overriding it with the peripheral window (-GRESET_ADDR)
+        // makes the core fetch its first instructions UNCACHED over
+        // AXI4-Lite, which is what the LiteX BIOS does: it runs from a ROM
+        // at 0x1000_0000, below MEM_BASE.
+        parameter logic [39:0] RESET_ADDR = 40'h00_8000_0000
+    );
 
     localparam int          SOC_ADDR_WIDTH = 40;
     localparam logic [39:0] MEM_BASE    = 40'h00_8000_0000;
     localparam int          MEM_WORDS   = 262144;             // 2 MiB
-    localparam logic [39:0] PERIPH_BASE = 40'h00_1200_0000;
+    // the peripheral window sits where LiteX puts its ROM
+    localparam logic [39:0] PERIPH_BASE = 40'h00_1000_0000;
 
     logic clk = 1'b0;
     logic rst_n, rst_dbg_n;
@@ -82,7 +91,7 @@ module tb_SYS;
             .AXI4_ADDR_WIDTH (SOC_ADDR_WIDTH),
             .AXIL_ADDR_WIDTH (SOC_ADDR_WIDTH),
             .MEM_BASE        (MEM_BASE),
-            .RESET_VECTOR    ({24'd0, MEM_BASE}),
+            .RESET_VECTOR    ({24'd0, RESET_ADDR}),
             .NUM_IRQ         (32),
             .USE_BFM         (0)
         )
@@ -240,6 +249,13 @@ module tb_SYS;
         $readmemh(hex_file, u_mem.mem);
         u_mem.stall_en = $test$plusargs("stall");
         u_per.stall_en = $test$plusargs("stall");
+        // A boot stub in the uncached window, for the run that starts
+        // there. Assembled from:
+        //     li t0, 0x80000000   ; addiw t0,zero,1 + slli t0,t0,31
+        //     jr t0
+        // Two of the three are compressed, so the run also fetches RVC
+        // parcels over AXI4-Lite.
+        u_per.mem[0] = 64'h828202fe_0010029b;
     end
 
     //=================================================================

@@ -1,0 +1,133 @@
+/* Device tree for mmRISC-2 on the Digilent Arty A7-100T.
+ *
+ * Taken from the working Rocket build of the same board and changed only
+ * where the CPU differs: the memory map, the peripherals and their
+ * interrupt numbers came out of LiteX byte for byte the same (see
+ * LitexSystem/docs/BRINGUP.md).
+ *
+ * timebase-frequency must match CLINT_TICK_DIV of the hardware: mtime
+ * counts one step every 100 cycles of the 50 MHz clock.
+ */
+/dts-v1/;
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+	compatible = "mmrisc,mmrisc-2-dev";
+	model = "mmRISC-2 on Digilent Arty A7-100T";
+	chosen {
+		bootargs = "console=liteuart earlycon=liteuart,0x12003800 swiotlb=noforce rootwait root=/dev/mmcblk0p2 rootfstype=ext4 rw";
+	};
+	L13: cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		timebase-frequency = <500000>;
+		L6: cpu@0 {
+			clock-frequency = <50000000>;
+			compatible = "mmrisc,mmrisc-2", "riscv";
+			d-cache-block-size = <64>;
+			d-cache-sets = <64>;
+			d-cache-size = <16384>;
+			d-tlb-sets = <1>;
+			d-tlb-size = <16>;
+			device_type = "cpu";
+			i-cache-block-size = <64>;
+			i-cache-sets = <64>;
+			i-cache-size = <16384>;
+			i-tlb-sets = <1>;
+			i-tlb-size = <16>;
+			mmu-type = "riscv,sv39";
+			next-level-cache = <&L8>;
+			reg = <0x0>;
+			riscv,isa = "rv64imafdc_zicsr_zifencei";
+			riscv,pmpgranularity = <4>;
+			riscv,pmpregions = <16>;
+			status = "okay";
+			tlb-split;
+			L4: interrupt-controller {
+				#interrupt-cells = <1>;
+				compatible = "riscv,cpu-intc";
+				interrupt-controller;
+			};
+		};
+	};
+	L8: memory@80000000 {
+		device_type = "memory";
+		reg = <0x80000000 0x10000000>; /* 256MB (Arty A7-100T, MT41K128M16 x2) */
+	};
+	clocks {
+		sys_clk: litex_sys_clk {
+			#clock-cells = <0>;
+			compatible = "fixed-clock";
+			clock-frequency = <50000000>;
+		};
+	};
+	vreg_mmc: vreg_mmc {
+		compatible = "regulator-fixed";
+		regulator-name = "vreg_mmc";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-always-on;
+	};
+	L12: soc {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "mmrisc,mmrisc-2-soc", "simple-bus";
+		ranges;
+		L2: clint@2000000 {
+			compatible = "riscv,clint0";
+			interrupts-extended = <&L4 3 &L4 7>;
+			reg = <0x2000000 0x10000>;
+			reg-names = "control";
+		};
+		L7: external-interrupts {
+			interrupt-parent = <&L1>;
+			interrupts = <1 2 3>;
+		};
+		L1: interrupt-controller@c000000 {
+			#interrupt-cells = <1>;
+			compatible = "riscv,plic0";
+			interrupt-controller;
+			interrupts-extended = <&L4 11 &L4 9>;
+			reg = <0xc000000 0x4000000>;
+			reg-names = "control";
+			riscv,max-priority = <7>;
+			riscv,ndev = <3>;
+		};
+		L10: rom@10000000 {
+			compatible = "sifive,rom0";
+			reg = <0x10000000 0x20000>;
+			reg-names = "mem";
+		};
+		soc_ctrl0: soc_controller@12000000 {
+			compatible = "litex,soc-controller";
+			reg = <0x12000000 0xc>;
+		};
+		liteuart0: serial@12003800 {
+			compatible = "litex,liteuart";
+			reg = <0x12003800 0x100>;
+			interrupt-parent = <&L1>;
+			interrupts = <1>;
+		};
+		mmc0: mmc@12002000 {
+			compatible = "litex,mmc";
+			reg = <0x12002000 0x1c>,
+				<0x1200201c 0x2c>,
+				<0x12002048 0x20>,
+				<0x12002068 0x20>,
+				<0x12002088 0x100>;
+			reg-names = "phy", "core", "reader", "writer", "irq";
+			clocks = <&sys_clk>;
+			vmmc-supply = <&vreg_mmc>;
+			interrupt-parent = <&L1>;
+			interrupts = <3>;
+		};
+		timer@12003000 {
+			compatible = "litex,timer";
+			reg = <0x12003000 0x20>;
+			clocks = <&sys_clk>;
+			interrupt-parent = <&L1>;
+			interrupts = <2>;
+		};
+	};
+};

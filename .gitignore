@@ -1,6 +1,10 @@
 # reference only (not pushed)
 LitexRocket/
 
+# LiteX SoC build output (regenerate with LitexSystem/scripts/build_soc.sh)
+LitexSystem/build/
+__pycache__/
+
 # simulation build artifacts
 obj_dir/
 obj_*/
