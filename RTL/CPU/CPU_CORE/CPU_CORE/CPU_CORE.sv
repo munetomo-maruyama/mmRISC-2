@@ -873,8 +873,11 @@ module CPU_CORE
     //=================================================================
     // pipeline control
     //=================================================================
-    assign ex_is_mem     = ex_valid & (ex_is_load | ex_is_store) & ~ex_exc
-                                    & d_tr_ready;
+    // fence.i goes out on the data port as well: it is the flush of the
+    // data cache, and MA waits for its answer before the instruction cache
+    // is invalidated
+    assign ex_is_mem     = ex_valid & (ex_is_load | ex_is_store | ex_is_fencei)
+                                    & ~ex_exc & d_tr_ready;
     // a memory access must not be started when the instruction in front of it
     // traps, because the cache cannot take the write back
     assign lsu_req_valid = ex_is_mem & ~stall_ma & ~flush;

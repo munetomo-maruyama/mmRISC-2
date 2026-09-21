@@ -12,8 +12,13 @@
 # Not listed, because they cannot change the behaviour of this bench:
 #   - the guards against x0 in CORE_RF (the read side and the write side each
 #     make the other one invisible)
-#   - the write back path of the data cache, which this bench has no model of
-#     (it is exercised in SIM_CACHE)
+#   - anything whose detection needs the caches to be real. The memory model
+#     here answers both ports from one flat array: there is no instruction
+#     cache to invalidate and no dirty line to write back, so a core that
+#     forgets either still passes everything below. fence.i was broken from
+#     M1 to M6 for exactly that reason and nothing here noticed. Those
+#     mutations live in SIM_SYS/bug_inject.sh, which runs the core behind
+#     CPU_CACHE.
 #   - the quality of the branch predictor beyond "it works at all". The
 #     predictor is transparent: the execute stage puts every wrong guess
 #     right, so nothing it gets wrong can change the result, only the clock.
@@ -109,8 +114,8 @@ MUTATIONS=(
 "43#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                                       dec_is_fence_i) \& pipe_busy)/                                       dec_is_fence_i) \& 1'b0)/#core: a CSR access is issued into a pipeline that is not empty"
 "44#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/    assign wfi_wait    = fq_valid \& dec_is_wfi \& ~irq_any;/    assign wfi_wait    = 1'b0;/#core: WFI does not wait"
 "45#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/            2'd3:    misaligned = |mem_addr\[2:0\];/            2'd3:    misaligned = 1'b0;/#core: a misaligned double word is not detected"
-"46#CPU_CORE/CPU_CORE/CPU_CORE.sv#s+assign ex_is_mem     = ex_valid \& (ex_is_load . ex_is_store) \& ~ex_exc+assign ex_is_mem     = ex_valid \& (ex_is_load | ex_is_store)+#core: an instruction that trapped still touches memory"
-"146#CPU_CORE/CPU_CORE/CPU_CORE.sv#s+                                    \& d_tr_ready;+                                    ;+#core: an access is issued before its address is translated"
+"46#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%                                    \& ~ex_exc \& d_tr_ready;%                                    \& d_tr_ready;%#core: an instruction that trapped still touches memory"
+"146#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%\& ~ex_exc \& d_tr_ready;%\& ~ex_exc;%#core: an access is issued before its address is translated"
 "47#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign trap_epc_c   = ma_pc;/assign trap_epc_c   = ma_pc + 64'd4;/#core: mepc points behind the instruction that trapped"
 "48#CPU_CORE/CPU_CORE/CPU_CORE.sv#s|                                             : {32'd0, ex_insn};|                                             : 64'd0;|#core: mtval of an illegal CSR access is empty"
 "49#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/csr_wr = (funct3\[1:0\] == 2'b01) || (rs1 != 5'd0);/csr_wr = 1'b1;/#decoder: CSRRS with x0 writes the CSR"
