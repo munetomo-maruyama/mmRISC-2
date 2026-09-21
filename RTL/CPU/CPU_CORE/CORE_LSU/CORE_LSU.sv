@@ -12,7 +12,9 @@
 //   of the A extension go through the same path as a load or a store; the
 //   cache does the read modify write and the reservation.
 //
-//   Misaligned accesses never reach this unit: EX turns them into a trap.
+//   Misaligned accesses never reach this unit: EX turns them into a trap,
+//   and so does an address the MMU refuses, so everything that arrives here
+//   has a physical address already.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -29,6 +31,7 @@ module CORE_LSU
         input  logic                    req_valid,     // start an access
         input  logic [3:0]              req_cmd,       // command of the cache port
         input  logic [63:0]             req_addr,
+        input  logic [63:0]             req_paddr,     // from the MMU
         input  logic [1:0]              req_size,      // 0:byte 1:half 2:word 3:double
         input  logic                    req_signed,
         input  logic [63:0]             req_wdata,
@@ -80,8 +83,9 @@ module CORE_LSU
                 busy        <= 1'b1;        // wins over the answer of this cycle
                 size_r      <= req_size;
                 signed_r    <= req_signed;
-                // no MMU yet (CPU_CACHE_SPEC.md 5.6)
-                d_req_paddr <= d_req_addr;
+                // the cache wants the tag one cycle after the request was
+                // taken (CPU_CACHE_SPEC.md 5.6)
+                d_req_paddr <= req_paddr[PADDR_WIDTH-1:0];
             end else if (d_resp_valid) begin
                 busy        <= 1'b0;
             end else if (kill) begin

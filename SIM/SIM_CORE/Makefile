@@ -18,6 +18,8 @@ TOP      := tb_CORE
 RTL_DIR  := ../../RTL
 
 RTL_SRCS := \
+	$(RTL_DIR)/CPU/CPU_MMU/MMU_PMP/MMU_PMP.sv \
+	$(RTL_DIR)/CPU/CPU_MMU/CORE_MMU/CORE_MMU.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_DEC/CORE_DEC.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_DECOMP/CORE_DECOMP.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_CSR/CORE_CSR.sv \
@@ -33,6 +35,7 @@ RTL_SRCS := \
 	$(RTL_DIR)/CPU/CPU_CLINT/CPU_CLINT.sv
 
 SIM_SRCS := CORE_MEM_MODEL.sv $(TOP).sv
+CLINT_SRCS := $(RTL_DIR)/CPU/CPU_CLINT/CPU_CLINT.sv tb_CLINT.sv
 SRCS     := $(RTL_SRCS) $(SIM_SRCS)
 
 VERILATOR       := verilator
@@ -78,7 +81,27 @@ tests/%.hex: tests/%.elf tools/bin2hex.py
 	python3 tools/bin2hex.py $(@:.hex=.bin) $@
 	$(RVOBJDUMP) -d $< > $(@:.hex=.dis)
 
-obj_dir/V$(TOP): $(SRCS)
+# The project lives on a shared folder whose file times have a resolution of
+# one second, so make cannot tell from a time stamp alone whether a source has
+# changed since the last build. Every build target therefore depends on a file
+# that holds a hash of the sources; when the hash moves, the rule throws the
+# executable away, which is what makes the build happen. Without this a run
+# can silently use the executable of the previous edit.
+.PHONY: FORCE
+
+obj_dir/.srchash: FORCE
+	@mkdir -p obj_dir
+	@h=`cat $(SRCS) | md5sum | cut -d' ' -f1`; \
+	 if [ "`cat $@ 2>/dev/null`" != "$$h" ]; then \
+	     rm -f obj_dir/V$(TOP); echo "$$h" > $@; fi
+
+obj_clint/.srchash: FORCE
+	@mkdir -p obj_clint
+	@h=`cat $(CLINT_SRCS) | md5sum | cut -d' ' -f1`; \
+	 if [ "`cat $@ 2>/dev/null`" != "$$h" ]; then \
+	     rm -f obj_clint/Vtb_CLINT; echo "$$h" > $@; fi
+
+obj_dir/V$(TOP): obj_dir/.srchash
 	$(VERILATOR) $(VERILATOR_FLAGS) $(SRCS)
 
 run: obj_dir/V$(TOP) tests/$(TEST).hex
@@ -95,7 +118,7 @@ riscv-tests: obj_dir/V$(TOP)
 
 # the multi hart register map of the CLINT cannot be reached from a program
 # on a single core, so it has a bench of its own
-obj_clint/Vtb_CLINT: $(RTL_DIR)/CPU/CPU_CLINT/CPU_CLINT.sv tb_CLINT.sv
+obj_clint/Vtb_CLINT: obj_clint/.srchash
 	$(VERILATOR) $(VERILATOR_BASE) --top-module tb_CLINT -Mdir obj_clint \
 	    $(RTL_DIR)/CPU/CPU_CLINT/CPU_CLINT.sv tb_CLINT.sv
 

@@ -12,8 +12,11 @@
 # Not listed, because they cannot change the behaviour of this bench:
 #   - the guards against x0 in CORE_RF (the read side and the write side each
 #     make the other one invisible)
-#   - i_req_paddr / d_req_paddr, which the memory model ignores (there is no
-#     MMU yet; the two address ports are exercised in SIM_CACHE section 15)
+#   - i_req_paddr / d_req_paddr, which the memory model ignores (it answers
+#     from the virtual address; the two address ports are exercised in
+#     SIM_CACHE section 15)
+#   - the inside of MMU_PMP, which has its own bench and its own campaign in
+#     SIM_MMU; what is listed here is the way the core uses it
 #   - a redirect issued while EX is stalled: the front end is redirected to
 #     the same address again when EX finally moves on
 #---------------------------------------------------------------------------
@@ -52,7 +55,7 @@ MUTATIONS=(
 "24#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ma_valid   <= 1'b0;/                ma_valid   <= ma_valid;/#core: MA is not emptied when EX has nothing to hand over"
 "25#CPU_CORE/CPU_CORE/CPU_CORE.sv#s@                wb_valid <= 1'b0;       // MA keeps its instruction : bubble@                wb_valid <= wb_valid;@#core: WB keeps its instruction while MA waits and retires it again"
 "26#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ex_valid      <= id_advance \& fq_valid \& ~redirect_valid;/                ex_valid      <= id_advance \& fq_valid;/#core: the instruction behind a taken branch is not killed"
-"27#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                id_exc_cause = EXC_ECALL_M;/                id_exc_cause = EXC_BREAK;/#core: ECALL is reported as a breakpoint"
+"27#CPU_CORE/CPU_CORE/CPU_CORE.sv#s|id_exc_cause = EXC_ECALL_U + {3'd0, priv};|id_exc_cause = EXC_BREAK;|#core: ECALL is reported as a breakpoint"
 "28#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign pop_q     = fq_valid \& fq_ready;/assign pop_q     = fq_valid;/#IFU: the fetch queue drops an instruction that ID could not take"
 "77#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                       \& ~serial_busy \& ~wfi_wait;/                       \& ~wfi_wait;/#core: the instruction behind a CSR write is decoded with the old mstatus.FS"
 "78#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign fpu_start  = fpu_active \& ~fpu_busy \& ~fpu_done \& ~flush \& ~stall_ma;/assign fpu_start  = fpu_active \& ~fpu_busy \& ~fpu_done \& ~flush;/#core: the FPU starts before the load in front of it has answered"
@@ -62,22 +65,22 @@ MUTATIONS=(
 "82#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign ma_load_data  = ma_fp_box ? {32'hFFFF_FFFF, lsu_resp_data\[31:0\]}/assign ma_load_data  = 1'b0 ? {32'hFFFF_FFFF, lsu_resp_data[31:0]}/#core: FLW does not NaN box what it loaded"
 "83#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/            .req_wdata    (ex_is_fp_store ? ex_fs2_fwd : ex_b_fwd),/            .req_wdata    (ex_b_fwd),/#core: the store data of FSD comes from the integer file"
 "84#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/            if (fflags_we) fflags <= fflags | fflags_set;/;/#CSR: fflags does not accumulate"
-"85#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/        mstatus_val\[14:13\] = mstatus_fs;      \/\/ FS/        mstatus_val[14:13] = 2'b11;/#CSR: mstatus.FS always reads as dirty"
+"85#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|        mstatus_val\[14:13\] = mstatus_fs;|        mstatus_val[14:13] = 2'b11;|#CSR: mstatus.FS always reads as dirty"
 "86#CPU_FPU/FPU_ROUND/FPU_ROUND.sv#s/            RM_RNE:  inc = guard \& (rest | lsb);/            RM_RNE:  inc = guard;/#FPU: round to nearest never breaks a tie to even"
 "87#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/        ex_rm_eff = (ex_fp_rm == 3'b111) ? frm_csr : ex_fp_rm;/        ex_rm_eff = ex_fp_rm;/#core: the dynamic rounding mode ignores frm"
 "88#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/| (fpu_active \& ~fpu_done \& ~flush);/| (1'b0);/#core: EX does not wait for the FPU"
 "89#CPU_CORE/CORE_FRF/CORE_FRF.sv#s/        rs3_data = (we \&\& (rs3 == rd)) ? rd_data : regs\[rs3\];/        rs3_data = regs[rs3];/#FRF: the third read port has no write first bypass"
 "90#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/        if      (ex_use_fs1 \&\& ma_valid \&\& ma_fp_we \&\& (ma_fp_rd == ex_fs1)) ex_fs1_fwd = ma_fp_fwd_data;/        if      (1'b0) ex_fs1_fwd = ma_fp_fwd_data;/#core: no forwarding of a floating point result from MA"
-"29#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/mstatus_val\[12:11\] = 2'b11;/mstatus_val[12:11] = 2'b00;/#CSR: mstatus.MPP is not the only legal value"
+"29#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|mstatus_val\[12:11\] = mstatus_mpp;|mstatus_val[12:11] = 2'b11;|#CSR: mstatus.MPP always reads as machine mode"
 "30#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/mstatus_mpie <= mstatus_mie;/mstatus_mpie <= 1'b0;/#CSR: a trap does not save the interrupt enable in MPIE"
 "31#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/mstatus_mie  <= mstatus_mpie;/mstatus_mie  <= 1'b0;/#CSR: MRET does not put the interrupt enable back"
 "32#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/CSR_MEPC      : mepc       <= {wr_data\[63:1\], 1'b0};/CSR_MEPC      : mepc       <= wr_data;/#CSR: mepc keeps the low bits of the written value"
-"33#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/assign trap_vector = (mtvec\[1:0\] == 2'b01) \&\& trap_int/assign trap_vector = 1'b0 \&\& trap_int/#CSR: the vectored mode of mtvec is ignored"
-"34#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/if      (irq_active\[IRQ_M_EXT\])   irq_cause = 5'(IRQ_M_EXT);/if      (irq_active[IRQ_M_TIMER]) irq_cause = 5'(IRQ_M_TIMER);/#CSR: the timer interrupt is reported before the external one"
+"33#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|assign trap_vector = (tvec_sel\[1:0\] == 2'b01) \&\& trap_int|assign trap_vector = 1'b0 \&\& trap_int|#CSR: the vectored mode of mtvec is ignored"
+"34#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|if      (irq_deliver\[IRQ_M_EXT\])   irq_cause = 5'(IRQ_M_EXT);|if      (irq_deliver[IRQ_M_TIMER]) irq_cause = 5'(IRQ_M_TIMER);|#CSR: the timer interrupt is reported before the external one"
 "35#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/assign rd_readonly = (rd_addr\[11:10\] == 2'b11);/assign rd_readonly = 1'b0;/#CSR: writing a read only CSR is allowed"
-"36#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/default       : rd_exists = 1'b0;/default       : rd_exists = 1'b1;/#CSR: a CSR that does not exist answers instead of trapping"
+"36#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|rd_exists = pmp_hit;|rd_exists = 1'b1;|#CSR: a CSR that does not exist answers instead of trapping"
 "37#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/if (instret_inc) minstret <= minstret + 64'd1;/;/#CSR: minstret does not count"
-"38#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/assign irq_req    = irq_any \& mstatus_mie;/assign irq_req    = irq_any;/#CSR: an interrupt is taken although mstatus.MIE is clear"
+"38#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|assign m_enabled   = (priv_r != PRIV_M) . mstatus_mie;|assign m_enabled   = 1'b1;|#CSR: an interrupt is taken although mstatus.MIE is clear"
 "39#CPU_CLINT/CPU_CLINT.sv#s/mtimecmp\[cmp_safe\] <= merge(mtimecmp\[cmp_safe\], wdata, wstrb);/;/#CLINT: mtimecmp cannot be written"
 "40#CPU_CLINT/CPU_CLINT.sv#s/assign irq_m_soft = msip;/assign irq_m_soft = '0;/#CLINT: the software interrupt never reaches the core"
 "41#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign lsu_req_valid = ex_is_mem \& ~stall_ma \& ~flush;/assign lsu_req_valid = ex_is_mem \& ~stall_ma;/#core: the access behind a trapping instruction is still issued"
@@ -87,9 +90,9 @@ MUTATIONS=(
 "45#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/            2'd3:    misaligned = |mem_addr\[2:0\];/            2'd3:    misaligned = 1'b0;/#core: a misaligned double word is not detected"
 "46#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign ex_is_mem     = ex_valid \& (ex_is_load | ex_is_store) \& ~ex_exc;/assign ex_is_mem     = ex_valid \& (ex_is_load | ex_is_store);/#core: an instruction that trapped still touches memory"
 "47#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign trap_epc_c   = ma_pc;/assign trap_epc_c   = ma_pc + 64'd4;/#core: mepc points behind the instruction that trapped"
-"48#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ex_exc_tval  = ex_is_rvc ? {48'd0, ex_insn\[15:0\]} : {32'd0, ex_insn};/                ex_exc_tval  = 64'd0;/#core: mtval of an illegal CSR access is empty"
+"48#CPU_CORE/CPU_CORE/CPU_CORE.sv#s|                                             : {32'd0, ex_insn};|                                             : 64'd0;|#core: mtval of an illegal CSR access is empty"
 "49#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/csr_wr = (funct3\[1:0\] == 2'b01) || (rs1 != 5'd0);/csr_wr = 1'b1;/#decoder: CSRRS with x0 writes the CSR"
-"50#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/12'h302: is_mret   = 1'b1;/12'h302: illegal   = 1'b1;/#decoder: MRET is not known"
+"50#CPU_CORE/CORE_DEC/CORE_DEC.sv#s|12'h302: begin is_mret   = 1'b1; sys_noarg = 1'b1; end|12'h302: illegal = 1'b1;|#decoder: MRET is not known"
 "51#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/OP_MULH:            begin a_signed = 1'b1; b_signed = 1'b1; end/OP_MULH:            begin a_signed = 1'b0; b_signed = 1'b0; end/#MDU: MULH multiplies unsigned"
 "52#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/prod\[127:64\] <= prod\[127:64\] - (a_neg ? b_r : 64'd0)/prod[127:64] <= prod[127:64] - (1'b0 ? b_r : 64'd0)/#MDU: the sign of the first operand is not corrected"
 "53#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/                            quo_r <= {64{1'b1}};/                            quo_r <= 64'd0;/#MDU: a division by zero answers zero"
@@ -116,6 +119,20 @@ MUTATIONS=(
 "74#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign fq_is_rvc = (p0\[1:0\] != 2'b11);/assign fq_is_rvc = 1'b0;/#IFU: every instruction is taken to be 32 bit wide"
 "75#CPU_CORE/CORE_EXU/CORE_EXU.sv#s/assign link_pc  = pc + (is_rvc ? 64'd2 : 64'd4);/assign link_pc  = pc + 64'd4;/#EXU: the link address of a compressed jump is four bytes on"
 "76#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/                mepc         <= {trap_epc\[63:1\], 1'b0};/                mepc         <= {trap_epc[63:2], 2'b00};/#CSR: mepc drops bit 1, which is wrong with the C extension"
+"91#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|assign d_fault = (d_req \& d_pmp_fail) ? FAULT_ACC : FAULT_NONE;|assign d_fault = FAULT_NONE;|#MMU: a load or store is never refused"
+"92#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|assign i_fault = (i_req \& i_pmp_fail) ? FAULT_ACC : FAULT_NONE;|assign i_fault = FAULT_NONE;|#MMU: a fetch is never refused"
+"93#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|assign d_priv = mstatus_mprv ? mstatus_mpp : priv;|assign d_priv = priv;|#MMU: MPRV is ignored"
+"94#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|.is_exec  (1'b1),|.is_exec  (1'b0),|#MMU: a fetch is checked against no permission at all"
+"95#CPU_CORE/CPU_CORE/CPU_CORE.sv#s|id_exc_cause = EXC_ECALL_U + {3'd0, priv};|id_exc_cause = 5'd11;|#core: ECALL always reports machine mode"
+"96#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|assign trap_to_s = deleg \& (priv_r != PRIV_M);|assign trap_to_s = 1'b0;|#CSR: nothing is ever delegated"
+"97#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|assign trap_to_s = deleg \& (priv_r != PRIV_M);|assign trap_to_s = deleg;|#CSR: a trap from machine mode is delegated too"
+"98#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|assign sret_target = sepc;|assign sret_target = mepc;|#CSR: SRET returns to mepc"
+"99#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|priv_r       <= mstatus_mpp;|priv_r       <= PRIV_M;|#CSR: MRET stays in machine mode"
+"100#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|if (rd_addr\[9:8\] > priv_r) rd_denied = 1'b1;|if (1'b0) rd_denied = 1'b1;|#CSR: the privilege of a CSR address is not checked"
+"101#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|mstatus_mpp  <= priv_r;|mstatus_mpp  <= PRIV_M;|#CSR: a trap records machine mode as the level it came from"
+"102#CPU_CORE/CPU_CORE/CPU_CORE.sv#s|(dec_is_sfence \& ((priv == PRIV_U) . ((priv == PRIV_S) \& st_tvm)))|1'b0|#core: TVM does not catch SFENCE.VMA"
+"103#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|assign s_enabled   = (priv_r == PRIV_U) . ((priv_r == PRIV_S) \& mstatus_sie);|assign s_enabled   = mstatus_sie;|#CSR: a supervisor interrupt in user mode needs SIE"
+
 )
 
 # every mutation is run without and with back pressure on both cache ports
@@ -132,7 +149,9 @@ run_one() {
         echo "M$id [NOT APPLIED] $desc"; return
     fi
     local R=$d/CPU/CPU_CORE
-    local SRCS="$R/CORE_DEC/CORE_DEC.sv $R/CORE_DECOMP/CORE_DECOMP.sv $R/CORE_CSR/CORE_CSR.sv \
+    local SRCS="$d/CPU/CPU_MMU/MMU_PMP/MMU_PMP.sv \
+$d/CPU/CPU_MMU/CORE_MMU/CORE_MMU.sv \
+$R/CORE_DEC/CORE_DEC.sv $R/CORE_DECOMP/CORE_DECOMP.sv $R/CORE_CSR/CORE_CSR.sv \
 $R/CORE_RF/CORE_RF.sv \
 $R/CORE_IFU/CORE_IFU.sv $R/CORE_EXU/CORE_EXU.sv $R/CORE_LSU/CORE_LSU.sv \
 $R/CORE_MDU/CORE_MDU.sv \
