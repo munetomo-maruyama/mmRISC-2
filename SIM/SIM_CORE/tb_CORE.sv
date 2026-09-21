@@ -72,7 +72,14 @@ module tb_CORE;
     logic [4:0]             trap_cause;
     logic [63:0]            trap_epc, trap_tval;
 
+    // the lines the core sees: what the bench raises by hand, or the PLIC
     logic                   irq_m_ext, irq_s_ext;
+    logic                   tb_irq_m_ext, tb_irq_s_ext;
+    logic [1:0]             plic_irq;
+    logic [31:0]            plic_src;
+
+    assign irq_m_ext = tb_irq_m_ext | plic_irq[0];
+    assign irq_s_ext = tb_irq_s_ext | plic_irq[1];
     logic [0:0]             irq_m_soft, irq_m_timer;   // one bit per hart
     logic [63:0]            mtime;
 
@@ -134,6 +141,11 @@ module tb_CORE;
     //=================================================================
     // memory model and CLINT
     //=================================================================
+    logic        plic_sel, plic_we;
+    logic [21:0] plic_addr;
+    logic [63:0] plic_wdata, plic_rdata;
+    logic [7:0]  plic_wstrb;
+
     logic        clint_sel, clint_we;
     logic [15:0] clint_addr;
     logic [63:0] clint_wdata, clint_rdata;
@@ -177,9 +189,32 @@ module tb_CORE;
             .clint_wdata  (clint_wdata),
             .clint_wstrb  (clint_wstrb),
             .clint_rdata  (clint_rdata),
-            .irq_ext      (irq_m_ext),
-            .irq_s_ext    (irq_s_ext),
+            .irq_ext      (tb_irq_m_ext),
+            .irq_s_ext    (tb_irq_s_ext),
+            .plic_sel     (plic_sel),
+            .plic_we      (plic_we),
+            .plic_addr    (plic_addr),
+            .plic_wdata   (plic_wdata),
+            .plic_wstrb   (plic_wstrb),
+            .plic_rdata   (plic_rdata),
+            .plic_src     (plic_src),
             .prot_error   (prot_error)
+        );
+
+    // context 0 is machine mode of hart 0, context 1 its supervisor mode,
+    // which is the layout the device tree of Linux describes
+    CPU_PLIC #(.SOURCES(31), .CONTEXTS(2), .PRIO_BITS(3)) u_plic
+        (
+            .clk   (clk),
+            .rst_n (rst_n),
+            .sel   (plic_sel),
+            .we    (plic_we),
+            .addr  (plic_addr),
+            .wdata (plic_wdata),
+            .wstrb (plic_wstrb),
+            .rdata (plic_rdata),
+            .src   ({plic_src[31:1], 1'b0}),
+            .irq   (plic_irq)
         );
 
     CPU_CLINT #(.NUM_HARTS(1), .TICK_DIV(1)) u_clint
