@@ -31,11 +31,10 @@ if [ ! -x $SIM ]; then echo "build the simulator first (make)"; exit 1; fi
 #                core traps on them, which the specification allows
 #                (rv64mi-p-ma_addr checks the trapping side and passes)
 #   breakpoint : wants the debug triggers (tselect / tdata*)
-#   pmpaddr    : wants PMP (M5 step 2)
 #   amocas_*   : the compare and swap of Zacas, which is not part of A
 #   dirty      : wants the MMU (M5 step 3)
 #   icache-alias : the same
-EXPECTED_FAIL="rv64ui-p-ma_data rv64mi-p-breakpoint rv64mi-p-pmpaddr \
+EXPECTED_FAIL="rv64ui-p-ma_data rv64mi-p-breakpoint \
 rv64ua-p-amocas_w rv64ua-p-amocas_d rv64ua-p-amocas_q \
 rv64si-p-dirty rv64si-p-icache-alias"
 

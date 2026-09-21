@@ -111,8 +111,17 @@ module CPU_CORE
     //=================================================================
     // ID : fetch queue, decoder, register file
     //=================================================================
-    logic        fq_valid, fq_ready, fq_error, fq_is_rvc;
+    logic        fq_valid, fq_ready, fq_is_rvc;
+    logic [1:0]  fq_fault;
     logic [63:0] fq_pc;
+
+    // to and from the MMU
+    logic        i_tr_req, i_tr_ready;
+    logic [63:0] i_tr_vaddr, i_tr_paddr;
+    logic [1:0]  i_tr_fault;
+    logic        d_tr_req, d_tr_ready;
+    logic [63:0] d_tr_paddr;
+    logic [1:0]  d_tr_fault;
     logic [31:0] fq_insn;          // raw, 16 bit in the low half when compressed
 
     logic        redirect_valid;
@@ -134,12 +143,17 @@ module CPU_CORE
             .i_kill         (i_kill),
             .redirect_valid (redirect_valid),
             .redirect_pc    (redirect_pc),
+            .tr_req         (i_tr_req),
+            .tr_vaddr       (i_tr_vaddr),
+            .tr_ready       (i_tr_ready),
+            .tr_paddr       (i_tr_paddr),
+            .tr_fault       (i_tr_fault),
             .fq_valid       (fq_valid),
             .fq_ready       (fq_ready),
             .fq_pc          (fq_pc),
             .fq_insn        (fq_insn),
             .fq_is_rvc      (fq_is_rvc),
-            .fq_error       (fq_error)
+            .fq_fault       (fq_fault)
         );
 
 
@@ -287,10 +301,17 @@ module CPU_CORE
     //   iterative unit must not start while MA is still waiting for the
     //   cache, and it has to be killed when a trap empties the pipeline.
     //=================================================================
-    logic ex_is_mem, stall_ma, stall_ex, ex_advance;
+    logic ex_is_mem, stall_ma, stall_ex, ex_advance, ex_mmu_wait;
     logic id_ready, id_advance, pipe_busy, serial_busy, wfi_wait, flush;
     logic ma_exc, trap_taken, mret_taken, sret_taken, fencei_taken, fencei_busy;
     logic sfence_taken, commit;
+
+    // the exception of the instruction in EX. `ex_exc_pre` is everything
+    // that is known before the address is translated, `ex_exc` has the
+    // fault of the translation on top of it.
+    logic        ex_exc_pre, ex_exc, ex_exc_int;
+    logic [4:0]  ex_exc_cause_pre, ex_exc_cause;
+    logic [63:0] ex_exc_tval_pre, ex_exc_tval;
 
     //=================================================================
     // EX stage registers
@@ -619,9 +640,6 @@ module CPU_CORE
     // exceptions found in EX
     //=================================================================
     logic       misaligned;
-    logic       ex_exc, ex_exc_int;
-    logic [4:0] ex_exc_cause;
-    logic [63:0] ex_exc_tval;
 
     always @(*) begin
         case (ex_mem_size)
@@ -633,27 +651,79 @@ module CPU_CORE
     end
 
     always @(*) begin
-        ex_exc       = ex_exc_r;
-        ex_exc_int   = ex_exc_int_r;
-        ex_exc_cause = ex_exc_cause_r;
-        ex_exc_tval  = ex_exc_tval_r;
+        ex_exc_pre       = ex_exc_r;
+        ex_exc_cause_pre = ex_exc_cause_r;
+        ex_exc_tval_pre  = ex_exc_tval_r;
         if (!ex_exc_r) begin
             if (ex_is_csr && (!csr_exists || csr_denied ||
                               (ex_csr_wr && csr_readonly))) begin
-                ex_exc       = 1'b1;
-                ex_exc_cause = EXC_ILLEGAL;
-                ex_exc_tval  = ex_is_rvc ? {48'd0, ex_insn[15:0]} : {32'd0, ex_insn};
+                ex_exc_pre       = 1'b1;
+                ex_exc_cause_pre = EXC_ILLEGAL;
+                ex_exc_tval_pre  = ex_is_rvc ? {48'd0, ex_insn[15:0]}
+                                             : {32'd0, ex_insn};
             end else if (take_branch && target_pc[0]) begin
-                ex_exc       = 1'b1;
-                ex_exc_cause = EXC_IADDR;
-                ex_exc_tval  = target_pc;
+                ex_exc_pre       = 1'b1;
+                ex_exc_cause_pre = EXC_IADDR;
+                ex_exc_tval_pre  = target_pc;
             end else if ((ex_is_load || ex_is_store) && misaligned) begin
-                ex_exc       = 1'b1;
-                ex_exc_cause = ex_is_store ? EXC_SADDR : EXC_LADDR;
-                ex_exc_tval  = mem_addr;
+                ex_exc_pre       = 1'b1;
+                ex_exc_cause_pre = ex_is_store ? EXC_SADDR : EXC_LADDR;
+                ex_exc_tval_pre  = mem_addr;
             end
         end
     end
+
+    // The address is only handed to the MMU when the instruction is going to
+    // use it. A misaligned access is reported as misaligned and never
+    // translated, which is the order the specification asks for.
+    assign d_tr_req = ex_valid & (ex_is_load | ex_is_store) & ~ex_exc_pre;
+
+    always @(*) begin
+        ex_exc       = ex_exc_pre;
+        ex_exc_int   = ex_exc_int_r;
+        ex_exc_cause = ex_exc_cause_pre;
+        ex_exc_tval  = ex_exc_tval_pre;
+        if (d_tr_req && (d_tr_fault != 2'd0)) begin
+            ex_exc       = 1'b1;
+            ex_exc_cause = (d_tr_fault == 2'd2)
+                         ? (ex_is_store ? EXC_SPAGE  : EXC_LPAGE)
+                         : (ex_is_store ? EXC_SFAULT : EXC_LFAULT);
+            ex_exc_tval  = mem_addr;
+        end
+    end
+
+    //=================================================================
+    // the MMU
+    //=================================================================
+    CORE_MMU #(.PMP_ENTRIES(PMP_ENTRIES)) u_mmu
+        (
+            .clk          (clk),
+            .rst_n        (rst_n),
+            .priv         (priv),
+            .satp         (satp),
+            .mstatus_sum  (st_sum),
+            .mstatus_mxr  (st_mxr),
+            .mstatus_mprv (st_mprv),
+            .mstatus_mpp  (st_mpp),
+            .pmpcfg       (pmpcfg),
+            .pmpaddr      (pmpaddr),
+            .i_req        (i_tr_req),
+            .i_vaddr      (i_tr_vaddr),
+            .i_ready      (i_tr_ready),
+            .i_paddr      (i_tr_paddr),
+            .i_fault      (i_tr_fault),
+            .d_req        (d_tr_req),
+            .d_vaddr      (mem_addr),
+            .d_size       (ex_mem_size),
+            .d_is_load    (ex_is_load),
+            .d_is_store   (ex_is_store),
+            .d_ready      (d_tr_ready),
+            .d_paddr      (d_tr_paddr),
+            .d_fault      (d_tr_fault),
+            .sfence_valid (sfence_taken),
+            .sfence_vaddr (ma_sfence_vaddr),
+            .sfence_asid  (ma_sfence_asid)
+        );
 
     //=================================================================
     // load / store unit
@@ -669,6 +739,7 @@ module CPU_CORE
             .req_addr     (mem_addr),
             .req_size     (ex_mem_size),
             .req_signed   (ex_mem_signed),
+            .req_paddr    (d_tr_paddr),
             .req_wdata    (ex_is_fp_store ? ex_fs2_fwd : ex_b_fwd),
             .req_accept   (lsu_accept),
             .resp_valid   (lsu_resp_valid),
@@ -739,7 +810,10 @@ module CPU_CORE
     // traps, because the cache cannot take the write back
     assign lsu_req_valid = ex_is_mem & ~stall_ma & ~flush;
     assign stall_ma      = ma_valid & ma_mem & ~lsu_resp_valid;
-    assign stall_ex      = stall_ma | (ex_is_mem & ~lsu_accept & ~flush)
+    // the page table is being walked : the address is not there yet
+    assign ex_mmu_wait   = d_tr_req & ~d_tr_ready & ~flush;
+    assign stall_ex      = stall_ma | ex_mmu_wait
+                                    | (ex_is_mem & ~lsu_accept & ~flush)
                                     | (mdu_active & ~mdu_done & ~flush)
                                     | (fpu_active & ~fpu_done & ~flush);
     assign ex_advance    = ~stall_ex;
@@ -821,9 +895,9 @@ module CPU_CORE
                 id_exc       = 1'b1;
                 id_exc_int   = 1'b1;
                 id_exc_cause = irq_cause;
-            end else if (fq_error) begin
+            end else if (fq_fault != 2'd0) begin
                 id_exc       = 1'b1;
-                id_exc_cause = EXC_IFAULT;
+                id_exc_cause = (fq_fault == 2'd2) ? EXC_IPAGE : EXC_IFAULT;
                 id_exc_tval  = fq_pc;
             end else if (dec_illegal || (fq_is_rvc && decomp_illegal) ||
                          (dec_is_fp & fp_off) ||

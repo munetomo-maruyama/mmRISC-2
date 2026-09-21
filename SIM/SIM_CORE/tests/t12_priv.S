@@ -263,6 +263,41 @@ in_s3:
     andi x11, x11, 2
     TEST_EQ(40, x11, 0)
 
+    //-----------------------------------------------------------------
+    // SIE only holds an interrupt back at its own level : one for
+    // supervisor mode is taken in user mode whatever sstatus.SIE says
+    //-----------------------------------------------------------------
+    csrci sstatus, 2                     // SIE = 0
+    li   x19, 0
+    la   x18, 3f                         // where the handler resumes
+    li   x17, 1                          // ... in supervisor mode
+    csrsi sip, 2                         // pending, but masked here
+    nop
+    TEST_EQ(41, x19, 0)                  // nothing happened in S
+    csrr x11, sip
+    andi x11, x11, 2
+    TEST_EQ(411, x11, 2)                 // but it is pending
+    csrr x11, sie
+    andi x11, x11, 2
+    TEST_EQ(412, x11, 2)                 // and enabled
+
+    // SRET puts SPIE back into SIE, so that one has to be clear as well
+    li   t0, (1 << 8) | (1 << 5)         // SPP = U, SPIE = 0
+    csrc sstatus, t0
+    la   t0, 4f
+    csrw sepc, t0
+    sret                                 // in U it is taken at once
+4:
+    j    fail
+3:
+    TEST_EQ(42, x19, 1)
+    li   t0, 1
+    slli t0, t0, 63
+    ori  t0, t0, 1
+    TEST_EQ_REG(43, x22, t0)
+    la   t0, 4b
+    TEST_EQ_REG(44, x20, t0)             // sepc is the instruction in U
+
     // Leave supervisor mode for the last time. ECALL from S is delegated by
     // now, so it would not reach machine mode; an illegal instruction is not
     // delegated and does.
@@ -272,6 +307,18 @@ in_s3:
     j    fail
 
 done_in_m:
+    //-----------------------------------------------------------------
+    // a trap taken in machine mode is never delegated, whatever medeleg says
+    //-----------------------------------------------------------------
+    li   t0, 1 << 2                      // illegal instruction
+    csrs medeleg, t0
+    li   x29, 0
+    li   x19, 0
+    csrr x11, 0x7C0                      // this CSR does not exist
+    TEST_EQ(45, x29, 1)                  // the machine handler ran
+    TEST_EQ(46, x19, 0)                  // and the supervisor one did not
+    TEST_EQ(47, x28, 2)
+
     la   t0, default_trap
     csrw mtvec, t0
     TEST_DONE

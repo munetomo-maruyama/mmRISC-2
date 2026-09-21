@@ -48,7 +48,21 @@ endif
 
 all: run
 
-obj_dir/V$(TOP): $(SRCS)
+# The project lives on a shared folder whose file times have a resolution of
+# one second, so make cannot tell from a time stamp alone whether a source has
+# changed since the last build. Every build target therefore depends on a file
+# that holds a hash of the sources; when the hash moves, the rule throws the
+# executable away, which is what makes the build happen. Without this a run
+# can silently use the executable of the previous edit.
+.PHONY: FORCE
+
+obj_dir/.srchash: FORCE
+	@mkdir -p obj_dir
+	@h=`cat $(SRCS) | md5sum | cut -d' ' -f1`; \
+	 if [ "`cat $@ 2>/dev/null`" != "$$h" ]; then \
+	     rm -f obj_dir/V$(TOP); echo "$$h" > $@; fi
+
+obj_dir/V$(TOP): obj_dir/.srchash
 	@test -f $(SF_LIB) || (echo "SoftFloat not built: $(SF_LIB)"; exit 1)
 	$(VERILATOR) $(VERILATOR_FLAGS) $(SRCS)
 
