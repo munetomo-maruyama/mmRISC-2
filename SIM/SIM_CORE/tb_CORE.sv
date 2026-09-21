@@ -383,6 +383,47 @@ module tb_CORE;
 
     logic [63:0] bench_v;
 
+    //=================================================================
+    // where the cycles go (+profile)
+    //
+    //   Every cycle in which nothing reaches write back is charged to one
+    //   reason, in the order below, so the parts add up to the whole.
+    //=================================================================
+    int p_total, p_retire, p_dcache, p_unit, p_mmu, p_starve, p_serial, p_other;
+
+    always @(posedge clk) begin
+        if (rst_n) begin
+            p_total <= p_total + 1;
+            if (trace_valid)                 p_retire <= p_retire + 1;
+            else if (u_core.stall_ma)        p_dcache <= p_dcache + 1;
+            else if ((u_core.mdu_active & ~u_core.mdu_done) |
+                     (u_core.fpu_active & ~u_core.fpu_done))
+                                             p_unit   <= p_unit   + 1;
+            else if (u_core.ex_mmu_wait)     p_mmu    <= p_mmu    + 1;
+            else if (~u_core.fq_valid)       p_starve <= p_starve + 1;
+            else if (~u_core.id_ready)       p_serial <= p_serial + 1;
+            else                             p_other  <= p_other  + 1;
+        end
+    end
+
+    task automatic report_profile;
+        $display("");
+        $display(" cycles %0d, retired %0d, CPI %0.2f",
+                 p_total, p_retire, real'(p_total) / real'(p_retire));
+        $display("   waiting for the data cache : %6d (%0.1f%%)",
+                 p_dcache, 100.0 * real'(p_dcache) / real'(p_total));
+        $display("   waiting for MDU or FPU     : %6d (%0.1f%%)",
+                 p_unit,   100.0 * real'(p_unit)   / real'(p_total));
+        $display("   waiting for a translation  : %6d (%0.1f%%)",
+                 p_mmu,    100.0 * real'(p_mmu)    / real'(p_total));
+        $display("   front end has nothing      : %6d (%0.1f%%)",
+                 p_starve, 100.0 * real'(p_starve) / real'(p_total));
+        $display("   serialising an instruction : %6d (%0.1f%%)",
+                 p_serial, 100.0 * real'(p_serial) / real'(p_total));
+        $display("   other bubbles              : %6d (%0.1f%%)",
+                 p_other,  100.0 * real'(p_other)  / real'(p_total));
+    endtask
+
     initial begin
         if (!$value$plusargs("maxcycles=%d", max_cycles)) max_cycles = 200000;
 
@@ -412,6 +453,7 @@ module tb_CORE;
                      test_name, tohost >> 1, tohost);
             report_trap();
         end
+        if ($test$plusargs("profile")) report_profile();
         if ($test$plusargs("bench")) begin
             // the four words a benchmark leaves at BENCH_SLOT
             for (int k = 0; k < 4; k++) begin
