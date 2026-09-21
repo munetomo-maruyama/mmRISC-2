@@ -70,7 +70,8 @@ module CORE_MEM_MODEL
         input  logic [63:0]             clint_rdata,
 
         // register of the test bench: bit 0 is the external interrupt
-        output logic                    irq_ext,
+        output logic                    irq_ext,      // bit 0 : machine
+        output logic                    irq_s_ext,    // bit 1 : supervisor
 
         // sticky : the core broke the rules of the port
         output logic                    prot_error
@@ -275,6 +276,7 @@ module CORE_MEM_MODEL
             for (int i = 0; i <= I_LATENCY; i++) ip_data[i] <= 64'd0;
             for (int i = 0; i <= D_LATENCY; i++) dp_data[i] <= 64'd0;
             irq_ext   <= 1'b0;
+            irq_s_ext <= 1'b0;
             res_valid <= 1'b0;
             res_line  <= '0;
         end else begin
@@ -339,9 +341,11 @@ module CORE_MEM_MODEL
                 dp_data[D_LATENCY] <= extract(clint_rdata, d_req_addr[2:0], d_req_size);
             end else if (d_acc && in_tbreg(d_req_addr)) begin
                 if (d_req_cmd == CMD_LOAD)
-                    dp_data[D_LATENCY] <= extract({63'd0, irq_ext}, d_req_addr[2:0], d_req_size);
+                    dp_data[D_LATENCY] <= extract({62'd0, irq_s_ext, irq_ext},
+                                                  d_req_addr[2:0], d_req_size);
                 else if ((d_req_cmd == CMD_STORE) && wr_strb[0])
-                    irq_ext <= clint_wdata[0];
+                    irq_ext   <= clint_wdata[0];
+                    irq_s_ext <= clint_wdata[1];
             end
         end
     end

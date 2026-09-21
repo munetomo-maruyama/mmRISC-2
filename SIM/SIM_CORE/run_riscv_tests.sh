@@ -13,7 +13,7 @@
 #---------------------------------------------------------------------------
 cd "$(dirname "$0")"
 RVTESTS=${RVTESTS:-$HOME/RISCV/riscv-tests}
-SETS=${@:-"rv64ui rv64um rv64ua rv64uc rv64uf rv64ud rv64mi"}
+SETS=${@:-"rv64ui rv64um rv64ua rv64uc rv64uf rv64ud rv64mi rv64si"}
 OUT=rvtests
 PREFIX=/opt/riscv/bin/riscv64-unknown-elf-
 SIM=./obj_dir/Vtb_CORE
@@ -31,10 +31,13 @@ if [ ! -x $SIM ]; then echo "build the simulator first (make)"; exit 1; fi
 #                core traps on them, which the specification allows
 #                (rv64mi-p-ma_addr checks the trapping side and passes)
 #   breakpoint : wants the debug triggers (tselect / tdata*)
-#   pmpaddr    : wants PMP, which comes with the supervisor mode (M5)
+#   pmpaddr    : wants PMP (M5 step 2)
 #   amocas_*   : the compare and swap of Zacas, which is not part of A
+#   dirty      : wants the MMU (M5 step 3)
+#   icache-alias : the same
 EXPECTED_FAIL="rv64ui-p-ma_data rv64mi-p-breakpoint rv64mi-p-pmpaddr \
-rv64ua-p-amocas_w rv64ua-p-amocas_d rv64ua-p-amocas_q"
+rv64ua-p-amocas_w rv64ua-p-amocas_d rv64ua-p-amocas_q \
+rv64si-p-dirty rv64si-p-icache-alias"
 
 mkdir -p $OUT
 pass=0; fail=0; xfail=0; failed=""
