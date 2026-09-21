@@ -32,7 +32,8 @@ module CPU_CORE
         parameter int          PQ_DEPTH     = 16,     // parcels in the fetch queue
         parameter int          PMP_ENTRIES  = 16,     // 0 removes PMP
         parameter int          ITLB_ENTRIES = 16,
-        parameter int          DTLB_ENTRIES = 16
+        parameter int          DTLB_ENTRIES = 16,
+        parameter int          BTB_ENTRIES  = 64
     )
     (
         input  logic                    clk,
@@ -115,6 +116,16 @@ module CPU_CORE
     //=================================================================
     logic        fq_valid, fq_ready, fq_is_rvc, fq_fault_hi;
     logic [1:0]  fq_fault;
+    logic        fq_pred_taken, btb_upd_valid;
+    logic [63:0] fq_pred_target;
+
+    // What the execute stage tells the branch target buffer. Declared here,
+    // above the instance that uses them, because everything they are driven
+    // from lives further down: naming those directly would leave Icarus
+    // Verilog with one bit wide implicit wires and silently truncated
+    // addresses.
+    logic [63:0] btb_upd_pc, btb_upd_target;
+    logic        btb_upd_is32, btb_upd_taken, btb_flush;
     logic [63:0] fq_pc;
 
     // to and from the MMU
@@ -141,7 +152,8 @@ module CPU_CORE
     logic [63:0] redirect_pc;
 
     CORE_IFU
-        #(.PADDR_WIDTH(PADDR_WIDTH), .RESET_VECTOR(RESET_VECTOR), .PQ_DEPTH(PQ_DEPTH))
+        #(.PADDR_WIDTH(PADDR_WIDTH), .RESET_VECTOR(RESET_VECTOR),
+          .PQ_DEPTH(PQ_DEPTH), .BTB_ENTRIES(BTB_ENTRIES))
     u_ifu
         (
             .clk            (clk),
@@ -167,7 +179,15 @@ module CPU_CORE
             .fq_insn        (fq_insn),
             .fq_is_rvc      (fq_is_rvc),
             .fq_fault       (fq_fault),
-            .fq_fault_hi    (fq_fault_hi)
+            .fq_fault_hi    (fq_fault_hi),
+            .fq_pred_taken  (fq_pred_taken),
+            .fq_pred_target (fq_pred_target),
+            .btb_upd_valid  (btb_upd_valid),
+            .btb_upd_pc     (btb_upd_pc),
+            .btb_upd_is32   (btb_upd_is32),
+            .btb_upd_target (btb_upd_target),
+            .btb_upd_taken  (btb_upd_taken),
+            .btb_flush      (btb_flush)
         );
 
 
@@ -318,7 +338,7 @@ module CPU_CORE
     logic ex_is_mem, stall_ma, stall_ex, ex_advance, ex_mmu_wait;
     logic id_ready, id_advance, pipe_busy, serial_busy, wfi_wait, flush;
     logic ma_exc, trap_taken, mret_taken, sret_taken, fencei_taken, fencei_busy;
-    logic sfence_taken, commit;
+    logic sfence_taken, commit, ex_mispredict;
 
     // the exception of the instruction in EX. `ex_exc_pre` is everything
     // that is known before the address is translated, `ex_exc` has the
@@ -358,6 +378,8 @@ module CPU_CORE
     logic [11:0] ex_csr_addr;
     logic [1:0]  ex_csr_op;
     logic        ex_is_mret, ex_is_sret, ex_is_sfence, ex_is_fencei, ex_serial;
+    logic        ex_pred_taken;
+    logic [63:0] ex_pred_target;
     logic        ex_exc_r;                 // exception seen in ID
     logic        ex_exc_int_r;
     logic [4:0]  ex_exc_cause_r;
@@ -885,17 +907,39 @@ module CPU_CORE
     assign id_advance  = ex_advance & id_ready;
     assign fq_ready    = id_advance;
 
-    // a branch or jump in EX redirects the front end; a trap and an MRET come
-    // from the commit point and win
-    assign redirect_valid = flush |
-                            (ex_valid & take_branch & ex_advance & ~ex_exc);
+    //=================================================================
+    // the front end guessed, EX knows
+    //
+    //   A redirect is only needed when the two disagree, which is the whole
+    //   point of the predictor. An instruction that is not a branch at all
+    //   but was predicted taken (an entry of the buffer that describes code
+    //   that has changed) disagrees here as well and is put right.
+    //=================================================================
+    logic [63:0] ex_seq_pc;
+    assign ex_seq_pc = ex_pc + (ex_is_rvc ? 64'd2 : 64'd4);
+
+    assign ex_mispredict = ex_valid & ~ex_exc &
+                           ((take_branch != ex_pred_taken) |
+                            (take_branch & (target_pc != ex_pred_target)));
+
+    // the buffer learns from every control transfer that gets through
+    assign btb_upd_valid  = ex_valid & ex_advance & ~ex_exc & ~flush &
+                            (ex_is_branch | ex_is_jal | ex_is_jalr);
+    assign btb_upd_pc     = ex_pc;
+    assign btb_upd_is32   = ~ex_is_rvc;
+    assign btb_upd_target = target_pc;
+    assign btb_upd_taken  = take_branch;
+    assign btb_flush      = fencei_taken | sfence_taken;
+
+    // a trap and an MRET come from the commit point and win
+    assign redirect_valid = flush | (ex_mispredict & ex_advance);
     always @(*) begin
         if      (trap_taken)   redirect_pc = trap_vector;
         else if (mret_taken)   redirect_pc = mret_target;
         else if (sret_taken)   redirect_pc = sret_target;
         else if (fencei_taken || sfence_taken)
                                redirect_pc = ma_pc + (ma_is_rvc ? 64'd2 : 64'd4);
-        else                   redirect_pc = target_pc;
+        else                   redirect_pc = take_branch ? target_pc : ex_seq_pc;
     end
 
     assign i_flush_valid = fencei_busy;
@@ -1019,6 +1063,8 @@ module CPU_CORE
             ex_csr_imm_sel<= 1'b0;
             ex_csr_uimm   <= 5'd0;
             ex_csr_wr     <= 1'b0;
+            ex_pred_taken <= 1'b0;
+            ex_pred_target<= 64'd0;
             ex_is_mret    <= 1'b0;
             ex_is_sret    <= 1'b0;
             ex_is_sfence  <= 1'b0;
@@ -1125,6 +1171,8 @@ module CPU_CORE
                 ex_csr_op     <= dec_csr_op;
                 ex_csr_imm_sel<= dec_csr_imm_sel;
                 ex_csr_wr     <= dec_csr_wr;
+                ex_pred_taken <= fq_pred_taken;
+                ex_pred_target<= fq_pred_target;
                 ex_is_mret    <= dec_is_mret;
                 ex_is_sret    <= dec_is_sret;
                 ex_is_sfence  <= dec_is_sfence;
@@ -1238,6 +1286,7 @@ module CPU_CORE
                 ex_valid   <= 1'b0;
                 ex_exc_r   <= 1'b0;
                 ex_serial  <= 1'b0;
+                ex_pred_taken <= 1'b0;
                 ma_valid   <= 1'b0;
                 ma_we_rd   <= 1'b0;
                 ma_mem     <= 1'b0;

@@ -14,6 +14,16 @@
 #     make the other one invisible)
 #   - the write back path of the data cache, which this bench has no model of
 #     (it is exercised in SIM_CACHE)
+#   - the quality of the branch predictor beyond "it works at all". The
+#     predictor is transparent: the execute stage puts every wrong guess
+#     right, so nothing it gets wrong can change the result, only the clock.
+#     What is checked here is that t16_bench still runs in BENCH_LIMIT
+#     cycles, which catches a buffer that has stopped predicting. The finer
+#     points -- comparing the tag, which branch of a word an update belongs
+#     to, the hysteresis of the counter -- cost a few percent on a workload
+#     this size, under the noise of the limit. Seeing those would need a
+#     benchmark with a code footprint larger than the buffer, which is worth
+#     building when the predictor is tuned rather than now.
 #   - the inside of MMU_PMP, which has its own bench and its own campaign in
 #     SIM_MMU; what is listed here is the way the core uses it
 #   - a redirect issued while EX is stalled: the front end is redirected to
@@ -25,6 +35,10 @@ mkdir -p $WORK
 
 # built by run_riscv_tests.sh -v; without it the campaign still runs, but the
 # mutations that only the virtual memory environment can see are not covered
+# t16_bench takes 33556 cycles as the design stands and 64087 with no
+# predictor at all; the limit sits between the two
+BENCH_LIMIT=${BENCH_LIMIT:-45000}
+
 VTEST=rvtests/rv64ui-v-add
 VTOHOST=$(/opt/riscv/bin/riscv64-unknown-elf-nm $VTEST 2>/dev/null | awk '$3=="tohost"{print $1}')
 if [ ! -f $VTEST.hex ]; then
@@ -51,7 +65,7 @@ MUTATIONS=(
 "13#CPU_CORE/CORE_LSU/CORE_LSU.sv#s/2'd1:    ext = signed_r ? {{48{d_resp_data\[15\]}}, d_resp_data\[15:0\]}/2'd1:    ext = signed_r ? {{48{d_resp_data[7]}}, d_resp_data[15:0]}/#LSU: LH sign extends from the wrong bit"
 "14#CPU_CORE/CORE_LSU/CORE_LSU.sv#s/assign d_req_cmd   = req_cmd;/assign d_req_cmd   = 4'd0;/#LSU: a store is issued as a load"
 "15#CPU_CORE/CORE_LSU/CORE_LSU.sv#s/assign req_accept  = d_req_valid \& d_req_ready;/assign req_accept  = d_req_valid;/#LSU: the access counts as issued although the cache did not take it"
-"16#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign i_kill      = redirect_valid;/assign i_kill      = 1'b0;/#IFU: the cache is not told about a redirect"
+"16#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign i_kill      = redirect_valid . self_redirect;%assign i_kill      = 1'b0;%#IFU: the cache is not told about a redirect"
 "17#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign fq_insn   = fq_is_rvc ? {16'd0, p0} : {p1, p0};/assign fq_insn   = fq_is_rvc ? {16'd0, p0} : {p0, p1};/#IFU: the two parcels of a 32 bit instruction are swapped"
 "18#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/if      (ma_valid \&\& ma_we_rd \&\& (ma_rd != 5'd0) \&\& (ma_rd == ex_rs1)) ex_a_fwd = ma_fwd_data;/if      (1'b0) ex_a_fwd = ma_fwd_data;/#core: no forwarding from MA into the first operand"
 "19#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/else if (wb_valid \&\& wb_we_rd \&\& (wb_rd != 5'd0) \&\& (wb_rd == ex_rs2)) ex_b_fwd = wb_data;/else if (1'b0) ex_b_fwd = wb_data;/#core: no forwarding from WB into the second operand"
@@ -123,7 +137,7 @@ MUTATIONS=(
 "70#CPU_CORE/CORE_DECOMP/CORE_DECOMP.sv#s/insn = i_type(imm_ci, rd, 3'b000, rd, OP_IMM32);/insn = i_type(imm_ci, rd, 3'b000, rd, OP_IMM);/#decompressor: C.ADDIW becomes a 64 bit ADDI"
 "71#CPU_CORE/CORE_DECOMP/CORE_DECOMP.sv#s/if (insn_c\[12:5\] == 8'd0) illegal = 1'b1;   \/\/ also the all zero word/;/#decompressor: the reserved encoding of C.ADDI4SPN is accepted"
 "72#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/pq_head <= pq_head + (fq_is_rvc ? PQ_BITS'(1) : PQ_BITS'(2));/pq_head <= pq_head + PQ_BITS'(1);/#IFU: a 32 bit instruction takes one parcel out of the queue"
-"73#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign push_n    = 3'd4 - {1'b0, push_pc\[2:1\]};/assign push_n    = 3'd4;/#IFU: a redirect into the middle of a word keeps the parcels in front of it"
+"73#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign keep_lo   = push_pc\[2:1\];%assign keep_lo   = 2'd0;%#IFU: a redirect into the middle of a word keeps the parcels in front of it"
 "74#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign fq_is_rvc = (p0\[1:0\] != 2'b11);/assign fq_is_rvc = 1'b0;/#IFU: every instruction is taken to be 32 bit wide"
 "75#CPU_CORE/CORE_EXU/CORE_EXU.sv#s/assign link_pc  = pc + (is_rvc ? 64'd2 : 64'd4);/assign link_pc  = pc + 64'd4;/#EXU: the link address of a compressed jump is four bytes on"
 "76#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/                mepc         <= {trap_epc\[63:1\], 1'b0};/                mepc         <= {trap_epc[63:2], 2'b00};/#CSR: mepc drops bit 1, which is wrong with the C extension"
@@ -176,6 +190,18 @@ MUTATIONS=(
 "161#CPU_PLIC/CPU_PLIC.sv#s+assign is_claim     = in_context \&\& ((int'(addr) % 32'h1000) == 4);+assign is_claim     = in_context \&\& ((int'(addr) % 32'h1000) == 0);+#PLIC: the claim register is at the wrong offset"
 "162#CPU_PLIC/CPU_PLIC.sv#s+assign ctx_ctl      = (int'(addr) - 32'h20_0000) / 32'h1000;+assign ctx_ctl      = 0;+#PLIC: every context uses the claim register of context zero"
 "163#CPU_PLIC/CPU_PLIC.sv#s+assign ctx_en       = (int'(addr) - 32'h00_2000) / 32'h80;+assign ctx_en       = 0;+#PLIC: every enable word belongs to context zero"
+"174#CPU_CORE/CORE_BTB/CORE_BTB.sv#s%assign spans   = upd_is32 \&\& (upd_off == 2'b11);%assign spans   = 1'b0;%#BTB: a 32 bit branch across two words is allocated"
+"175#CPU_CORE/CORE_BTB/CORE_BTB.sv#s%e_target\[upd_idx\] <= upd_target;%;%#BTB: the target of an entry that is hit again is not kept up to date"
+"177#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%(btb_off >= next_start);%1'b1;%#IFU: a prediction is used even when the branch is before the address jumped to"
+"178#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign straddle      = fq_have \& ~fq_is_rvc \& d0;%assign straddle      = 1'b0;%#IFU: the misfetch of a trim inside an instruction is not caught"
+"179#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign fq_pred_taken  = fq_is_rvc ? d0 : d1;%assign fq_pred_taken  = d0;%#IFU: the prediction of a 32 bit instruction is read from its first parcel"
+"180#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%pr_last  \[pr_tail\] <= btb_off + {1'b0, btb_is32};%pr_last  [pr_tail] <= btb_off;%#IFU: the trim keeps only the first half of a 32 bit branch"
+"181#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%head_pc <= fq_pred_target;%head_pc <= head_pc + 64'd4;%#IFU: the head does not follow a prediction to its target"
+"182#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%push_pc <= pred_resp ? pr_target\[pr_head\]%push_pc <= pred_resp ? 64'd0%#IFU: the push address after a prediction is wrong"
+"183#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%(take_branch \& (target_pc != ex_pred_target))%1'b0%#core: a prediction to the wrong target is not put right"
+"184#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%((take_branch != ex_pred_taken) .%(1'b0 |%#core: a branch that was predicted wrongly is not put right"
+"185#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%redirect_pc = take_branch ? target_pc : ex_seq_pc;%redirect_pc = target_pc;%#core: a wrong taken prediction does not go back to the next instruction"
+"187#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign btb_upd_is32   = ~ex_is_rvc;%assign btb_upd_is32   = 1'b0;%#core: the buffer is told every branch is compressed"
 )
 
 # every mutation is run without and with back pressure on both cache ports
@@ -197,7 +223,7 @@ $d/CPU/CPU_MMU/MMU_TLB/MMU_TLB.sv $d/CPU/CPU_MMU/MMU_PTW/MMU_PTW.sv \
 $d/CPU/CPU_MMU/CORE_MMU/CORE_MMU.sv \
 $R/CORE_DEC/CORE_DEC.sv $R/CORE_DECOMP/CORE_DECOMP.sv $R/CORE_CSR/CORE_CSR.sv \
 $R/CORE_RF/CORE_RF.sv \
-$R/CORE_IFU/CORE_IFU.sv $R/CORE_EXU/CORE_EXU.sv $R/CORE_LSU/CORE_LSU.sv \
+$R/CORE_BTB/CORE_BTB.sv $R/CORE_IFU/CORE_IFU.sv $R/CORE_EXU/CORE_EXU.sv $R/CORE_LSU/CORE_LSU.sv \
 $R/CORE_MDU/CORE_MDU.sv \
 $R/CORE_FRF/CORE_FRF.sv $d/CPU/CPU_FPU/FPU_ROUND/FPU_ROUND.sv \
 $d/CPU/CPU_FPU/CORE_FPU/CORE_FPU.sv \
@@ -229,6 +255,17 @@ CORE_MEM_MODEL.sv tb_CORE.sv"
             if grep -q ": PASS" $d/vtest.$m.log; then passes=$((passes+1)); else fails=$((fails+1)); fi
         fi
     done
+    # the clock, not the answer: a predictor that has stopped predicting
+    # still gets everything right, only slowly
+    local cyc
+    cyc=$(timeout 300 ./$d/obj/Vtb_CORE +hex=tests/t16_bench.hex +name=bench 2>&1 \
+          | grep -oE '[0-9]+ cycles' | grep -oE '[0-9]+')
+    if [ -n "$cyc" ] && [ "$cyc" -gt "$BENCH_LIMIT" ]; then
+        fails=$((fails+1))
+    else
+        passes=$((passes+1))
+    fi
+
     if [ $fails -eq 0 ]; then
         echo "M$id [NOT DETECTED] $desc"
     else
