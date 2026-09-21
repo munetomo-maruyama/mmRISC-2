@@ -51,12 +51,36 @@ _start:
     csrr x27, mscratch
     TEST_EQ(13, x27, 30)
 
-    // ---- mstatus : MPP is WARL and machine mode is the only legal value ----
-    csrw mstatus, x0
+    // ---- mstatus : MPP is WARL, 0 (U), 1 (S) and 3 (M) exist, 2 does not ----
+    li   x12, 3 << 11
+    csrc mstatus, x12                    // MPP = 0 : user
     csrr x10, mstatus
     srli x11, x10, 11
     andi x11, x11, 3
-    TEST_EQ(14, x11, 3)
+    TEST_EQ(14, x11, 0)
+
+    li   x12, 1 << 11
+    csrs mstatus, x12                    // MPP = 1 : supervisor
+    csrr x10, mstatus
+    srli x11, x10, 11
+    andi x11, x11, 3
+    TEST_EQ(140, x11, 1)
+
+    li   x12, 2 << 11
+    csrs mstatus, x12                    // MPP = 3 : machine
+    csrr x10, mstatus
+    srli x11, x10, 11
+    andi x11, x11, 3
+    TEST_EQ(141, x11, 3)
+
+    li   x12, 3 << 11
+    csrc mstatus, x12
+    li   x12, 2 << 11
+    csrs mstatus, x12                    // MPP = 2 is reserved -> 0
+    csrr x10, mstatus
+    srli x11, x10, 11
+    andi x11, x11, 3
+    TEST_EQ(142, x11, 0)
 
     li   x12, 0x88                       // MIE (3) and MPIE (7)
     csrs mstatus, x12
@@ -142,8 +166,12 @@ _start:
     TEST_EQ(29, x29, 1)
 
     li   x29, 0
-    csrr x11, 0x180                      // satp comes with the MMU (M5)
-    TEST_EQ(30, x29, 1)
+    csrr x11, 0x180                      // satp exists now (M5)
+    TEST_EQ(30, x29, 0)
+
+    li   x29, 0
+    csrr x11, 0xBC0                      // this one does not
+    TEST_EQ(301, x29, 1)
 
     li   x29, 0
     csrr x11, mscratch                   // this one exists : no trap

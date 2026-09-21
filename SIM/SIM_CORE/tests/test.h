@@ -19,6 +19,14 @@
     la   t0, default_trap;          \
     csrw mtvec, t0;
 
+// A test that leaves machine mode needs one PMP entry that lets S and U
+// reach everything; without a matching entry they get nothing (M5).
+#define INIT_PMP                    \
+    li   t0, -1;                    \
+    csrw pmpaddr0, t0;              \
+    li   t0, 0x1F;                  \
+    csrw pmpcfg0, t0;
+
 #define TEST_EQ(n, reg, value)      \
     li   gp, n;                     \
     li   t6, value;                 \

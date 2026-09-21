@@ -11,9 +11,9 @@
 //               a trap, an MRET and a CSR write happen here
 //   WB        : register write back and trace
 //
-//   M3 : RV64IMAC + Zicsr + machine mode traps. No MMU and no S / U mode yet,
-//   so mstatus.MPP is WARL with the single value 3 and there is no
-//   delegation.
+//   M5 : RV64IMAFDC + Zicsr + machine, supervisor and user mode with
+//   delegation. The privilege level lives in CORE_CSR; the pipeline reads it
+//   to decide which instructions are legal and which ECALL cause to raise.
 //
 //   Why the commit point is MA and not WB: a store hands its data to the
 //   cache in EX, so the trap of the instruction in front of it has to be
@@ -29,7 +29,8 @@ module CPU_CORE
         parameter int          PADDR_WIDTH  = 40,
         parameter logic [63:0] RESET_VECTOR = 64'h0000_0000_8000_0000,
         parameter logic [63:0] HART_ID      = 64'd0,
-        parameter int          PQ_DEPTH     = 16      // parcels in the fetch queue
+        parameter int          PQ_DEPTH     = 16,     // parcels in the fetch queue
+        parameter int          PMP_ENTRIES  = 16      // 0 removes PMP
     )
     (
         input  logic                    clk,
@@ -63,6 +64,7 @@ module CPU_CORE
         input  logic                    irq_m_soft,
         input  logic                    irq_m_timer,
         input  logic                    irq_m_ext,
+        input  logic                    irq_s_ext,
         input  logic [63:0]             mtime,
 
         // retirement trace (verification)
@@ -72,13 +74,15 @@ module CPU_CORE
         output logic                    trace_rd_we,
         output logic [4:0]              trace_rd,
         output logic [63:0]             trace_rd_data,
+        output logic [1:0]              trace_priv,
 
         // trap trace (verification)
         output logic                    trap_valid,
         output logic                    trap_is_int,
         output logic [4:0]              trap_cause,
         output logic [63:0]             trap_epc,
-        output logic [63:0]             trap_tval
+        output logic [63:0]             trap_tval,
+        output logic                    trap_to_s
     );
 
     //=================================================================
@@ -92,7 +96,17 @@ module CPU_CORE
     localparam logic [4:0] EXC_LFAULT = 5'd5;    // load access fault
     localparam logic [4:0] EXC_SADDR  = 5'd6;    // store address misaligned
     localparam logic [4:0] EXC_SFAULT = 5'd7;    // store access fault
-    localparam logic [4:0] EXC_ECALL_M= 5'd11;
+    localparam logic [4:0] EXC_ECALL_U= 5'd8;    // 8 + priv : U 8, S 9, M 11
+    localparam logic [4:0] EXC_IPAGE  = 5'd12;   // instruction page fault
+    localparam logic [4:0] EXC_LPAGE  = 5'd13;
+    localparam logic [4:0] EXC_SPAGE  = 5'd15;
+
+    //=================================================================
+    // privilege levels
+    //=================================================================
+    localparam logic [1:0] PRIV_U = 2'b00;
+    localparam logic [1:0] PRIV_S = 2'b01;
+    localparam logic [1:0] PRIV_M = 2'b11;
 
     //=================================================================
     // ID : fetch queue, decoder, register file
@@ -159,7 +173,7 @@ module CPU_CORE
     logic [1:0]  dec_mem_size;
     logic        dec_mem_signed;
     logic        dec_is_fence, dec_is_fence_i, dec_is_ecall, dec_is_ebreak;
-    logic        dec_is_mret, dec_is_wfi, dec_illegal;
+    logic        dec_is_mret, dec_is_sret, dec_is_sfence, dec_is_wfi, dec_illegal;
     logic        dec_is_fp, dec_fp_arith, dec_fp_fmt;
     logic [4:0]  dec_fp_op;
     logic [2:0]  dec_fp_rm;
@@ -200,6 +214,8 @@ module CPU_CORE
             .is_ecall    (dec_is_ecall),
             .is_ebreak   (dec_is_ebreak),
             .is_mret     (dec_is_mret),
+            .is_sret     (dec_is_sret),
+            .is_sfence   (dec_is_sfence),
             .is_wfi      (dec_is_wfi),
             .illegal     (dec_illegal),
             .is_fp         (dec_is_fp),
@@ -273,8 +289,8 @@ module CPU_CORE
     //=================================================================
     logic ex_is_mem, stall_ma, stall_ex, ex_advance;
     logic id_ready, id_advance, pipe_busy, serial_busy, wfi_wait, flush;
-    logic ma_exc, trap_taken, mret_taken, fencei_taken, fencei_busy;
-    logic commit;
+    logic ma_exc, trap_taken, mret_taken, sret_taken, fencei_taken, fencei_busy;
+    logic sfence_taken, commit;
 
     //=================================================================
     // EX stage registers
@@ -306,7 +322,7 @@ module CPU_CORE
     logic [4:0]  ex_csr_uimm;
     logic [11:0] ex_csr_addr;
     logic [1:0]  ex_csr_op;
-    logic        ex_is_mret, ex_is_fencei, ex_serial;
+    logic        ex_is_mret, ex_is_sret, ex_is_sfence, ex_is_fencei, ex_serial;
     logic        ex_exc_r;                 // exception seen in ID
     logic        ex_exc_int_r;
     logic [4:0]  ex_exc_cause_r;
@@ -319,7 +335,9 @@ module CPU_CORE
     logic [63:0] ma_pc, ma_result;
     logic [31:0] ma_insn;
     logic [4:0]  ma_rd;
-    logic        ma_is_mret, ma_is_fencei, ma_is_rvc, ma_serial;
+    logic        ma_is_mret, ma_is_sret, ma_is_sfence, ma_is_fencei;
+    logic        ma_is_rvc, ma_serial;
+    logic [63:0] ma_sfence_vaddr, ma_sfence_asid;
     logic        ma_is_fp, ma_fp_arith, ma_fp_we, ma_fp_box;
     logic [4:0]  ma_fp_rd;
     logic [4:0]  ma_fp_flags;
@@ -486,23 +504,32 @@ module CPU_CORE
     // CSR file
     //=================================================================
     logic [63:0] csr_rdata;
-    logic        csr_exists, csr_readonly;
+    logic        csr_exists, csr_readonly, csr_denied;
     logic        csr_wr_en;
     logic        trap_en, trap_int_c;
     logic [4:0]  trap_cause_c;
     logic [63:0] trap_epc_c, trap_tval_c, trap_vector;
-    logic        mret_en;
-    logic [63:0] mret_target;
+    logic        mret_en, sret_en;
+    logic [63:0] mret_target, sret_target;
     logic        irq_req, irq_any;
     logic [4:0]  irq_cause;
 
+    // privilege and translation state, read by the pipeline and the MMU
+    logic [1:0]  priv;
+    logic [63:0] satp;
+    logic        st_sum, st_mxr, st_mprv, st_tvm, st_tw, st_tsr;
+    logic [1:0]  st_mpp;
+    logic [8*PMP_ENTRIES-1:0]  pmpcfg;
+    logic [64*PMP_ENTRIES-1:0] pmpaddr;
+
     // misa : bit 0 is 'A' ... bit 8 is 'I' ... bit 12 is 'M'
-    // bit 0 'A', 2 'C', 3 'D', 5 'F', 8 'I', 12 'M'
+    // bit 0 'A', 2 'C', 3 'D', 5 'F', 8 'I', 12 'M', 18 'S', 20 'U'
     localparam logic [63:0] MISA_VAL = (64'd2 << 62) | (64'd1 << 0) | (64'd1 << 2) |
                                        (64'd1 << 3) | (64'd1 << 5) |
-                                       (64'd1 << 8) | (64'd1 << 12);
+                                       (64'd1 << 8) | (64'd1 << 12) |
+                                       (64'd1 << 18) | (64'd1 << 20);
 
-    CORE_CSR #(.HART_ID(HART_ID), .MISA(MISA_VAL)) u_csr
+    CORE_CSR #(.HART_ID(HART_ID), .MISA(MISA_VAL), .PMP_ENTRIES(PMP_ENTRIES)) u_csr
         (
             .clk         (clk),
             .rst_n       (rst_n),
@@ -510,6 +537,7 @@ module CPU_CORE
             .rd_data     (csr_rdata),
             .rd_exists   (csr_exists),
             .rd_readonly (csr_readonly),
+            .rd_denied   (csr_denied),
             .wr_en       (csr_wr_en),
             .wr_addr     (ma_csr_addr),
             .wr_data     (ma_csr_wdata),
@@ -519,15 +547,30 @@ module CPU_CORE
             .trap_epc    (trap_epc_c),
             .trap_tval   (trap_tval_c),
             .trap_vector (trap_vector),
+            .trap_to_s   (trap_to_s),
             .mret_en     (mret_en),
+            .sret_en     (sret_en),
             .mret_target (mret_target),
+            .sret_target (sret_target),
             .irq_m_soft  (irq_m_soft),
             .irq_m_timer (irq_m_timer),
             .irq_m_ext   (irq_m_ext),
+            .irq_s_ext   (irq_s_ext),
             .mtime       (mtime),
             .irq_req     (irq_req),
             .irq_cause   (irq_cause),
             .irq_any     (irq_any),
+            .priv        (priv),
+            .satp_out    (satp),
+            .mstatus_sum_out  (st_sum),
+            .mstatus_mxr_out  (st_mxr),
+            .mstatus_mprv_out (st_mprv),
+            .mstatus_mpp_out  (st_mpp),
+            .mstatus_tvm_out  (st_tvm),
+            .mstatus_tw_out   (st_tw),
+            .mstatus_tsr_out  (st_tsr),
+            .pmpcfg_out  (pmpcfg),
+            .pmpaddr_out (pmpaddr),
             .instret_inc (commit),
             .fflags_we   (commit & ma_fp_arith),
             .fflags_set  (ma_fp_flags),
@@ -595,7 +638,8 @@ module CPU_CORE
         ex_exc_cause = ex_exc_cause_r;
         ex_exc_tval  = ex_exc_tval_r;
         if (!ex_exc_r) begin
-            if (ex_is_csr && (!csr_exists || (ex_csr_wr && csr_readonly))) begin
+            if (ex_is_csr && (!csr_exists || csr_denied ||
+                              (ex_csr_wr && csr_readonly))) begin
                 ex_exc       = 1'b1;
                 ex_exc_cause = EXC_ILLEGAL;
                 ex_exc_tval  = ex_is_rvc ? {48'd0, ex_insn[15:0]} : {32'd0, ex_insn};
@@ -666,11 +710,16 @@ module CPU_CORE
 
     assign trap_taken   = ma_valid & ma_exc     & ~stall_ma;
     assign mret_taken   = ma_valid & ma_is_mret & ~stall_ma & ~trap_taken;
+    assign sret_taken   = ma_valid & ma_is_sret & ~stall_ma & ~trap_taken;
+    // SFENCE.VMA changes the translation the front end has already used, so
+    // like fence.i it refetches from the instruction behind it
+    assign sfence_taken = ma_valid & ma_is_sfence & ~stall_ma & ~trap_taken;
     // fence.i invalidates the instruction cache and refetches from the next
     // instruction; the cache does not take a request while the invalidate is
     // running, so nothing of the old content can be fetched in between
     assign fencei_taken = ma_valid & ma_is_fencei & ~stall_ma & ~trap_taken;
-    assign flush        = trap_taken | mret_taken | fencei_taken;
+    assign flush        = trap_taken | mret_taken | sret_taken |
+                          fencei_taken | sfence_taken;
     assign commit     = ma_valid & ~stall_ma & ~trap_taken;
 
     assign trap_en      = trap_taken;
@@ -679,6 +728,7 @@ module CPU_CORE
     assign trap_epc_c   = ma_pc;
     assign trap_tval_c  = ma_exc_tval;
     assign mret_en      = mret_taken;
+    assign sret_en      = sret_taken;
     assign csr_wr_en    = ma_valid & ma_csr_wr & ~stall_ma & ~trap_taken;
 
     //=================================================================
@@ -707,7 +757,8 @@ module CPU_CORE
     assign pipe_busy   = ex_valid | ma_valid | wb_valid;
     assign serial_busy = (ex_valid & ex_serial) | (ma_valid & ma_serial);
     assign wfi_wait    = fq_valid & dec_is_wfi & ~irq_any;
-    assign id_ready    = ~(fq_valid & (dec_is_csr | dec_is_mret | dec_is_fence |
+    assign id_ready    = ~(fq_valid & (dec_is_csr | dec_is_mret | dec_is_sret |
+                                       dec_is_sfence | dec_is_fence |
                                        dec_is_fence_i) & pipe_busy)
                        & ~serial_busy & ~wfi_wait;
     assign id_advance  = ex_advance & id_ready;
@@ -720,7 +771,9 @@ module CPU_CORE
     always @(*) begin
         if      (trap_taken)   redirect_pc = trap_vector;
         else if (mret_taken)   redirect_pc = mret_target;
-        else if (fencei_taken) redirect_pc = ma_pc + (ma_is_rvc ? 64'd2 : 64'd4);
+        else if (sret_taken)   redirect_pc = sret_target;
+        else if (fencei_taken || sfence_taken)
+                               redirect_pc = ma_pc + (ma_is_rvc ? 64'd2 : 64'd4);
         else                   redirect_pc = target_pc;
     end
 
@@ -731,6 +784,21 @@ module CPU_CORE
         else if (fencei_taken)   fencei_busy <= 1'b1;
         else if (i_flush_done)   fencei_busy <= 1'b0;
     end
+
+    //=================================================================
+    // instructions that the current privilege level may not execute
+    //
+    //   TSR / TVM / TW let a hypervisor (or M mode) catch the supervisor
+    //   doing these; without them the rule is simply the level of the
+    //   instruction.
+    //=================================================================
+    logic priv_bad;
+
+    assign priv_bad =
+          (dec_is_mret   & (priv != PRIV_M))
+        | (dec_is_sret   & ((priv == PRIV_U) | ((priv == PRIV_S) & st_tsr)))
+        | (dec_is_sfence & ((priv == PRIV_U) | ((priv == PRIV_S) & st_tvm)))
+        | (dec_is_wfi    & (priv != PRIV_M) & st_tw);
 
     //=================================================================
     // exceptions found in ID
@@ -760,13 +828,13 @@ module CPU_CORE
             end else if (dec_illegal || (fq_is_rvc && decomp_illegal) ||
                          (dec_is_fp & fp_off) ||
                          (dec_is_csr & csr_is_fp & fp_off) ||
-                         dec_rm_bad) begin
+                         dec_rm_bad || priv_bad) begin
                 id_exc       = 1'b1;
                 id_exc_cause = EXC_ILLEGAL;
                 id_exc_tval  = fq_is_rvc ? {48'd0, fq_insn[15:0]} : {32'd0, fq_insn};
             end else if (dec_is_ecall) begin
                 id_exc       = 1'b1;
-                id_exc_cause = EXC_ECALL_M;
+                id_exc_cause = EXC_ECALL_U + {3'd0, priv};
             end else if (dec_is_ebreak) begin
                 id_exc       = 1'b1;
                 id_exc_cause = EXC_BREAK;
@@ -828,6 +896,8 @@ module CPU_CORE
             ex_csr_uimm   <= 5'd0;
             ex_csr_wr     <= 1'b0;
             ex_is_mret    <= 1'b0;
+            ex_is_sret    <= 1'b0;
+            ex_is_sfence  <= 1'b0;
             ex_is_fencei  <= 1'b0;
             ex_serial     <= 1'b0;
             ex_exc_r      <= 1'b0;
@@ -845,7 +915,11 @@ module CPU_CORE
             ma_result     <= 64'd0;
             ma_rd         <= 5'd0;
             ma_is_mret    <= 1'b0;
+            ma_is_sret    <= 1'b0;
+            ma_is_sfence  <= 1'b0;
             ma_is_fencei  <= 1'b0;
+            ma_sfence_vaddr <= 64'd0;
+            ma_sfence_asid  <= 64'd0;
             ma_serial     <= 1'b0;
             ma_is_rvc     <= 1'b0;
             ma_csr_wr     <= 1'b0;
@@ -928,8 +1002,11 @@ module CPU_CORE
                 ex_csr_imm_sel<= dec_csr_imm_sel;
                 ex_csr_wr     <= dec_csr_wr;
                 ex_is_mret    <= dec_is_mret;
+                ex_is_sret    <= dec_is_sret;
+                ex_is_sfence  <= dec_is_sfence;
                 ex_is_fencei  <= dec_is_fence_i;
-                ex_serial     <= dec_is_csr | dec_is_mret;
+                ex_serial     <= dec_is_csr | dec_is_mret | dec_is_sret |
+                                 dec_is_sfence;
                 ex_exc_r      <= id_exc;
                 ex_exc_int_r  <= id_exc_int;
                 ex_exc_cause_r<= id_exc_cause;
@@ -960,7 +1037,13 @@ module CPU_CORE
                 ma_is_load    <= ex_is_load;
                 ma_is_store   <= ex_is_store;
                 ma_is_mret    <= ex_is_mret;
+                ma_is_sret    <= ex_is_sret;
+                ma_is_sfence  <= ex_is_sfence;
                 ma_is_fencei  <= ex_is_fencei;
+                // SFENCE.VMA rs2, rs1 : rs1 selects the address and rs2 the
+                // ASID, a zero register meaning "every one of them"
+                ma_sfence_vaddr <= (ex_rs1 == 5'd0) ? 64'd0 : ex_a_fwd;
+                ma_sfence_asid  <= (ex_rs2 == 5'd0) ? 64'd0 : ex_b_fwd;
                 ma_serial     <= ex_serial;
                 ma_is_rvc     <= ex_is_rvc;
                 ma_is_fp      <= ex_is_fp;
@@ -989,6 +1072,8 @@ module CPU_CORE
                 ma_mem     <= 1'b0;
                 ma_is_load <= 1'b0;
                 ma_is_mret <= 1'b0;
+                ma_is_sret <= 1'b0;
+                ma_is_sfence <= 1'b0;
                 ma_is_fencei <= 1'b0;
                 ma_serial  <= 1'b0;
                 ma_csr_wr  <= 1'b0;
@@ -1033,6 +1118,8 @@ module CPU_CORE
                 ma_we_rd   <= 1'b0;
                 ma_mem     <= 1'b0;
                 ma_is_mret <= 1'b0;
+                ma_is_sret <= 1'b0;
+                ma_is_sfence <= 1'b0;
                 ma_is_fencei <= 1'b0;
                 ma_serial  <= 1'b0;
                 ma_csr_wr  <= 1'b0;
@@ -1054,6 +1141,7 @@ module CPU_CORE
         trace_rd_we   = wb_we_rd & (wb_rd != 5'd0);
         trace_rd      = wb_rd;
         trace_rd_data = wb_data;
+        trace_priv    = priv;
 
         trap_valid    = trap_taken;
         trap_is_int   = ma_exc_int_r;

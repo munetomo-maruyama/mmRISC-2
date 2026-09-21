@@ -54,6 +54,8 @@ module CORE_DEC
         output logic        is_ecall,
         output logic        is_ebreak,
         output logic        is_mret,
+        output logic        is_sret,
+        output logic        is_sfence,    // SFENCE.VMA
         output logic        is_wfi,
         output logic        illegal,
 
@@ -179,6 +181,9 @@ module CORE_DEC
     assign imm_u = {{32{insn[31]}}, insn[31:12], 12'd0};
     assign imm_j = {{43{insn[31]}}, insn[31], insn[19:12], insn[20], insn[30:21], 1'b0};
 
+    // a SYSTEM instruction that takes no operands: rs1 and rd have to be zero
+    logic sys_noarg;
+
     // shift amount checks
     logic shamt64_ok, shamt32_ok;
     assign shamt64_ok = (insn[31:26] == 6'b000000) || (insn[31:26] == 6'b010000);
@@ -206,9 +211,12 @@ module CORE_DEC
         mem_signed = ~funct3[2];
         is_fence   = 1'b0;
         is_fence_i = 1'b0;
+        sys_noarg  = 1'b0;
         is_ecall   = 1'b0;
         is_ebreak  = 1'b0;
         is_mret    = 1'b0;
+        is_sret    = 1'b0;
+        is_sfence  = 1'b0;
         is_wfi     = 1'b0;
         illegal    = 1'b0;
 
@@ -577,16 +585,28 @@ module CORE_DEC
                 case (funct3)
                     3'b000: begin
                         case (insn[31:20])
-                            12'h000: is_ecall  = 1'b1;
-                            12'h001: is_ebreak = 1'b1;
-                            12'h302: is_mret   = 1'b1;
-                            12'h105: is_wfi    = 1'b1;
-                            // SRET, SFENCE.VMA and the debug return come with
-                            // the supervisor mode (M5) and the debug mode
-                            default: illegal   = 1'b1;
+                            // these take no operands at all
+                            12'h000: begin is_ecall  = 1'b1; sys_noarg = 1'b1; end
+                            12'h001: begin is_ebreak = 1'b1; sys_noarg = 1'b1; end
+                            12'h102: begin is_sret   = 1'b1; sys_noarg = 1'b1; end
+                            12'h302: begin is_mret   = 1'b1; sys_noarg = 1'b1; end
+                            12'h105: begin is_wfi    = 1'b1; sys_noarg = 1'b1; end
+                            default: begin
+                                // SFENCE.VMA rs2, rs1 : rs1 is the address and
+                                // rs2 the ASID, either of them zero meaning
+                                // "all of them". rd has to be zero.
+                                if (insn[31:25] == 7'b0001001) begin
+                                    is_sfence = 1'b1;
+                                    use_rs1   = 1'b1;
+                                    use_rs2   = 1'b1;
+                                    if (rd != 5'd0) illegal = 1'b1;
+                                end else begin
+                                    illegal = 1'b1;    // DRET comes with the
+                                end                    // debug mode
+                            end
                         endcase
-                        // the register fields of these have to be zero
-                        if ((rs1 != 5'd0) || (rd != 5'd0)) illegal = 1'b1;
+                        if (sys_noarg && ((rs1 != 5'd0) || (rd != 5'd0)))
+                            illegal = 1'b1;
                     end
                     3'b100: illegal = 1'b1;
                     default: begin                   // CSRRW/S/C and the immediate forms

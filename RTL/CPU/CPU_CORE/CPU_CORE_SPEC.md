@@ -202,22 +202,46 @@ MMU 追加時にキャッシュ側の変更は不要。
 CSR ファイルはアドレス → レジスタのテーブル駆動にして、拡張追加時に行を足す
 だけで済むようにする。未実装 CSR へのアクセスは不正命令例外。
 
-M2 で実装済み(`CORE_CSR`):
+実装済み(`CORE_CSR`)。マシンモード:
 
 | アドレス | CSR | 備考 |
 |---|---|---|
-| 0x300 | `mstatus` | MIE / MPIE のみ。MPP は WARL で 3 固定(M-mode しかない) |
-| 0x301 | `misa` | MXL=2、I。書き込みは無視 |
-| 0x304 / 0x344 | `mie` / `mip` | MSIE/MTIE/MEIE。`mip` は CLINT・PLIC が駆動する読み出し専用 |
+| 0x300 | `mstatus` | MIE/SIE/MPIE/SPIE/MPP/SPP/FS/MPRV/SUM/MXR/TVM/TW/TSR/UXL/SXL/SD |
+| 0x301 | `misa` | MXL=2、IMAFDC + S + U。書き込みは無視 |
+| 0x302 / 0x303 | `medeleg` / `mideleg` | 委譲。11 番(M からの ECALL)と予約番号は書けない |
+| 0x304 / 0x344 | `mie` / `mip` | M と S の 3 本ずつ。M の pending は CLINT・PLIC が駆動 |
 | 0x305 | `mtvec` | モード 0(direct)と 1(vectored)。予約モードは取り込まない |
-| 0x306 | `mcounteren` | S/U モード用。現状は値を保持するだけ |
-| 0x340-0x343 | `mscratch` / `mepc` / `mcause` / `mtval` | `mepc` は下位 2bit を落とす |
+| 0x306 | `mcounteren` | S/U がカウンタを読めるかどうか |
+| 0x340-0x343 | `mscratch` / `mepc` / `mcause` / `mtval` | `mepc` は下位 1bit を落とす |
+| 0x3A0 / 0x3A2 | `pmpcfg0` / `pmpcfg2` | PMP 設定、1 本に 8 エントリ |
+| 0x3B0-0x3BF | `pmpaddr0`-`15` | PMP アドレス |
 | 0xB00 / 0xB02 | `mcycle` / `minstret` | 書き込み可。書き込みはその命令の加算に優先する |
 | 0xC00 / 0xC01 / 0xC02 | `cycle` / `time` / `instret` | 読み出し専用。`time` は CLINT の `mtime` |
 | 0xF11-0xF14 | `mvendorid` / `marchid` / `mimpid` / `mhartid` | 読み出し専用 |
 
-`satp`、PMP、`medeleg`/`mideleg`、デバッグ用 CSR はまだ存在しない
-(riscv-tests の p 環境はこれらが不正命令例外になることを前提に書かれている)。
+スーパバイザモード:
+
+| アドレス | CSR | 備考 |
+|---|---|---|
+| 0x100 | `sstatus` | `mstatus` をマスクして見たもの。実体は 1 つ |
+| 0x104 / 0x144 | `sie` / `sip` | `mie`/`mip` を `mideleg` でマスクしたもの |
+| 0x105 | `stvec` | `mtvec` と同じ 2 モード |
+| 0x106 | `scounteren` | U がカウンタを読めるかどうか |
+| 0x140-0x143 | `sscratch` / `sepc` / `scause` / `stval` | |
+| 0x180 | `satp` | MODE は bare(0)と Sv39(8)のみ。それ以外の書き込みは無視 |
+
+浮動小数点: 0x001/0x002/0x003 = `fflags`/`frm`/`fcsr`(10 章)。
+デバッグ用 CSR(`dcsr`/`dpc`/`dscratch*`)はまだ無い。
+
+**アクセスの可否**は 3 つの条件で決まり、どれも不正命令例外になる:
+
+1. そのアドレスが実装されていない
+2. アドレス bit[9:8] が現在の特権より上(`rd_denied`)
+3. 書き込みなのにアドレス bit[11:10] が 11(読み出し専用)
+
+これに加えて `satp` は S モードかつ `mstatus.TVM` のとき、
+`cycle`/`time`/`instret` は `mcounteren`(S から)と `scounteren`(U から)が
+許していないときに拒否される。
 
 CSR 命令は**直列化**する。パイプラインが空になってから発行し、コミットするまで
 次の命令を入れない。これにより `minstret`/`mcycle` の読み出し値が正確になり、
@@ -251,7 +275,18 @@ EX での CSR 読み出しが直前の CSR 書き込みを必ず見る。
   `mtime` は `TICK_DIV` サイクルごとに 1 進む(シミュレーションは 1、実機は
   クロックを分周して固定周波数にする)。割り込み線は `msip` と
   `mtime >= mtimecmp`。
-- 委譲: `medeleg`/`mideleg` により S-mode へ委譲。
+- 委譲: `medeleg`/`mideleg` により S-mode へ委譲。委譲先が現在の特権より
+  上になることはないので、条件は「委譲ビットが立っていて、かつ現在 M ではない」。
+- **特権によって禁止される命令**(いずれも不正命令例外):
+
+  | 命令 | 禁止条件 |
+  |---|---|
+  | `MRET` | M 以外 |
+  | `SRET` | U、または S かつ `mstatus.TSR` |
+  | `SFENCE.VMA` | U、または S かつ `mstatus.TVM` |
+  | `WFI` | M 以外かつ `mstatus.TW` |
+
+- `ECALL` の原因番号は現在の特権で決まる(U=8、S=9、M=11)。
 - デバッグ: `ebreak` と外部からの halt 要求は `dcsr` に従ってデバッグモードへ。
 
 ---

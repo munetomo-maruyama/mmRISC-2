@@ -64,11 +64,13 @@ module tb_CORE;
     logic [31:0]            trace_insn;
     logic [4:0]             trace_rd;
 
-    logic                   trap_valid, trap_is_int;
+    logic [1:0]             trace_priv;
+
+    logic                   trap_valid, trap_is_int, trap_to_s;
     logic [4:0]             trap_cause;
     logic [63:0]            trap_epc, trap_tval;
 
-    logic                   irq_m_ext;
+    logic                   irq_m_ext, irq_s_ext;
     logic [0:0]             irq_m_soft, irq_m_timer;   // one bit per hart
     logic [63:0]            mtime;
 
@@ -110,6 +112,7 @@ module tb_CORE;
             .irq_m_soft    (irq_m_soft[0]),
             .irq_m_timer   (irq_m_timer[0]),
             .irq_m_ext     (irq_m_ext),
+            .irq_s_ext     (irq_s_ext),
             .mtime         (mtime),
             .trace_valid   (trace_valid),
             .trace_pc      (trace_pc),
@@ -117,11 +120,13 @@ module tb_CORE;
             .trace_rd_we   (trace_rd_we),
             .trace_rd      (trace_rd),
             .trace_rd_data (trace_rd_data),
+            .trace_priv    (trace_priv),
             .trap_valid    (trap_valid),
             .trap_is_int   (trap_is_int),
             .trap_cause    (trap_cause),
             .trap_epc      (trap_epc),
-            .trap_tval     (trap_tval)
+            .trap_tval     (trap_tval),
+            .trap_to_s     (trap_to_s)
         );
 
     //=================================================================
@@ -169,6 +174,7 @@ module tb_CORE;
             .clint_wstrb  (clint_wstrb),
             .clint_rdata  (clint_rdata),
             .irq_ext      (irq_m_ext),
+            .irq_s_ext    (irq_s_ext),
             .prot_error   (prot_error)
         );
 
