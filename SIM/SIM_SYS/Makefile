@@ -72,7 +72,7 @@ TESTS    := t01_alu t02_branch t03_ldst t04_hazard t05_csr t07_trap t08_rvc \
 TEST     ?= t01_alu
 PLUSARGS ?=
 
-.PHONY: all run run-all profile stall riscv-tests lint clean FORCE
+.PHONY: all run run-all profile stall romboot riscv-tests lint clean FORCE
 
 all: run-all
 
@@ -115,8 +115,33 @@ stall:
 riscv-tests: obj_dir/V$(TOP)
 	./run_riscv_tests.sh
 
+# The BIOS of LiteX runs from a ROM below MEM_BASE, so its instructions are
+# fetched uncached over AXI4-Lite. Nothing else exercises that path from the
+# core: this run starts there, on a stub that jumps into main memory.
+obj_rom/.srchash: FORCE
+	@mkdir -p obj_rom
+	@h=`cat $(SRCS) | md5sum | cut -d' ' -f1`; \
+	 if [ "`cat $@ 2>/dev/null`" != "$$h" ]; then \
+	     rm -f obj_rom/V$(TOP); echo "$$h" > $@; fi
+
+obj_rom/V$(TOP): obj_rom/.srchash
+	$(VERILATOR) $(VERILATOR_FLAGS) -GRESET_ADDR=0x10000000 -Mdir obj_rom $(SRCS)
+
+romboot: obj_rom/V$(TOP)
+	@$(MAKE) -s -C ../SIM_CORE tests > /dev/null
+	@fail=0; \
+	for t in $(TESTS); do \
+	    ./obj_rom/V$(TOP) +hex=tests/$$t.hex +name=$$t $(PLUSARGS) \
+	        | grep -E "PASS|FAIL" || fail=1; \
+	    ./obj_rom/V$(TOP) +hex=tests/$$t.hex +name=$$t $(PLUSARGS) \
+	        | grep -q PASS || fail=1; \
+	done; \
+	echo ""; \
+	if [ $$fail -eq 0 ]; then echo "ROMBOOT TEST RESULT : PASS"; \
+	else echo "ROMBOOT TEST RESULT : FAIL"; exit 1; fi
+
 lint:
 	$(VERILATOR) --lint-only -Wall --timing --top-module $(TOP) $(SRCS)
 
 clean:
-	rm -rf obj_dir *.vcd *.log
+	rm -rf obj_dir obj_rom *.vcd *.log
