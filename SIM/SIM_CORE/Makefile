@@ -5,7 +5,8 @@
 #   make TEST=t01_alu run : run one test
 #   make stress     : run them all with back pressure on both cache ports
 #   make bugs       : injected bug campaign (bug_inject.sh)
-#   make riscv-tests: the official riscv-tests (rv64ui, rv64mi)
+#   make riscv-tests: the official riscv-tests, physical environment
+#   make riscv-tests-v : the same tests under Sv39 in user mode (env/v)
 #   make clint      : CPU_CLINT with several harts (tb_CLINT)
 #   make trace      : run one test with the retirement trace
 #   make wave       : run one test and dump tb_CORE.vcd
@@ -19,6 +20,8 @@ RTL_DIR  := ../../RTL
 
 RTL_SRCS := \
 	$(RTL_DIR)/CPU/CPU_MMU/MMU_PMP/MMU_PMP.sv \
+	$(RTL_DIR)/CPU/CPU_MMU/MMU_TLB/MMU_TLB.sv \
+	$(RTL_DIR)/CPU/CPU_MMU/MMU_PTW/MMU_PTW.sv \
 	$(RTL_DIR)/CPU/CPU_MMU/CORE_MMU/CORE_MMU.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_DEC/CORE_DEC.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_DECOMP/CORE_DECOMP.sv \
@@ -42,7 +45,7 @@ VERILATOR       := verilator
 VERILATOR_BASE  := --binary --timing -j 0 \
                    -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-UNUSEDSIGNAL \
                    -Wno-UNUSEDPARAM -Wno-DECLFILENAME -Wno-PINCONNECTEMPTY \
-                   -Wno-BLKSEQ
+                   -Wno-BLKSEQ -Wno-MULTIDRIVEN
 VERILATOR_FLAGS := $(VERILATOR_BASE) --top-module $(TOP)
 IVERILOG_FLAGS  := -g2012 -Wall -Wno-timescale -s $(TOP)
 
@@ -64,7 +67,8 @@ HEXES    := $(addprefix tests/,$(addsuffix .hex,$(TESTS)))
 TEST     ?= $(firstword $(TESTS))
 PLUSARGS ?=
 
-.PHONY: all run run-all stress bugs riscv-tests clint trace wave lint iverilog clean tests
+.PHONY: all run run-all stress bugs riscv-tests riscv-tests-v clint trace \
+        wave lint iverilog clean tests
 
 # back pressure on both cache ports : ready is low in 40 % of the cycles
 STRESS_ARGS := +istall=40 +dstall=40
@@ -115,6 +119,12 @@ bugs: obj_dir/V$(TOP) $(HEXES)
 
 riscv-tests: obj_dir/V$(TOP)
 	./run_riscv_tests.sh
+
+# The environment of env/v boots into supervisor mode with Sv39 on and runs
+# the test in user mode, handing out its pages on demand: every instruction
+# is translated and the page table is walked thousands of times.
+riscv-tests-v: obj_dir/V$(TOP)
+	./run_riscv_tests.sh -v
 
 # the multi hart register map of the CLINT cannot be reached from a program
 # on a single core, so it has a bench of its own
