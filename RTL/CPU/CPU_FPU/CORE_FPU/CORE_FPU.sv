@@ -164,12 +164,44 @@ module CORE_FPU
         end
     endtask
 
+    //=================================================================
+    // the operands, held for as long as the operation lasts
+    //
+    //   EX keeps them steady while the unit is busy, but it holds them
+    //   through the forwarding multiplexers of the pipeline, so without a
+    //   copy of its own every path into this unit starts at a writeback
+    //   register and runs through those multiplexers and the unpacking
+    //   before it reaches anything. Taking the copy at `start` puts a flip
+    //   flop in front of all of that. The first cycle still needs the live
+    //   value -- that is when the partial products are taken and when the
+    //   special cases decide which way to go -- so the copy is bypassed
+    //   exactly then.
+    //=================================================================
+    logic [63:0] q_a, q_b, q_c;
+    logic [63:0] u_a, u_b, u_c;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            q_a <= 64'd0;
+            q_b <= 64'd0;
+            q_c <= 64'd0;
+        end else if (start) begin
+            q_a <= a;
+            q_b <= b;
+            q_c <= c;
+        end
+    end
+
+    assign u_a = start ? a : q_a;
+    assign u_b = start ? b : q_b;
+    assign u_c = start ? c : q_c;
+
     // The operand as an operation sees it. Everything except the transfer
     // instructions (FLW/FSW, FMV.W.X, FMV.X.W) reads a single that is not
     // NaN boxed as the canonical NaN.
     logic [63:0] a_cval, b_cval;
-    assign a_cval = (fmt | (&a[63:32])) ? a : QNAN32;
-    assign b_cval = (fmt | (&b[63:32])) ? b : QNAN32;
+    assign a_cval = (fmt | (&u_a[63:32])) ? u_a : QNAN32;
+    assign b_cval = (fmt | (&u_b[63:32])) ? u_b : QNAN32;
 
     logic        a_sign, a_zero, a_inf, a_nan, a_snan;
     logic        b_sign, b_zero, b_inf, b_nan, b_snan;
@@ -180,16 +212,16 @@ module CORE_FPU
     int signed   c_exp;
     logic [63:0] c_sig;
     logic [63:0] c_cval;
-    assign c_cval = (fmt | (&c[63:32])) ? c : QNAN32;
+    assign c_cval = (fmt | (&u_c[63:32])) ? u_c : QNAN32;
 
     // The sensitivity list is written out on purpose. `unpack` is a task
     // with output arguments, and with @(*) Icarus Verilog puts those outputs
     // into the list as well, so the block keeps waking itself up; the whole
     // core then runs about a thousand times slower. The task reads nothing
     // but its two inputs, so naming them is exact as well as portable.
-    always @(a, fmt) unpack(a, fmt, a_sign, a_exp, a_sig, a_zero, a_inf, a_nan, a_snan);
-    always @(b, fmt) unpack(b, fmt, b_sign, b_exp, b_sig, b_zero, b_inf, b_nan, b_snan);
-    always @(c, fmt) unpack(c, fmt, c_sign, c_exp, c_sig, c_zero, c_inf, c_nan, c_snan);
+    always @(u_a, fmt) unpack(u_a, fmt, a_sign, a_exp, a_sig, a_zero, a_inf, a_nan, a_snan);
+    always @(u_b, fmt) unpack(u_b, fmt, b_sign, b_exp, b_sig, b_zero, b_inf, b_nan, b_snan);
+    always @(u_c, fmt) unpack(u_c, fmt, c_sign, c_exp, c_sig, c_zero, c_inf, c_nan, c_snan);
 
     //=================================================================
     // the rounder, shared by everything that rounds
@@ -202,13 +234,20 @@ module CORE_FPU
     logic [63:0]        rnd_result;
     logic [4:0]         rnd_flags;
 
+    // The rounder is given registered inputs. Selecting what it is to round
+    // and rounding it are each about half of the longest path of this unit,
+    // and one cycle cannot hold both.
+    logic               q_rnd_sign, q_rnd_sticky, q_rnd_fmt;
+    logic signed [13:0] q_rnd_exp;
+    logic [127:0]       q_rnd_sig;
+
     FPU_ROUND u_round
         (
-            .sign   (rnd_sign),
-            .exp_in (rnd_exp),
-            .sig_in (rnd_sig),
-            .sticky_in (rnd_sticky),
-            .fmt    (rnd_fmt),
+            .sign   (q_rnd_sign),
+            .exp_in (q_rnd_exp),
+            .sig_in (q_rnd_sig),
+            .sticky_in (q_rnd_sticky),
+            .fmt    (q_rnd_fmt),
             .rm     (rm),
             .result (rnd_result),
             .flags  (rnd_flags)
@@ -335,7 +374,7 @@ module CORE_FPU
 
     always @(*) begin
         logic [63:0] v;
-        v = int_w ? a : (int_signed ? {{32{a[31]}}, a[31:0]} : {32'd0, a[31:0]});
+        v = int_w ? u_a : (int_signed ? {{32{u_a[31]}}, u_a[31:0]} : {32'd0, u_a[31:0]});
         i2f_sign = int_signed & v[63];
         i2f_mag  = i2f_sign ? (~v + 64'd1) : v;
         i2f_zero = (i2f_mag == 64'd0);
@@ -548,6 +587,15 @@ module CORE_FPU
     logic [128:0] sum_r;
     logic         sum_sign, stick_sum;
 
+    // what the alignment hands to the addition, one cycle later
+    logic [128:0] al_gt, al_ls;
+    logic         al_st, al_add, al_sgn_gt, al_sgn_ls;
+
+    // what the select hands to the rounding, one cycle later
+    logic [63:0]  q_sp_res;
+    logic         q_sp_is_int, q_use_rnd;
+    logic [4:0]   q_sp_flags;
+
     // shift a 128 bit value right, keeping what leaves in a sticky bit
     function automatic logic [128:0] shr_jam(input logic [127:0] v, input int n);
         logic [127:0] sh;
@@ -698,11 +746,12 @@ module CORE_FPU
     // is when nothing has to be rounded. It must not read the output of the
     // rounder: that would be a combinational loop through it, which costs
     // nothing in a synthesised design but makes an event driven simulator
-    // evaluate the whole thing several times per cycle. Reading the rounder
-    // happens in the small block after it instead.
-    logic [63:0] sp_res, res_comb;
-    logic        sp_is_int, res_int_comb;
-    logic [4:0]  sp_flags, flg_comb;
+    // evaluate the whole thing several times per cycle. What this block
+    // produces is written into registers by S_SEL, and the rounder is read
+    // one cycle later by S_RND.
+    logic [63:0] sp_res;
+    logic        sp_is_int;
+    logic [4:0]  sp_flags;
     logic        use_rnd;
 
     always @(*) begin
@@ -737,11 +786,11 @@ module CORE_FPU
 
             FOP_MV_X_F: begin
                 // the raw bits; a single is sign extended from bit 31
-                sp_res     = fmt ? a : {{32{a[31]}}, a[31:0]};
+                sp_res     = fmt ? u_a : {{32{u_a[31]}}, u_a[31:0]};
                 sp_is_int = 1'b1;
             end
 
-            FOP_MV_F_X: sp_res = fmt ? a : {32'hFFFF_FFFF, a[31:0]};
+            FOP_MV_F_X: sp_res = fmt ? u_a : {32'hFFFF_FFFF, u_a[31:0]};
 
             FOP_CVT_S_D: begin                    // double -> single
                 rnd_fmt = 1'b0;
@@ -828,28 +877,26 @@ module CORE_FPU
     end
 
 
-    // the only place that reads the rounder
-    always @(*) begin
-        res_int_comb = sp_is_int;
-        if (use_rnd) begin
-            res_comb = rnd_result;
-            flg_comb = sp_flags | rnd_flags;
-        end else begin
-            res_comb = sp_res;
-            flg_comb = sp_flags;
-        end
-    end
-
     //=================================================================
     // sequencing
     //
-    //   Everything but the multiply and add answers in one cycle. The
-    //   multiply and add takes four: the partial products, their sum, the
-    //   alignment and the addition, and finally the normalisation and the
-    //   rounding. It is not pipelined, one operation at a time, which is all
-    //   an in order single issue pipeline can use.
+    //   Every operation ends the same way: S_SEL decides what the answer is
+    //   made of and what the rounder is given, S_RND rounds it. Those are
+    //   two cycles because together they are the longest path in the unit --
+    //   a leading zero count over 129 bits, a shift of the same width, and
+    //   then the subnormal shift and the carry of the rounding.
+    //
+    //   The multiply and add reaches them through four more: the partial
+    //   products, their sum, the alignment of the addend, and the addition.
+    //   The alignment and the addition are apart for the same reason: a
+    //   variable shift followed by two adders as wide as the product does
+    //   not fit in a cycle.
+    //
+    //   It is not pipelined, one operation at a time, which is all an in
+    //   order single issue pipeline can use.
     //=================================================================
-    typedef enum logic [2:0] {S_IDLE, S_M1, S_M2, S_A3, S_DIV, S_SQRT, S_DONE} state_t;
+    typedef enum logic [3:0] {S_IDLE, S_M1, S_M2, S_M3, S_SEL, S_RND,
+                              S_DIV, S_SQRT, S_DONE} state_t;
     state_t state;
 
     assign busy = (state != S_IDLE) && (state != S_DONE);
@@ -865,6 +912,12 @@ module CORE_FPU
             prod  <= 128'd0;
             sum_r <= 129'd0;
             com_exp <= 0; sum_sign <= 1'b0; stick_sum <= 1'b0;
+            al_gt <= 129'd0; al_ls <= 129'd0; al_st <= 1'b0;
+            al_add <= 1'b0; al_sgn_gt <= 1'b0; al_sgn_ls <= 1'b0;
+            q_sp_res <= 64'd0; q_sp_is_int <= 1'b0; q_sp_flags <= 5'd0;
+            q_use_rnd <= 1'b0;
+            q_rnd_sign <= 1'b0; q_rnd_exp <= 14'sd0; q_rnd_sig <= 128'd0;
+            q_rnd_sticky <= 1'b0; q_rnd_fmt <= 1'b0;
             dv_rem <= 65'd0; dv_quo <= 128'd0; dv_div <= 64'd0;
             dv_cnt <= 8'd0;  dv_exp <= 0; dv_sign <= 1'b0; dv_fmt <= 1'b0;
             sq_rem <= 66'd0; sq_root <= 64'd0; sq_rad <= 128'd0;
@@ -903,10 +956,11 @@ module CORE_FPU
                         pp_hh <= {32'd0, x_sig[63:32]} * {32'd0, y_sig[63:32]};
                         state <= S_M1;
                     end else begin
-                        result        <= res_comb;
-                        result_is_int <= res_int_comb;
-                        flags         <= flg_comb;
-                        state         <= S_DONE;
+                        // everything else -- the moves, the comparisons, the
+                        // conversions, and every special case of the four
+                        // above -- is decided by S_SEL out of the copy of
+                        // the operands that was just taken
+                        state <= S_SEL;
                     end
                 end
                 //-----------------------------------------------------
@@ -917,61 +971,76 @@ module CORE_FPU
                 end
                 //-----------------------------------------------------
                 S_M2: begin
-                    // normalise the product, bring the addend into its frame
-                    // and add
+                    // normalise the product and bring the addend into its
+                    // frame. The larger of the two is `al_gt`, the one that
+                    // was shifted is `al_ls`, and `al_add` says whether the
+                    // next cycle adds them or takes one from the other.
                     logic [127:0] pn_v, zn_v;
                     int signed    pexp_v, d_v;
                     logic [128:0] sh;
-                    logic [128:0] gt, ls;
-                    logic         st;
 
                     pn_v   = prod[127] ? prod : (prod << 1);
                     pexp_v = prod[127] ? (x_exp + y_exp + 1) : (x_exp + y_exp);
                     zn_v   = {zz_sig, 64'd0};
 
                     if (!has_z || zz_zero) begin
-                        gt  = {1'b0, pn_v};
-                        ls  = 129'd0;
-                        st  = 1'b0;
-                        com_exp  <= pexp_v;
-                        sum_sign <= prod_sign;
-                        sum_r    <= gt;
-                        stick_sum <= 1'b0;
+                        al_gt     <= {1'b0, pn_v};
+                        al_ls     <= 129'd0;
+                        al_st     <= 1'b0;
+                        al_add    <= 1'b1;
+                        al_sgn_gt <= prod_sign;
+                        al_sgn_ls <= prod_sign;
+                        com_exp   <= pexp_v;
                     end else begin
                         d_v = pexp_v - zz_exp;
                         if (d_v >= 0) begin
-                            sh = shr_jam(zn_v, d_v);
-                            gt = {1'b0, pn_v};
-                            ls = {1'b0, sh[127:0]};
-                            st = sh[128];
-                            com_exp <= pexp_v;
+                            sh        = shr_jam(zn_v, d_v);
+                            al_gt     <= {1'b0, pn_v};
+                            al_ls     <= {1'b0, sh[127:0]};
+                            al_st     <= sh[128];
+                            al_sgn_gt <= prod_sign;
+                            al_sgn_ls <= zz_sign;
+                            com_exp   <= pexp_v;
                         end else begin
-                            sh = shr_jam(pn_v, -d_v);
-                            gt = {1'b0, zn_v};
-                            ls = {1'b0, sh[127:0]};
-                            st = sh[128];
-                            com_exp <= zz_exp;
+                            sh        = shr_jam(pn_v, -d_v);
+                            al_gt     <= {1'b0, zn_v};
+                            al_ls     <= {1'b0, sh[127:0]};
+                            al_st     <= sh[128];
+                            al_sgn_gt <= zz_sign;
+                            al_sgn_ls <= prod_sign;
+                            com_exp   <= zz_exp;
                         end
-
-                        if (prod_sign == zz_sign) begin
-                            sum_r     <= gt + ls;
-                            sum_sign  <= prod_sign;
-                            stick_sum <= st;
-                        end else begin
-                            // the one that was shifted is the smaller one
-                            // whenever anything was lost, so a borrow can
-                            // only happen without a sticky bit
-                            if (gt >= ls) begin
-                                sum_r    <= gt - ls - (st ? 129'd1 : 129'd0);
-                                sum_sign <= (d_v >= 0) ? prod_sign : zz_sign;
-                            end else begin
-                                sum_r    <= ls - gt;
-                                sum_sign <= (d_v >= 0) ? zz_sign : prod_sign;
-                            end
-                            stick_sum <= st;
-                        end
+                        al_add <= (prod_sign == zz_sign);
                     end
-                    state <= S_A3;
+                    state <= S_M3;
+                end
+                //-----------------------------------------------------
+                S_M3: begin
+                    // The three results are built side by side and one of
+                    // them is picked, so the cycle holds one adder and not
+                    // a comparison followed by a subtraction.
+                    //
+                    // The one that was shifted is the smaller one whenever
+                    // anything was lost, so a borrow can only happen without
+                    // a sticky bit.
+                    logic [128:0] sum_add, sum_sub, sum_rev;
+
+                    sum_add = al_gt + al_ls;
+                    sum_sub = al_gt - al_ls - (al_st ? 129'd1 : 129'd0);
+                    sum_rev = al_ls - al_gt;
+
+                    if (al_add) begin
+                        sum_r    <= sum_add;
+                        sum_sign <= al_sgn_gt;
+                    end else if (al_gt >= al_ls) begin
+                        sum_r    <= sum_sub;
+                        sum_sign <= al_sgn_gt;
+                    end else begin
+                        sum_r    <= sum_rev;
+                        sum_sign <= al_sgn_ls;
+                    end
+                    stick_sum <= al_st;
+                    state     <= S_SEL;
                 end
                 //-----------------------------------------------------
                 S_DIV: begin
@@ -987,7 +1056,7 @@ module CORE_FPU
                     dv_quo <= {dv_quo[126:0], qbit};
                     dv_rem <= {r1[63:0], 1'b0};
                     dv_cnt <= dv_cnt - 8'd1;
-                    if (dv_cnt == 8'd1) state <= S_A3;
+                    if (dv_cnt == 8'd1) state <= S_SEL;
                 end
                 //-----------------------------------------------------
                 S_SQRT: begin
@@ -1003,13 +1072,27 @@ module CORE_FPU
                     end
                     sq_rad <= sq_rad << 2;
                     sq_cnt <= sq_cnt - 8'd1;
-                    if (sq_cnt == 8'd1) state <= S_A3;
+                    if (sq_cnt == 8'd1) state <= S_SEL;
                 end
                 //-----------------------------------------------------
-                S_A3: begin
-                    result        <= res_comb;
-                    result_is_int <= res_int_comb;
-                    flags         <= flg_comb;
+                S_SEL: begin
+                    q_sp_res     <= sp_res;
+                    q_sp_is_int  <= sp_is_int;
+                    q_sp_flags   <= sp_flags;
+                    q_use_rnd    <= use_rnd;
+                    q_rnd_sign   <= rnd_sign;
+                    q_rnd_exp    <= rnd_exp;
+                    q_rnd_sig    <= rnd_sig;
+                    q_rnd_sticky <= rnd_sticky;
+                    q_rnd_fmt    <= rnd_fmt;
+                    state        <= S_RND;
+                end
+                //-----------------------------------------------------
+                S_RND: begin
+                    result        <= q_use_rnd ? rnd_result : q_sp_res;
+                    result_is_int <= q_sp_is_int;
+                    flags         <= q_use_rnd ? (q_sp_flags | rnd_flags)
+                                               : q_sp_flags;
                     state         <= S_DONE;
                 end
                 //-----------------------------------------------------
