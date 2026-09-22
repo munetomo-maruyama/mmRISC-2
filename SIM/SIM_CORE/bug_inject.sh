@@ -28,7 +28,11 @@
 #     to, the hysteresis of the counter -- cost a few percent on a workload
 #     this size, under the noise of the limit. Seeing those would need a
 #     benchmark with a code footprint larger than the buffer, which is worth
-#     building when the predictor is tuned rather than now.
+#     building when the predictor is tuned rather than now. 174 and 175 are
+#     listed but are in that category: they are left in for the day such a
+#     benchmark exists, and they report NOT DETECTED until then. What covers
+#     the buffer instead is that a change to it which alters no prediction
+#     leaves every cycle count in the suite exactly where it was.
 #   - the inside of MMU_PMP, which has its own bench and its own campaign in
 #     SIM_MMU; what is listed here is the way the core uses it
 #   - a redirect issued while EX is stalled: the front end is redirected to
@@ -196,7 +200,7 @@ MUTATIONS=(
 "162#CPU_PLIC/CPU_PLIC.sv#s+assign ctx_ctl      = (int'(addr) - 32'h20_0000) / 32'h1000;+assign ctx_ctl      = 0;+#PLIC: every context uses the claim register of context zero"
 "163#CPU_PLIC/CPU_PLIC.sv#s+assign ctx_en       = (int'(addr) - 32'h00_2000) / 32'h80;+assign ctx_en       = 0;+#PLIC: every enable word belongs to context zero"
 "174#CPU_CORE/CORE_BTB/CORE_BTB.sv#s%assign spans   = upd_is32 \&\& (upd_off == 2'b11);%assign spans   = 1'b0;%#BTB: a 32 bit branch across two words is allocated"
-"175#CPU_CORE/CORE_BTB/CORE_BTB.sv#s%e_target\[upd_idx\] <= upd_target;%;%#BTB: the target of an entry that is hit again is not kept up to date"
+"175#CPU_CORE/CORE_BTB/CORE_BTB.sv#s%upd_d\[F_IS32\], upd_target, new_cnt %upd_d[F_IS32], upd_d[F_TARGET +: 64], new_cnt %#BTB: the target of an entry that is hit again is not kept up to date"
 "177#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%(btb_off >= next_start);%1'b1;%#IFU: a prediction is used even when the branch is before the address jumped to"
 "178#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign straddle      = fq_have \& ~fq_is_rvc \& d0;%assign straddle      = 1'b0;%#IFU: the misfetch of a trim inside an instruction is not caught"
 "179#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign fq_pred_taken  = fq_is_rvc ? d0 : d1;%assign fq_pred_taken  = d0;%#IFU: the prediction of a 32 bit instruction is read from its first parcel"

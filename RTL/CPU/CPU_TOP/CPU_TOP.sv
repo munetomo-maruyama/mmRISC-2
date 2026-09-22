@@ -87,9 +87,9 @@ module CPU_TOP
 
         // branch target buffer, TLBs, PMP
         parameter int          BTB_ENTRIES  = 64,
-        parameter int          ITLB_ENTRIES = 16,
-        parameter int          DTLB_ENTRIES = 16,
-        parameter int          PMP_ENTRIES  = 16,
+        parameter int          ITLB_ENTRIES = 8,
+        parameter int          DTLB_ENTRIES = 8,
+        parameter int          PMP_ENTRIES  = 8,
         parameter int          PQ_DEPTH     = 16,
 
         // 1: instantiate the temporary BFM (simulation) instead of the core

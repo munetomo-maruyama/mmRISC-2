@@ -30,9 +30,9 @@ module CPU_CORE
         parameter logic [63:0] RESET_VECTOR = 64'h0000_0000_8000_0000,
         parameter logic [63:0] HART_ID      = 64'd0,
         parameter int          PQ_DEPTH     = 16,     // parcels in the fetch queue
-        parameter int          PMP_ENTRIES  = 16,     // 0 removes PMP
-        parameter int          ITLB_ENTRIES = 16,
-        parameter int          DTLB_ENTRIES = 16,
+        parameter int          PMP_ENTRIES  = 8,     // 0 removes PMP
+        parameter int          ITLB_ENTRIES = 8,
+        parameter int          DTLB_ENTRIES = 8,
         parameter int          BTB_ENTRIES  = 64
     )
     (

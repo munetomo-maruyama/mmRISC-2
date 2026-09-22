@@ -15,13 +15,19 @@
 //
 //   A superpage is held as one entry with its level; the comparison then
 //   only looks at the part of the virtual page number above that level.
+//
+//   Every entry is compared at once and the lowest numbered match is the
+//   one that answers. That last part is written as a one hot select rather
+//   than as a chain of "unless an earlier one matched", because the chain
+//   would be as deep as the table and this lookup sits on the address path
+//   of the execute stage.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
 
 module MMU_TLB
     #(
-        parameter int ENTRIES = 16
+        parameter int ENTRIES = 8
     )
     (
         input  logic        clk,
@@ -81,22 +87,29 @@ module MMU_TLB
     // lookup
     //
     //   A global entry belongs to every address space, so its ASID is not
-    //   compared. Counted downwards so that the lowest numbered match wins,
-    //   which only matters if software left two entries for one page.
+    //   compared. The lowest numbered match wins, which only matters if
+    //   software left two entries for one page.
     //-----------------------------------------------------------------
+    logic [ENTRIES-1:0] match, sel;
+
     always @(*) begin
-        hit   = 1'b0;
+        for (int i = 0; i < ENTRIES; i++)
+            match[i] = e_valid[i] && vpn_match(e_vpn[i], vpn, e_level[i]) &&
+                       (e_perm[i][5] || (e_asid[i] == asid));
+    end
+
+    // the lowest set bit, which is the lowest numbered entry that matched
+    assign sel = match & (~match + ENTRIES'(1));
+    assign hit = |match;
+
+    always @(*) begin
         ppn   = 44'd0;
         level = 2'd0;
         perm  = 8'd0;
-        for (int i = ENTRIES-1; i >= 0; i--) begin
-            if (e_valid[i] && vpn_match(e_vpn[i], vpn, e_level[i]) &&
-                (e_perm[i][5] || (e_asid[i] == asid))) begin
-                hit   = 1'b1;
-                ppn   = e_ppn[i];
-                level = e_level[i];
-                perm  = e_perm[i];
-            end
+        for (int i = 0; i < ENTRIES; i++) begin
+            ppn   |= {44{sel[i]}} & e_ppn[i];
+            level |= {2{sel[i]}}  & e_level[i];
+            perm  |= {8{sel[i]}}  & e_perm[i];
         end
     end
 

@@ -29,9 +29,9 @@
 
 module CORE_MMU
     #(
-        parameter int PMP_ENTRIES  = 16,
-        parameter int ITLB_ENTRIES = 16,
-        parameter int DTLB_ENTRIES = 16
+        parameter int PMP_ENTRIES  = 8,
+        parameter int ITLB_ENTRIES = 8,
+        parameter int DTLB_ENTRIES = 8
     )
     (
         input  logic        clk,

@@ -26,7 +26,13 @@ module CORE_CSR
         // bit 0 is 'A' ... bit 8 is 'I' ... bit 18 is 'S', bit 20 is 'U'
         parameter logic [63:0] MISA      = (64'd2 << 62) | (64'd1 << 8),
         // number of implemented PMP entries (0, 16 or 64; 0 removes PMP)
-        parameter int          PMP_ENTRIES = 16
+        parameter int          PMP_ENTRIES = 8,
+        // The privileged specification lets an implementation provide zero,
+        // sixteen or sixty four PMP entries, and the CSRs of the entries it
+        // does not provide still have to read as zero rather than raise an
+        // illegal instruction. PMP_ENTRIES is how many actually check an
+        // address; this is how many the software can see.
+        parameter int          PMP_CSRS    = 16
     )
     (
         input  logic        clk,
@@ -309,15 +315,17 @@ module CORE_CSR
         rd_cfg_sel  = int'(rd_addr) - int'(CSR_PMPCFG0);
         rd_cfg_base = (rd_cfg_sel / 2) * 8;
         rd_addr_idx = int'(rd_addr) - int'(CSR_PMPADDR0);
-        if (PMP_ENTRIES > 0) begin
+        if (PMP_CSRS > 0) begin
             if ((rd_cfg_sel >= 0) && (rd_cfg_sel < 16) && (rd_cfg_sel % 2 == 0) &&
-                (rd_cfg_base < PMP_ENTRIES)) begin
+                (rd_cfg_base < PMP_CSRS)) begin
                 pmp_hit = 1'b1;
                 for (int i = 0; i < 8; i++)
-                    pmp_rdata[8*i +: 8] = pmpcfg[rd_cfg_base + i];
-            end else if ((rd_addr_idx >= 0) && (rd_addr_idx < PMP_ENTRIES)) begin
-                pmp_hit   = 1'b1;
-                pmp_rdata = {10'd0, pmpaddr[rd_addr_idx]};
+                    if (rd_cfg_base + i < PMP_ENTRIES)
+                        pmp_rdata[8*i +: 8] = pmpcfg[rd_cfg_base + i];
+            end else if ((rd_addr_idx >= 0) && (rd_addr_idx < PMP_CSRS)) begin
+                pmp_hit = 1'b1;
+                if (rd_addr_idx < PMP_ENTRIES)
+                    pmp_rdata = {10'd0, pmpaddr[rd_addr_idx]};
             end
         end
     end

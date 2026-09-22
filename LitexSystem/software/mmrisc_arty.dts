@@ -29,19 +29,19 @@
 			d-cache-sets = <64>;
 			d-cache-size = <16384>;
 			d-tlb-sets = <1>;
-			d-tlb-size = <16>;
+			d-tlb-size = <8>;
 			device_type = "cpu";
 			i-cache-block-size = <64>;
 			i-cache-sets = <64>;
 			i-cache-size = <16384>;
 			i-tlb-sets = <1>;
-			i-tlb-size = <16>;
+			i-tlb-size = <8>;
 			mmu-type = "riscv,sv39";
 			next-level-cache = <&L8>;
 			reg = <0x0>;
 			riscv,isa = "rv64imafdc_zicsr_zifencei";
 			riscv,pmpgranularity = <4>;
-			riscv,pmpregions = <16>;
+			riscv,pmpregions = <8>;
 			status = "okay";
 			tlb-split;
 			L4: interrupt-controller {

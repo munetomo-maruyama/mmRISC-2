@@ -194,6 +194,31 @@ back_in_m:
     csrr x22, pmpaddr3
     TEST_EQ_REG(21, x22, x21)
 
+    //-----------------------------------------------------------------
+    // the entries this core does not check still have to answer
+    //
+    //   The privileged specification lets an implementation provide zero,
+    //   sixteen or sixty four entries, and asks that the CSRs of the ones
+    //   it does not provide read as zero instead of raising an illegal
+    //   instruction. This core checks eight and shows sixteen.
+    //-----------------------------------------------------------------
+    li   x29, 0
+    li   x21, -1
+
+    csrw pmpaddr8, x21
+    csrr x22, pmpaddr8
+    TEST_EQ(22, x22, 0)
+
+    csrw pmpaddr15, x21
+    csrr x22, pmpaddr15
+    TEST_EQ(23, x22, 0)
+
+    csrw pmpcfg2, x21
+    csrr x22, pmpcfg2
+    TEST_EQ(24, x22, 0)
+
+    TEST_EQ(25, x29, 0)                  // and none of that trapped
+
     la   t0, default_trap
     csrw mtvec, t0
     TEST_DONE
