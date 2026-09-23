@@ -44,6 +44,14 @@
 //   carrying it. Such a fetch is answered inside this unit and never
 //   reaches the cache, and it waits until the answers already in the cache
 //   have come back so that the queue stays in order.
+//
+//   The PMP is not part of that answer: the translation and the PMP behind
+//   it did not fit into IF1 together (LitexSystem/docs/TIMING.md 18). The
+//   PMP looks at the physical address one cycle later, when it is handed
+//   to the cache as i_req_paddr. A refusal then cancels that request in
+//   the cache (i_cancel), before the cache goes to memory or to the bus,
+//   and the request keeps its place in the record: when it reaches the
+//   head, this unit answers it with an access fault instead of the cache.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -68,6 +76,8 @@ module CORE_IFU
         input  logic [63:0]             i_resp_data,
         input  logic                    i_resp_error,
         output logic                    i_kill,
+        output logic                    i_cancel,      // the request of the last cycle
+        input  logic                    pmp_fail,      // for i_req_paddr
 
         // redirect from the back end
         input  logic                    redirect_valid,
@@ -123,6 +133,7 @@ module CORE_IFU
     logic [OS_BITS:0]   os_count;
 
     logic push_req, push_resp, resp_real, local_resp, pop_q;
+    logic chk_valid, resp_cancel;
     logic req_want, fetch_bad, self_redirect;
     logic [2:0] push_n;           // parcels of this answer that are kept
     logic [1:0] keep_lo, keep_hi;
@@ -138,6 +149,7 @@ module CORE_IFU
 
     // one record per request that is in the cache
     logic        pr_valid  [0:OS_DEPTH-1];
+    logic        pr_cancel [0:OS_DEPTH-1];   // refused by the PMP : no answer comes
     logic [1:0]  pr_last   [0:OS_DEPTH-1];
     logic [63:0] pr_target [0:OS_DEPTH-1];
     logic [OS_BITS-1:0] pr_head, pr_tail;
@@ -191,15 +203,26 @@ module CORE_IFU
 
     assign fetch_bad   = req_want & tr_ready & (tr_fault != 2'd0);
     assign local_resp  = fetch_bad & (os_count == '0);
-    assign i_req_valid = req_want & tr_ready & (tr_fault == 2'd0);
+    // i_req_paddr holds the physical address of the request of the last
+    // cycle, which the cache is looking at now; the PMP judges it here.
+    // No new request goes out in the cycle one is cancelled: the cache
+    // would take it into the stage that is being emptied.
+    assign i_cancel    = chk_valid & pmp_fail & ~redirect_valid & ~self_redirect;
+    assign i_req_valid = req_want & tr_ready & (tr_fault == 2'd0) & ~i_cancel;
     // the cache is indexed with the virtual address and tagged with the
     // physical one, and the two agree on the bits it indexes with
     assign i_req_addr  = fetch_pc[PADDR_WIDTH-1:0];
     assign i_kill      = redirect_valid | self_redirect;
 
     assign push_req  = i_req_valid & i_req_ready;
-    assign resp_real = i_resp_valid & ~redirect_valid & ~self_redirect &
-                       (os_count != '0);
+    // A cancelled request is answered here when it is at the head. The
+    // cache has no answer for it, and the one for the request behind it
+    // cannot come in the same cycle: that request went out at least one
+    // cycle after the cancelled one, which is at the head by then.
+    assign resp_cancel = pr_cancel[pr_head] & (os_count != '0) &
+                         ~redirect_valid & ~self_redirect;
+    assign resp_real = ((i_resp_valid & (os_count != '0)) | resp_cancel) &
+                       ~redirect_valid & ~self_redirect;
     assign push_resp = resp_real | local_resp;
 
     // The parcels in front of push_pc belong to the word but not to the
@@ -267,8 +290,11 @@ module CORE_IFU
             pr_tail     <= '0;
             tg_head     <= 3'd0;
             tg_tail     <= 3'd0;
+            chk_valid   <= 1'b0;
             for (int i = 0; i < OS_DEPTH; i++) pr_valid[i] <= 1'b0;
+            for (int i = 0; i < OS_DEPTH; i++) pr_cancel[i] <= 1'b0;
         end else begin
+            chk_valid <= push_req & ~redirect_valid & ~self_redirect;
             // the cache wants the tag in the cycle after the request was
             // taken (CPU_CACHE_SPEC.md 5.6)
             if (push_req) i_req_paddr <= tr_paddr[PADDR_WIDTH-1:0];
@@ -291,6 +317,7 @@ module CORE_IFU
                 tg_head  <= 3'd0;
                 tg_tail  <= 3'd0;
                 for (int i = 0; i < OS_DEPTH; i++) pr_valid[i] <= 1'b0;
+                for (int i = 0; i < OS_DEPTH; i++) pr_cancel[i] <= 1'b0;
             end else begin
                 if (push_req | local_resp) begin
                     fetch_pc   <= use_pred ? btb_target : fetch_pc + 64'd8;
@@ -299,7 +326,10 @@ module CORE_IFU
                 end
 
                 // the record that travels with the request
+                // the request of the last cycle is the newest in the record
+                if (i_cancel) pr_cancel[pr_tail - OS_BITS'(1)] <= 1'b1;
                 if (push_req) begin
+                    pr_cancel[pr_tail] <= 1'b0;
                     pr_valid [pr_tail] <= use_pred;
                     pr_last  [pr_tail] <= btb_off + {1'b0, btb_is32};
                     pr_target[pr_tail] <= btb_target;
@@ -314,7 +344,7 @@ module CORE_IFU
                                 <= local_resp ? 16'd0 : i_resp_data[16*i +: 16];
                             pq_fault[pq_tail + PQ_BITS'(i) - PQ_BITS'(keep_lo)]
                                 <= local_resp ? tr_fault
-                                              : (i_resp_error ? 2'd1 : 2'd0);
+                                              : ((i_resp_error | resp_cancel) ? 2'd1 : 2'd0);
                             pq_pend[pq_tail + PQ_BITS'(i) - PQ_BITS'(keep_lo)]
                                 <= pred_resp && (2'(i) == keep_hi);
                         end

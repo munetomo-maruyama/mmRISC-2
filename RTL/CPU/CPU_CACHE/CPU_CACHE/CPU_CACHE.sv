@@ -54,6 +54,7 @@ module CPU_CACHE
         input  logic                     i_flush_valid,
         output logic                     i_flush_done,
         input  logic                     i_kill,
+        input  logic                     i_cancel,     // the request in stage 1 only
 
         // data side
         input  logic                     d_req_valid,
@@ -289,6 +290,7 @@ module CPU_CACHE
             .i_flush_valid  (i_flush_valid),
             .i_flush_done   (i_flush_done),
             .i_kill         (i_kill),
+            .i_cancel       (i_cancel),
             .m_axi4_arid    (ic_axi4_arid),
             .m_axi4_araddr  (ic_axi4_araddr),
             .m_axi4_arlen   (ic_axi4_arlen),

@@ -60,6 +60,7 @@ module CPU_CORE
         output logic                    i_flush_valid,
         input  logic                    i_flush_done,
         output logic                    i_kill,
+        output logic                    i_cancel,
 
         // data cache
         output logic                    d_req_valid,
@@ -142,6 +143,7 @@ module CPU_CORE
     logic        i_tr_req, i_tr_ready;
     logic [63:0] i_tr_vaddr, i_tr_paddr;
     logic [1:0]  i_tr_fault;
+    logic        i_chk_fail;      // the PMP on the fetch the cache is looking at
     logic        d_tr_req, d_tr_ready;
     logic [63:0] d_tr_paddr;
     logic [1:0]  d_tr_fault;
@@ -176,6 +178,8 @@ module CPU_CORE
             .i_resp_data    (i_resp_data),
             .i_resp_error   (i_resp_error),
             .i_kill         (i_kill),
+            .i_cancel       (i_cancel),
+            .pmp_fail       (i_chk_fail),
             .redirect_valid (redirect_valid),
             .redirect_pc    (redirect_pc),
             .tr_req         (i_tr_req),
@@ -816,6 +820,8 @@ module CPU_CORE
             .i_ready      (i_tr_ready),
             .i_paddr      (i_tr_paddr),
             .i_fault      (i_tr_fault),
+            .i_chk_paddr  (64'(i_req_paddr)),
+            .i_chk_fail   (i_chk_fail),
             .d_req        (d_tr_req),
             .d_vaddr      (mem_addr),
             .d_size       (ex_mem_size),

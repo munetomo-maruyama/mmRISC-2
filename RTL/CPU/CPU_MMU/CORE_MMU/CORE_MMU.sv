@@ -12,8 +12,11 @@
 //   steps: the translation and its permissions with the request (EX), the
 //   PMP one cycle later on the physical address the pipeline has kept (MR,
 //   the p_ port). The walker has a PMP checker of its own. One cycle could not hold both behind the address adder
-//   (LitexSystem/docs/TIMING.md 15). The instruction side still does both
-//   at once: its address comes from a register. The cache is indexed with the
+//   (LitexSystem/docs/TIMING.md 15). The instruction side is checked in
+//   two steps as well: the translation with the request (IF1), the PMP one
+//   cycle later on the physical address the fetch unit has registered for
+//   the cache (the i_chk_ port), in time for the fetch unit to cancel the
+//   request before the cache goes to the bus (TIMING.md 18). The cache is indexed with the
 //   virtual address and tagged with the physical one (CPU_CACHE_SPEC.md
 //   5.6); because the index and the offset together stay inside a page, the
 //   two agree on those bits and nothing in the cache has to change.
@@ -58,6 +61,11 @@ module CORE_MMU
         output logic        i_ready,        // the answer below is valid
         output logic [63:0] i_paddr,
         output logic [1:0]  i_fault,        // 0 none, 1 access fault, 2 page fault
+                                            // (of the translation only)
+
+        // the PMP check of the instruction side, one cycle after the request
+        input  logic [63:0] i_chk_paddr,
+        output logic        i_chk_fail,
 
         // data side
         input  logic        d_req,
@@ -347,7 +355,7 @@ module CORE_MMU
             .cfg      (pmpcfg),
             .addr     (pmpaddr),
             .priv     (priv),
-            .paddr    (i_paddr),
+            .paddr    (i_chk_paddr),
             .size     (2'd3),            // a fetch brings a whole double word
             .is_read  (1'b0),
             .is_write (1'b0),
@@ -398,10 +406,10 @@ module CORE_MMU
             else           i_ready = 1'b0;   // the table is being walked
         end else if (i_trans && !i_perm_ok) begin
             i_fault = FAULT_PAGE;
-        end else if (i_pmp_fail) begin
-            i_fault = FAULT_ACC;
         end
     end
+
+    assign i_chk_fail = i_pmp_fail;
 
     always @(*) begin
         d_ready = 1'b1;

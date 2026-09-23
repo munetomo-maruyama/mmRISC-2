@@ -13,6 +13,10 @@
 //     uncached access has finished. Hits are accepted every cycle.
 //   - i_flush_valid invalidates every line in one cycle (fence.i).
 //   - i_kill drops the response of the request in flight.
+//   - i_cancel drops the request in stage 1, the one whose physical address
+//     is on i_req_paddr in this cycle, before it goes to the arrays' answer
+//     or to the bus. The core uses it for a fetch the PMP refuses, which it
+//     only knows once it has the physical address (CPU_CORE_SPEC.md 6.3).
 //   - A bus error (SLVERR/DECERR) is reported with i_resp_error and the line
 //     is not cached.
 //
@@ -58,6 +62,7 @@ module ICACHE
         input  logic                        i_flush_valid,
         output logic                        i_flush_done,
         input  logic                        i_kill,
+        input  logic                        i_cancel,
 
         // memory bus : AXI4 read only
         output logic [AXI4_ID_WIDTH-1:0]    m_axi4_arid,
@@ -231,7 +236,7 @@ module ICACHE
     // A new request is accepted while stage 1 hits (one request per cycle).
     // When stage 1 misses, the pipeline stops until the fill has finished.
     assign i_req_ready = (state == S_IDLE) && !i_flush_valid &&
-                         !(s1_valid && !hit && !i_kill);
+                         !(s1_valid && !hit && !i_kill && !i_cancel);
 
     // array read for a new request
     assign tag_rd_en    = i_req_valid & i_req_ready;
@@ -292,7 +297,7 @@ module ICACHE
             case (state)
                 //-----------------------------------------------------
                 S_IDLE: begin
-                    if (s1_valid && i_kill) begin
+                    if (s1_valid && (i_kill || i_cancel)) begin
                         s1_valid <= 1'b0;
                     end else if (s1_valid && hit) begin
                         i_resp_valid <= 1'b1;

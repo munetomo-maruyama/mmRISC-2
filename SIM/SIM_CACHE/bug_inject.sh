@@ -20,7 +20,7 @@ VFLAGS="--binary --timing -j 2 --top-module tb_CACHE -Wno-fatal"
 # id # file # sed expression # +from # +to # description
 MUTATIONS=(
 "1#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/.inv_all(i_flush_valid)/.inv_all(1'b0)/#6#6#I\$: fence.i does not invalidate the array"
-"2#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/!(s1_valid \&\& !hit \&\& !i_kill)/1'b1/#10#11#I\$: accepts a new request while the current one misses"
+"2#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/!(s1_valid \&\& !hit \&\& !i_kill \&\& !i_cancel)/1'b1/#10#11#I\$: accepts a new request while the current one misses"
 "3#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/!fill_flushed \&\& !i_flush_valid/1'b1/#6#6#I\$: fill validates a line invalidated by fence.i"
 "4#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/tag_wr_dirty = 1'b1;\$/tag_wr_dirty = 1'b0;/#11#12#D\$: store hit does not set the dirty bit"
 "5#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/ms_wb_needed\[ms_tail\]  <= victim_dirty;/ms_wb_needed[ms_tail]  <= 1'b0;/#3#3#D\$: dirty victim is not written back"

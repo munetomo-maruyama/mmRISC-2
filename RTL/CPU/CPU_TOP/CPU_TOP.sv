@@ -457,6 +457,7 @@ module CPU_TOP
 
     // cache ports : driven by the core, or by the BFM while USE_BFM is set
     logic                       cpu_i_req_valid, cpu_i_req_ready, cpu_i_kill;
+    logic                       cpu_i_cancel;
     logic [AXI4_ADDR_WIDTH-1:0] cpu_i_req_addr, cpu_i_req_paddr;
     logic                       cc_i_resp_valid, cc_i_resp_error;
     logic [63:0]                cc_i_resp_data;
@@ -664,6 +665,7 @@ module CPU_TOP
             .i_flush_valid   (cc_i_flush_valid),
             .i_flush_done    (cc_i_flush_done),
             .i_kill          (cpu_i_kill),
+            .i_cancel        (cpu_i_cancel),
             .d_req_valid     (cpu_d_req_valid),
             .d_req_ready     (cpu_d_req_ready),
             .d_req_addr      (cpu_d_req_addr),
@@ -1279,6 +1281,7 @@ module CPU_TOP
                     .i_flush_valid   (cpu_i_flush_valid),
                     .i_flush_done    (cc_i_flush_done),
                     .i_kill          (cpu_i_kill),
+                    .i_cancel        (cpu_i_cancel),
 
                     .d_req_valid     (cpu_d_req_valid),
                     .d_req_ready     (cpu_d_req_ready),
@@ -1326,6 +1329,7 @@ module CPU_TOP
                     .i_flush_valid (cpu_i_flush_valid),
                     .i_flush_done  (cc_i_flush_done),
                     .i_kill        (cpu_i_kill),
+                    .i_cancel      (cpu_i_cancel),
                     .d_req_valid   (cpu_d_req_valid),
                     .d_req_ready   (cpu_d_req_ready),
                     .d_req_addr    (cpu_d_req_addr),

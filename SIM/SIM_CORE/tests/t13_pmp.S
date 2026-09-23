@@ -10,7 +10,8 @@
 //   entry 1 : 64 bytes around prot_data, read only
 //   entry 2 : everything, read write execute
 //
-//   x29 / x28 / x27 / x26 : a trap happened, its cause, tval, epc
+//   x29 / x28 / x27 / x26 : a trap happened (1 in M, 2 in S), its cause,
+//                           tval, epc
 //   x24 : where the handler resumes (0 : behind the instruction)
 //   x23 : if not zero, the handler sets MPP to x23[1:0] before MRET
 #include "test.h"
@@ -219,6 +220,44 @@ back_in_m:
 
     TEST_EQ(25, x29, 0)                  // and none of that trapped
 
+    //-----------------------------------------------------------------
+    // a refused fetch whose trap is delegated to S
+    //
+    //   The hart stays in S after the trap, so the entry that refused the
+    //   fetch still applies when fetching starts again at stvec. The fetch
+    //   unit finds a refusal one cycle after the request (CPU_CORE_SPEC.md
+    //   6.3) and must take it for that request only, not for an address it
+    //   still holds from before.
+    //-----------------------------------------------------------------
+    li   t0, 1 << 1                      // instruction access fault to S
+    csrs medeleg, t0
+    la   t0, s_trap
+    csrw stvec, t0
+    li   t0, 3 << 11
+    csrc mstatus, t0
+    li   t0, 1 << 11
+    csrs mstatus, t0                     // MPP = S
+    la   t0, in_s2
+    csrw mepc, t0
+    mret
+
+in_s2:
+    li   x29, 0
+    la   x18, no_x_code
+    la   x24, 1f
+    jalr x1, x18, 0
+1:
+    TEST_EQ(27, x29, 2)                  // taken in S
+    TEST_EQ(28, x28, 1)                  // instruction access fault
+    TEST_EQ_REG(29, x26, x18)
+    la   x24, back_in_m2
+    li   x23, 4 | 3                      // back in M
+    ecall                                // not delegated : to M
+back_in_m2:
+    TEST_EQ(30, x28, 9)
+    li   t0, 1 << 1
+    csrc medeleg, t0
+
     la   t0, default_trap
     csrw mtvec, t0
     TEST_DONE
@@ -255,6 +294,19 @@ m_trap:
     csrw mepc, x24
     li   x24, 0
     mret
+
+    //-----------------------------------------------------------------
+    // supervisor trap handler : records like the machine one (x29 = 2)
+    //-----------------------------------------------------------------
+    .align 2
+s_trap:
+    csrr x28, scause
+    csrr x27, stval
+    csrr x26, sepc
+    li   x29, 2
+    csrw sepc, x24
+    li   x24, 0
+    sret
 
     TEST_FAIL_HANDLER
 

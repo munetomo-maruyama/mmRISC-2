@@ -92,6 +92,7 @@ module tb_CACHE;
     logic [FETCH_WIDTH-1:0]  i_resp_data;
     logic                    i_flush_valid, i_flush_done;
     logic                    i_kill;
+    logic                    i_cancel = 1'b0;   // the core's PMP; not used here
     logic [PADDR_WIDTH-1:0]  i_req_paddr;     // physical address, one cycle later
 
     logic                    d_req_valid, d_req_ready;
@@ -235,6 +236,7 @@ module tb_CACHE;
             .i_flush_valid  (i_flush_valid),
             .i_flush_done   (i_flush_done),
             .i_kill         (i_kill),
+            .i_cancel       (i_cancel),
 
             .d_req_valid    (d_req_valid),
             .d_req_ready    (d_req_ready),

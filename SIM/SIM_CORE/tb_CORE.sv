@@ -51,6 +51,7 @@ module tb_CORE;
     // DUT
     //=================================================================
     logic                   i_req_valid, i_req_ready, i_resp_valid, i_resp_error, i_kill;
+    logic                   i_cancel;
     logic [PADDR_WIDTH-1:0] i_req_addr, i_req_paddr;
     logic [63:0]            i_resp_data;
     logic                   i_flush_valid, i_flush_done;
@@ -108,6 +109,7 @@ module tb_CORE;
             .i_flush_valid (i_flush_valid),
             .i_flush_done  (i_flush_done),
             .i_kill        (i_kill),
+            .i_cancel      (i_cancel),
             .d_req_valid   (d_req_valid),
             .d_req_ready   (d_req_ready),
             .d_req_addr    (d_req_addr),
@@ -170,6 +172,7 @@ module tb_CORE;
             .i_req_addr   (i_req_addr),
             .i_req_paddr  (i_req_paddr),
             .i_kill       (i_kill),
+            .i_cancel     (i_cancel),
             .i_resp_valid (i_resp_valid),
             .i_resp_data  (i_resp_data),
             .i_resp_error (i_resp_error),
