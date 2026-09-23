@@ -165,43 +165,47 @@ module CORE_FPU
     endtask
 
     //=================================================================
-    // the operands, held for as long as the operation lasts
+    // the operands and the control, copied in on the first cycle
     //
     //   EX keeps them steady while the unit is busy, but it holds them
     //   through the forwarding multiplexers of the pipeline, so without a
     //   copy of its own every path into this unit starts at a writeback
     //   register and runs through those multiplexers and the unpacking
-    //   before it reaches anything. Taking the copy at `start` puts a flip
-    //   flop in front of all of that. The first cycle still needs the live
-    //   value -- that is when the partial products are taken and when the
-    //   special cases decide which way to go -- so the copy is bypassed
-    //   exactly then.
+    //   before it reaches anything.
+    //
+    //   Nothing bypasses the copy. A multiplexer in front of it would put
+    //   `start` at the head of the deepest cone in the unit, and `start`
+    //   is not an early signal -- the pipeline only raises it when the
+    //   memory stage is not stalling, which depends on the answer of the
+    //   data cache. It would also give the timing analysis a path that the
+    //   design never takes, from the live operand through the whole select
+    //   into registers that are only written several states later. So the
+    //   first cycle does nothing but take the copy, and S_UNP does what
+    //   used to happen at `start`.
     //=================================================================
-    logic [63:0] q_a, q_b, q_c;
     logic [63:0] u_a, u_b, u_c;
+    logic [4:0]  u_op;
+    logic        u_fmt, u_int_signed, u_int_w;
+    logic [2:0]  u_rm;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            q_a <= 64'd0;
-            q_b <= 64'd0;
-            q_c <= 64'd0;
+            u_a <= 64'd0; u_b <= 64'd0; u_c <= 64'd0;
+            u_op <= 5'd0; u_fmt <= 1'b0; u_rm <= 3'd0;
+            u_int_signed <= 1'b0; u_int_w <= 1'b0;
         end else if (start) begin
-            q_a <= a;
-            q_b <= b;
-            q_c <= c;
+            u_a <= a; u_b <= b; u_c <= c;
+            u_op <= op; u_fmt <= fmt; u_rm <= rm;
+            u_int_signed <= int_signed; u_int_w <= int_w;
         end
     end
-
-    assign u_a = start ? a : q_a;
-    assign u_b = start ? b : q_b;
-    assign u_c = start ? c : q_c;
 
     // The operand as an operation sees it. Everything except the transfer
     // instructions (FLW/FSW, FMV.W.X, FMV.X.W) reads a single that is not
     // NaN boxed as the canonical NaN.
     logic [63:0] a_cval, b_cval;
-    assign a_cval = (fmt | (&u_a[63:32])) ? u_a : QNAN32;
-    assign b_cval = (fmt | (&u_b[63:32])) ? u_b : QNAN32;
+    assign a_cval = (u_fmt | (&u_a[63:32])) ? u_a : QNAN32;
+    assign b_cval = (u_fmt | (&u_b[63:32])) ? u_b : QNAN32;
 
     logic        a_sign, a_zero, a_inf, a_nan, a_snan;
     logic        b_sign, b_zero, b_inf, b_nan, b_snan;
@@ -212,16 +216,39 @@ module CORE_FPU
     int signed   c_exp;
     logic [63:0] c_sig;
     logic [63:0] c_cval;
-    assign c_cval = (fmt | (&u_c[63:32])) ? u_c : QNAN32;
+    assign c_cval = (u_fmt | (&u_c[63:32])) ? u_c : QNAN32;
+
+    // What the unpacking produces before anything is held. Telling what kind
+    // of value it is costs a couple of comparisons, but the exponent and the
+    // significand of a subnormal cost a leading zero count and a shift of
+    // the whole width, and that is too much to leave in front of the select.
+    // So the kind is used as it comes and the two numbers are held.
+    logic        w_a_sign, w_a_zero, w_a_inf, w_a_nan, w_a_snan;
+    logic        w_b_sign, w_b_zero, w_b_inf, w_b_nan, w_b_snan;
+    logic        w_c_sign, w_c_zero, w_c_inf, w_c_nan, w_c_snan;
+    int signed   w_a_exp, w_b_exp, w_c_exp;
+    logic [63:0] w_a_sig, w_b_sig, w_c_sig;
 
     // The sensitivity list is written out on purpose. `unpack` is a task
     // with output arguments, and with @(*) Icarus Verilog puts those outputs
     // into the list as well, so the block keeps waking itself up; the whole
     // core then runs about a thousand times slower. The task reads nothing
     // but its two inputs, so naming them is exact as well as portable.
-    always @(u_a, fmt) unpack(u_a, fmt, a_sign, a_exp, a_sig, a_zero, a_inf, a_nan, a_snan);
-    always @(u_b, fmt) unpack(u_b, fmt, b_sign, b_exp, b_sig, b_zero, b_inf, b_nan, b_snan);
-    always @(u_c, fmt) unpack(u_c, fmt, c_sign, c_exp, c_sig, c_zero, c_inf, c_nan, c_snan);
+    always @(u_a, u_fmt) unpack(u_a, u_fmt, w_a_sign, w_a_exp, w_a_sig,
+                                w_a_zero, w_a_inf, w_a_nan, w_a_snan);
+    always @(u_b, u_fmt) unpack(u_b, u_fmt, w_b_sign, w_b_exp, w_b_sig,
+                                w_b_zero, w_b_inf, w_b_nan, w_b_snan);
+    always @(u_c, u_fmt) unpack(u_c, u_fmt, w_c_sign, w_c_exp, w_c_sig,
+                                w_c_zero, w_c_inf, w_c_nan, w_c_snan);
+
+    assign a_sign = w_a_sign; assign a_zero = w_a_zero; assign a_inf = w_a_inf;
+    assign a_nan  = w_a_nan;  assign a_snan = w_a_snan;
+    assign b_sign = w_b_sign; assign b_zero = w_b_zero; assign b_inf = w_b_inf;
+    assign b_nan  = w_b_nan;  assign b_snan = w_b_snan;
+    assign c_sign = w_c_sign; assign c_zero = w_c_zero; assign c_inf = w_c_inf;
+    assign c_nan  = w_c_nan;  assign c_snan = w_c_snan;
+
+    // a_exp / a_sig and their fellows are written by S_UNP
 
     //=================================================================
     // the rounder, shared by everything that rounds
@@ -248,7 +275,7 @@ module CORE_FPU
             .sig_in (q_rnd_sig),
             .sticky_in (q_rnd_sticky),
             .fmt    (q_rnd_fmt),
-            .rm     (rm),
+            .rm     (u_rm),
             .result (rnd_result),
             .flags  (rnd_flags)
         );
@@ -260,14 +287,14 @@ module CORE_FPU
     logic        sgn_a, sgn_b, sgn_new;
 
     always @(*) begin
-        sgn_a = fmt ? a_cval[63] : a_cval[31];
-        sgn_b = fmt ? b_cval[63] : b_cval[31];
-        case (op)
+        sgn_a = u_fmt ? a_cval[63] : a_cval[31];
+        sgn_b = u_fmt ? b_cval[63] : b_cval[31];
+        case (u_op)
             FOP_SGNJN: sgn_new = ~sgn_b;
             FOP_SGNJX: sgn_new = sgn_a ^ sgn_b;
             default:   sgn_new = sgn_b;
         endcase
-        if (fmt) sgnj_res = {sgn_new, a_cval[62:0]};
+        if (u_fmt) sgnj_res = {sgn_new, a_cval[62:0]};
         else     sgnj_res = {32'hFFFF_FFFF, sgn_new, a_cval[30:0]};
     end
 
@@ -298,7 +325,7 @@ module CORE_FPU
 
         cmp_res   = 1'b0;
         cmp_flags = 5'd0;
-        case (op)
+        case (u_op)
             FOP_EQ: begin
                 cmp_res = ~cmp_unordered & cmp_eq;
                 // FEQ is quiet : only a signalling NaN is invalid
@@ -328,15 +355,15 @@ module CORE_FPU
 
         // -0 is smaller than +0, and a NaN loses against a number
         if      (a_zero && b_zero && (a_sign != b_sign))
-            take_b = (op == FOP_MIN) ? b_sign : a_sign;
-        else if (op == FOP_MIN) take_b = ~cmp_lt;
+            take_b = (u_op == FOP_MIN) ? b_sign : a_sign;
+        else if (u_op == FOP_MIN) take_b = ~cmp_lt;
         else                    take_b =  cmp_lt;
 
-        if (a_nan && b_nan)      minmax_res = fmt ? QNAN64 : QNAN32;
+        if (a_nan && b_nan)      minmax_res = u_fmt ? QNAN64 : QNAN32;
         else if (a_nan)          minmax_res = b_cval;
         else if (b_nan)          minmax_res = a_cval;
         else                     minmax_res = take_b ? b_cval : a_cval;
-        if (!fmt && !(a_nan && b_nan))
+        if (!u_fmt && !(a_nan && b_nan))
             minmax_res = {32'hFFFF_FFFF, minmax_res[31:0]};
     end
 
@@ -348,7 +375,7 @@ module CORE_FPU
 
     always @(*) begin
         a_sub = ~a_zero & ~a_inf & ~a_nan &
-                (fmt ? (a_cval[62:52] == 11'd0) : (a_cval[30:23] == 8'd0));
+                (u_fmt ? (a_cval[62:52] == 11'd0) : (a_cval[30:23] == 8'd0));
         class_res = 64'd0;
         if      (a_inf  &&  a_sign)              class_res[0] = 1'b1;
         else if (!a_nan && !a_inf && !a_zero && a_sign && !a_sub) class_res[1] = 1'b1;
@@ -374,8 +401,8 @@ module CORE_FPU
 
     always @(*) begin
         logic [63:0] v;
-        v = int_w ? u_a : (int_signed ? {{32{u_a[31]}}, u_a[31:0]} : {32'd0, u_a[31:0]});
-        i2f_sign = int_signed & v[63];
+        v = u_int_w ? u_a : (u_int_signed ? {{32{u_a[31]}}, u_a[31:0]} : {32'd0, u_a[31:0]});
+        i2f_sign = u_int_signed & v[63];
         i2f_mag  = i2f_sign ? (~v + 64'd1) : v;
         i2f_zero = (i2f_mag == 64'd0);
         i2f_shift = clz64(i2f_mag);
@@ -394,10 +421,10 @@ module CORE_FPU
         logic [63:0]  lim_max, lim_min;
         int           iw;
 
-        iw      = int_w ? 64 : 32;
-        lim_max = int_signed ? ((64'd1 << (iw-1)) - 64'd1)
-                             : (int_w ? {64{1'b1}} : 64'h0000_0000_FFFF_FFFF);
-        lim_min = int_signed ? (64'd1 << (iw-1)) : 64'd0;   // magnitude of the min
+        iw      = u_int_w ? 64 : 32;
+        lim_max = u_int_signed ? ((64'd1 << (iw-1)) - 64'd1)
+                             : (u_int_w ? {64{1'b1}} : 64'h0000_0000_FFFF_FFFF);
+        lim_min = u_int_signed ? (64'd1 << (iw-1)) : 64'd0;   // magnitude of the min
 
         f2i_res   = 64'd0;
         f2i_flags = 5'd0;
@@ -412,7 +439,7 @@ module CORE_FPU
             f2i_res         = lim_max;
             f2i_flags[F_NV] = 1'b1;
         end else if (a_inf) begin
-            f2i_res         = a_sign ? (int_signed ? (~lim_min + 64'd1) : 64'd0)
+            f2i_res         = a_sign ? (u_int_signed ? (~lim_min + 64'd1) : 64'd0)
                                      : lim_max;
             f2i_flags[F_NV] = 1'b1;
         end else if (a_zero) begin
@@ -437,7 +464,7 @@ module CORE_FPU
                 s    = |(a_sig & ((64'd1 << (sh-1)) - 64'd1));
             end
 
-            case (rm)
+            case (u_rm)
                 3'b000:  inc_i = g & (s | ival[0]);
                 3'b001:  inc_i = 1'b0;
                 3'b010:  inc_i =  a_sign & (g | s);
@@ -450,12 +477,12 @@ module CORE_FPU
                 ival = ival + 64'd1;
             end
 
-            if (a_sign && !int_signed && (ival != 64'd0)) ovf = 1'b1;
+            if (a_sign && !u_int_signed && (ival != 64'd0)) ovf = 1'b1;
             if (!a_sign && (ival > lim_max))              ovf = 1'b1;
-            if (a_sign && int_signed && (ival > lim_min)) ovf = 1'b1;
+            if (a_sign && u_int_signed && (ival > lim_min)) ovf = 1'b1;
 
             if (ovf) begin
-                f2i_res         = a_sign ? (int_signed ? (~lim_min + 64'd1) : 64'd0)
+                f2i_res         = a_sign ? (u_int_signed ? (~lim_min + 64'd1) : 64'd0)
                                          : lim_max;
                 f2i_flags[F_NV] = 1'b1;
             end else begin
@@ -465,7 +492,7 @@ module CORE_FPU
         end
 
         // a 32 bit result is sign extended into the register
-        if (!int_w) f2i_res = {{32{f2i_res[31]}}, f2i_res[31:0]};
+        if (!u_int_w) f2i_res = {{32{f2i_res[31]}}, f2i_res[31:0]};
     end
 
 
@@ -486,12 +513,12 @@ module CORE_FPU
     logic        is_fma_op, y_is_one, has_z, z_from_c, x_neg, z_neg;
 
     always @(*) begin
-        is_fma_op = (op <= FOP_NMADD) && (op != FOP_DIV) && (op != FOP_SQRT);
-        y_is_one  = (op == FOP_ADD) || (op == FOP_SUB);
-        has_z     = (op != FOP_MUL);
-        z_from_c  = (op >= FOP_MADD) && (op <= FOP_NMADD);
-        x_neg     = (op == FOP_NMSUB) || (op == FOP_NMADD);
-        z_neg     = (op == FOP_SUB)   || (op == FOP_MSUB) || (op == FOP_NMADD);
+        is_fma_op = (u_op <= FOP_NMADD) && (u_op != FOP_DIV) && (u_op != FOP_SQRT);
+        y_is_one  = (u_op == FOP_ADD) || (u_op == FOP_SUB);
+        has_z     = (u_op != FOP_MUL);
+        z_from_c  = (u_op >= FOP_MADD) && (u_op <= FOP_NMADD);
+        x_neg     = (u_op == FOP_NMSUB) || (u_op == FOP_NMADD);
+        z_neg     = (u_op == FOP_SUB)   || (u_op == FOP_MSUB) || (u_op == FOP_NMADD);
     end
 
     logic        x_sign, x_zero, x_inf, x_nan, x_snan;
@@ -517,12 +544,12 @@ module CORE_FPU
         if (z_from_c) begin
             zz_sign = c_sign ^ z_neg; zz_exp = c_exp; zz_sig = c_sig;
             zz_zero = c_zero; zz_inf = c_inf; zz_nan = c_nan; zz_snan = c_snan;
-            z_packed = fmt ? {c_cval[63] ^ z_neg, c_cval[62:0]}
+            z_packed = u_fmt ? {c_cval[63] ^ z_neg, c_cval[62:0]}
                            : {32'hFFFF_FFFF, c_cval[31] ^ z_neg, c_cval[30:0]};
         end else begin
             zz_sign = b_sign ^ z_neg; zz_exp = b_exp; zz_sig = b_sig;
             zz_zero = b_zero; zz_inf = b_inf; zz_nan = b_nan; zz_snan = b_snan;
-            z_packed = fmt ? {b_cval[63] ^ z_neg, b_cval[62:0]}
+            z_packed = u_fmt ? {b_cval[63] ^ z_neg, b_cval[62:0]}
                            : {32'hFFFF_FFFF, b_cval[31] ^ z_neg, b_cval[30:0]};
         end
     end
@@ -530,7 +557,7 @@ module CORE_FPU
     // the sign a zero result gets: minus only when both sides are minus, or
     // when rounding goes towards minus infinity
     logic zero_sign, zsum_sign;
-    assign zero_sign = (rm == RM_RDN_L) ? 1'b1 : 1'b0;
+    assign zero_sign = (u_rm == RM_RDN_L) ? 1'b1 : 1'b0;
     assign zsum_sign = (!has_z)                    ? prod_sign :
                        (prod_sign == zz_sign)      ? prod_sign : zero_sign;
 
@@ -547,7 +574,7 @@ module CORE_FPU
 
     always @(*) begin
         fma_special  = 1'b1;
-        fma_sp_res   = fmt ? QNAN64 : QNAN32;
+        fma_sp_res   = u_fmt ? QNAN64 : QNAN32;
         fma_sp_flags = 5'd0;
 
         if ((x_inf & y_zero) | (y_inf & x_zero)) begin
@@ -560,16 +587,16 @@ module CORE_FPU
             if (has_z & zz_inf & (zz_sign != prod_sign)) begin
                 fma_sp_flags[F_NV] = 1'b1;               // inf - inf
             end else begin
-                fma_sp_res = fmt ? {prod_sign, 11'h7FF, 52'd0}
+                fma_sp_res = u_fmt ? {prod_sign, 11'h7FF, 52'd0}
                                  : {32'hFFFF_FFFF, prod_sign, 8'hFF, 23'd0};
             end
         end else if (has_z & zz_inf) begin
-            fma_sp_res = fmt ? {zz_sign, 11'h7FF, 52'd0}
+            fma_sp_res = u_fmt ? {zz_sign, 11'h7FF, 52'd0}
                              : {32'hFFFF_FFFF, zz_sign, 8'hFF, 23'd0};
         end else if (prod_zero & (~has_z | zz_zero)) begin
             // both sides are zero: minus only when both are minus, or when
             // the rounding goes towards minus infinity
-            fma_sp_res = fmt ? {zsum_sign, 63'd0}
+            fma_sp_res = u_fmt ? {zsum_sign, 63'd0}
                              : {32'hFFFF_FFFF, zsum_sign, 31'd0};
         end else if (prod_zero) begin
             fma_sp_res = z_packed;                       // 0 + z is z
@@ -697,7 +724,7 @@ module CORE_FPU
 
     always @(*) begin
         div_special  = 1'b1;
-        div_sp_res   = fmt ? QNAN64 : QNAN32;
+        div_sp_res   = u_fmt ? QNAN64 : QNAN32;
         div_sp_flags = 5'd0;
 
         if (a_nan | b_nan) begin
@@ -709,30 +736,30 @@ module CORE_FPU
         end else if (a_inf) begin
             // an infinite dividend gives an infinity, and no flag: divide by
             // zero is only raised for a finite non zero dividend
-            div_sp_res = fmt ? {div_sign, 11'h7FF, 52'd0}
+            div_sp_res = u_fmt ? {div_sign, 11'h7FF, 52'd0}
                              : {32'hFFFF_FFFF, div_sign, 8'hFF, 23'd0};
         end else if (b_zero) begin
             div_sp_flags[F_DZ] = 1'b1;
-            div_sp_res = fmt ? {div_sign, 11'h7FF, 52'd0}
+            div_sp_res = u_fmt ? {div_sign, 11'h7FF, 52'd0}
                              : {32'hFFFF_FFFF, div_sign, 8'hFF, 23'd0};
         end else if (b_inf | a_zero) begin
-            div_sp_res = fmt ? {div_sign, 63'd0} : {32'hFFFF_FFFF, div_sign, 31'd0};
+            div_sp_res = u_fmt ? {div_sign, 63'd0} : {32'hFFFF_FFFF, div_sign, 31'd0};
         end else begin
             div_special = 1'b0;
         end
 
         sqrt_special  = 1'b1;
-        sqrt_sp_res   = fmt ? QNAN64 : QNAN32;
+        sqrt_sp_res   = u_fmt ? QNAN64 : QNAN32;
         sqrt_sp_flags = 5'd0;
 
         if (a_nan) begin
             if (a_snan) sqrt_sp_flags[F_NV] = 1'b1;
         end else if (a_zero) begin
-            sqrt_sp_res = fmt ? {a_sign, 63'd0} : {32'hFFFF_FFFF, a_sign, 31'd0};
+            sqrt_sp_res = u_fmt ? {a_sign, 63'd0} : {32'hFFFF_FFFF, a_sign, 31'd0};
         end else if (a_sign) begin
             sqrt_sp_flags[F_NV] = 1'b1;          // the root of a negative number
         end else if (a_inf) begin
-            sqrt_sp_res = fmt ? {1'b0, 11'h7FF, 52'd0}
+            sqrt_sp_res = u_fmt ? {1'b0, 11'h7FF, 52'd0}
                               : {32'hFFFF_FFFF, 1'b0, 8'hFF, 23'd0};
         end else begin
             sqrt_special = 1'b0;
@@ -763,9 +790,9 @@ module CORE_FPU
         rnd_exp      = 14'sd0;
         rnd_sig      = 128'd0;
         rnd_sticky   = 1'b0;
-        rnd_fmt      = fmt;
+        rnd_fmt      = u_fmt;
 
-        case (op)
+        case (u_op)
             FOP_SGNJ, FOP_SGNJN, FOP_SGNJX: sp_res = sgnj_res;
 
             FOP_MIN, FOP_MAX: begin
@@ -786,11 +813,11 @@ module CORE_FPU
 
             FOP_MV_X_F: begin
                 // the raw bits; a single is sign extended from bit 31
-                sp_res     = fmt ? u_a : {{32{u_a[31]}}, u_a[31:0]};
+                sp_res     = u_fmt ? u_a : {{32{u_a[31]}}, u_a[31:0]};
                 sp_is_int = 1'b1;
             end
 
-            FOP_MV_F_X: sp_res = fmt ? u_a : {32'hFFFF_FFFF, u_a[31:0]};
+            FOP_MV_F_X: sp_res = u_fmt ? u_a : {32'hFFFF_FFFF, u_a[31:0]};
 
             FOP_CVT_S_D: begin                    // double -> single
                 rnd_fmt = 1'b0;
@@ -821,7 +848,7 @@ module CORE_FPU
             end
 
             FOP_CVT_F_I: begin                    // integer -> floating point
-                if (i2f_zero) sp_res = fmt ? 64'd0 : {32'hFFFF_FFFF, 32'd0};
+                if (i2f_zero) sp_res = u_fmt ? 64'd0 : {32'hFFFF_FFFF, 32'd0};
                 else begin
                     rnd_sign = i2f_sign;
                     rnd_exp  = 14'(63 - i2f_shift);
@@ -837,9 +864,9 @@ module CORE_FPU
             end
 
             FOP_DIV, FOP_SQRT: begin
-                if ((op == FOP_DIV) ? div_special : sqrt_special) begin
-                    sp_res = (op == FOP_DIV) ? div_sp_res   : sqrt_sp_res;
-                    sp_flags = (op == FOP_DIV) ? div_sp_flags : sqrt_sp_flags;
+                if ((u_op == FOP_DIV) ? div_special : sqrt_special) begin
+                    sp_res = (u_op == FOP_DIV) ? div_sp_res   : sqrt_sp_res;
+                    sp_flags = (u_op == FOP_DIV) ? div_sp_flags : sqrt_sp_flags;
                 end else begin
                     rnd_sign   = ds_sign;
                     rnd_exp    = 14'(ds_exp);
@@ -856,7 +883,7 @@ module CORE_FPU
                     sp_flags = fma_sp_flags;
                 end else if (fma_zero) begin
                     // everything cancelled out
-                    sp_res = fmt ? {zero_sign, 63'd0}
+                    sp_res = u_fmt ? {zero_sign, 63'd0}
                                    : {32'hFFFF_FFFF, zero_sign, 31'd0};
                 end else begin
                     rnd_sign = sum_sign;
@@ -886,7 +913,11 @@ module CORE_FPU
     //   a leading zero count over 129 bits, a shift of the same width, and
     //   then the subnormal shift and the carry of the rounding.
     //
-    //   The multiply and add reaches them through four more: the partial
+    //   In front of them every operation has two: S_IDLE takes the copy of
+    //   the operands and the control, S_UNP unpacks them and holds the
+    //   exponent and the significand of each.
+    //
+    //   The multiply and add reaches the end through four more: the partial
     //   products, their sum, the alignment of the addend, and the addition.
     //   The alignment and the addition are apart for the same reason: a
     //   variable shift followed by two adders as wide as the product does
@@ -895,8 +926,8 @@ module CORE_FPU
     //   It is not pipelined, one operation at a time, which is all an in
     //   order single issue pipeline can use.
     //=================================================================
-    typedef enum logic [3:0] {S_IDLE, S_M1, S_M2, S_M3, S_SEL, S_RND,
-                              S_DIV, S_SQRT, S_DONE} state_t;
+    typedef enum logic [3:0] {S_IDLE, S_UNP, S_PP, S_M1, S_M2, S_M3,
+                              S_SEL, S_RND, S_DIV, S_SQRT, S_DONE} state_t;
     state_t state;
 
     assign busy = (state != S_IDLE) && (state != S_DONE);
@@ -908,6 +939,9 @@ module CORE_FPU
             result        <= 64'd0;
             result_is_int <= 1'b0;
             flags         <= 5'd0;
+            a_exp <= 0; a_sig <= 64'd0;
+            b_exp <= 0; b_sig <= 64'd0;
+            c_exp <= 0; c_sig <= 64'd0;
             pp_ll <= 64'd0; pp_hl <= 64'd0; pp_lh <= 64'd0; pp_hh <= 64'd0;
             prod  <= 128'd0;
             sum_r <= 129'd0;
@@ -927,41 +961,60 @@ module CORE_FPU
         end else begin
             case (state)
                 //-----------------------------------------------------
-                S_IDLE: if (start) begin
-                    if ((op == FOP_DIV) && !div_special) begin
-                        dv_rem  <= {1'b0, a_sig};
-                        dv_div  <= b_sig;
+                // nothing but the copy of the operands, which the block
+                // above this one takes
+                S_IDLE: if (start) state <= S_UNP;
+                //-----------------------------------------------------
+                S_UNP: begin
+                    // The kind of each value is used as it comes out of the
+                    // unpacking; the exponent and the significand are held,
+                    // so that no later cycle has the leading zero count and
+                    // the shift of a subnormal in front of it.
+                    a_exp <= w_a_exp;  a_sig <= w_a_sig;
+                    b_exp <= w_b_exp;  b_sig <= w_b_sig;
+                    c_exp <= w_c_exp;  c_sig <= w_c_sig;
+
+                    if ((u_op == FOP_DIV) && !div_special) begin
+                        dv_rem  <= {1'b0, w_a_sig};
+                        dv_div  <= w_b_sig;
                         dv_quo  <= 128'd0;
-                        dv_cnt  <= fmt ? 8'd128 : 8'd64;
-                        dv_exp  <= a_exp - b_exp;
+                        dv_cnt  <= u_fmt ? 8'd128 : 8'd64;
+                        dv_exp  <= w_a_exp - w_b_exp;
                         dv_sign <= div_sign;
-                        dv_fmt  <= fmt;
+                        dv_fmt  <= u_fmt;
                         is_sqrt_r <= 1'b0;
                         state   <= S_DIV;
-                    end else if ((op == FOP_SQRT) && !sqrt_special) begin
+                    end else if ((u_op == FOP_SQRT) && !sqrt_special) begin
                         // an odd exponent leaves a factor of two in the
                         // radicand, so that the exponent of the root stays
                         // a whole number
-                        sq_rad  <= a_exp[0] ? {a_sig, 64'd0} : {1'b0, a_sig, 63'd0};
+                        sq_rad  <= w_a_exp[0] ? {w_a_sig, 64'd0}
+                                              : {1'b0, w_a_sig, 63'd0};
                         sq_rem  <= 66'd0;
                         sq_root <= 64'd0;
                         sq_cnt  <= 8'd64;
-                        sq_exp  <= a_exp >>> 1;
+                        sq_exp  <= w_a_exp >>> 1;
                         is_sqrt_r <= 1'b1;
                         state   <= S_SQRT;
                     end else if (is_fma_op && !fma_special) begin
-                        pp_ll <= {32'd0, x_sig[31:0]}  * {32'd0, y_sig[31:0]};
-                        pp_hl <= {32'd0, x_sig[63:32]} * {32'd0, y_sig[31:0]};
-                        pp_lh <= {32'd0, x_sig[31:0]}  * {32'd0, y_sig[63:32]};
-                        pp_hh <= {32'd0, x_sig[63:32]} * {32'd0, y_sig[63:32]};
-                        state <= S_M1;
+                        state <= S_PP;
                     end else begin
                         // everything else -- the moves, the comparisons, the
                         // conversions, and every special case of the four
-                        // above -- is decided by S_SEL out of the copy of
-                        // the operands that was just taken
+                        // above -- is decided by S_SEL out of what has just
+                        // been held
                         state <= S_SEL;
                     end
+                end
+                //-----------------------------------------------------
+                S_PP: begin
+                    // out of the held significands, so that the leading zero
+                    // count of a subnormal is not in front of the multiplier
+                    pp_ll <= {32'd0, x_sig[31:0]}  * {32'd0, y_sig[31:0]};
+                    pp_hl <= {32'd0, x_sig[63:32]} * {32'd0, y_sig[31:0]};
+                    pp_lh <= {32'd0, x_sig[31:0]}  * {32'd0, y_sig[63:32]};
+                    pp_hh <= {32'd0, x_sig[63:32]} * {32'd0, y_sig[63:32]};
+                    state <= S_M1;
                 end
                 //-----------------------------------------------------
                 S_M1: begin

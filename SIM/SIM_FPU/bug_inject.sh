@@ -12,10 +12,6 @@
 # is where a register that is written in one state and read in another can
 # be wired to the wrong thing without any of it showing up in a lint.
 #
-# Not listed, because they cannot change an answer:
-#   - bypassing the operand copy always (`u_a = a`). EX holds the operands
-#     steady for the whole operation and so does the bench, so the copy and
-#     the live value agree; the copy exists for the clock, not the answer.
 #---------------------------------------------------------------------------
 set -u
 
@@ -34,7 +30,12 @@ VERILATOR_FLAGS="--binary --timing -j 0 \
 MUTATIONS=(
 # the operand copy
 "operands are never copied|CORE_FPU/CORE_FPU.sv|s|end else if (start) begin|end else if (1'b0) begin|"
-"the copy is not bypassed on the first cycle|CORE_FPU/CORE_FPU.sv|s|assign u_a = start ? a : q_a;|assign u_a = q_a;|"
+"the control is copied from the wrong place|CORE_FPU/CORE_FPU.sv|s|u_op <= op; u_fmt <= fmt; u_rm <= rm;|u_op <= op; u_fmt <= ~fmt; u_rm <= rm;|"
+
+# holding the unpacked value (S_UNP) and the partial products (S_PP)
+"the held significand is the wrong operand|CORE_FPU/CORE_FPU.sv|s|a_exp <= w_a_exp;  a_sig <= w_a_sig;|a_exp <= w_a_exp;  a_sig <= w_b_sig;|"
+"the held exponent is the one before normalising|CORE_FPU/CORE_FPU.sv|s|b_exp <= w_b_exp;  b_sig <= w_b_sig;|b_exp <= 0;        b_sig <= w_b_sig;|"
+"a partial product takes the wrong half|CORE_FPU/CORE_FPU.sv|s%pp_hl <= {32'd0, x_sig\[63:32\]} \* {32'd0, y_sig\[31:0\]};%pp_hl <= {32'd0, x_sig[31:0]} * {32'd0, y_sig[31:0]};%"
 
 # the alignment cycle (S_M2)
 "the alignment sticky is thrown away|CORE_FPU/CORE_FPU.sv|s|al_st     <= sh\[128\];|al_st     <= 1'b0;|g"
