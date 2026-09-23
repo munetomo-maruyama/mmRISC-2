@@ -30,13 +30,19 @@
 #     benchmark with a code footprint larger than the buffer, which is worth
 #     building when the predictor is tuned rather than now. 174 and 175 are
 #     listed but are in that category: they are left in for the day such a
-#     benchmark exists, and they report NOT DETECTED until then. What covers
+#     benchmark exists. 175 reports NOT DETECTED until then; 174 is caught
+#     by the virtual memory test below (a real wrong answer, check 20 of
+#     rv64ui-v-add), which only runs when its hex exists, that is after
+#     "make riscv-tests-v" has been run once. What covers
 #     the buffer instead is that a change to it which alters no prediction
 #     leaves every cycle count in the suite exactly where it was.
 #   - the inside of MMU_PMP, which has its own bench and its own campaign in
 #     SIM_MMU; what is listed here is the way the core uses it
 #   - a redirect issued while EX is stalled: the front end is redirected to
 #     the same address again when EX finally moves on
+#   - the stall of MA in the forwarding select from WB: a stalled MA keeps
+#     its instruction, so the select from MA is set whenever the one from
+#     WB would be, and MA comes first
 #---------------------------------------------------------------------------
 cd "$(dirname "$0")"
 WORK=bug_work
@@ -76,8 +82,8 @@ MUTATIONS=(
 "15#CPU_CORE/CORE_LSU/CORE_LSU.sv#s/assign req_accept  = d_req_valid \& d_req_ready;/assign req_accept  = d_req_valid;/#LSU: the access counts as issued although the cache did not take it"
 "16#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign i_kill      = redirect_valid . self_redirect;%assign i_kill      = 1'b0;%#IFU: the cache is not told about a redirect"
 "17#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign fq_insn   = fq_is_rvc ? {16'd0, p0} : {p1, p0};/assign fq_insn   = fq_is_rvc ? {16'd0, p0} : {p0, p1};/#IFU: the two parcels of a 32 bit instruction are swapped"
-"18#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/if      (ma_valid \&\& ma_we_rd \&\& (ma_rd != 5'd0) \&\& (ma_rd == ex_rs1)) ex_a_fwd = ma_fwd_data;/if      (1'b0) ex_a_fwd = ma_fwd_data;/#core: no forwarding from MA into the first operand"
-"19#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/else if (wb_valid \&\& wb_we_rd \&\& (wb_rd != 5'd0) \&\& (wb_rd == ex_rs2)) ex_b_fwd = wb_data;/else if (1'b0) ex_b_fwd = wb_data;/#core: no forwarding from WB into the second operand"
+"18#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/if      (fwd_a_ma) ex_a_fwd = ma_fwd_data;/if      (1'b0) ex_a_fwd = ma_fwd_data;/#core: no forwarding from MA into the first operand"
+"19#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/else if (fwd_b_wb) ex_b_fwd = wb_data;/else if (1'b0) ex_b_fwd = wb_data;/#core: no forwarding from WB into the second operand"
 "20#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign ma_fwd_data = (ma_mem \& ma_is_load) ? lsu_resp_data : ma_result;/assign ma_fwd_data = ma_result;/#core: a load in MA forwards its address"
 "21#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ex_rs1_data <= ex_a_fwd;/                ex_rs1_data <= ex_rs1_data;/#core: a stalled EX does not keep the forwarded operand"
 "22#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ex_rs2_data <= ex_b_fwd;/                ex_rs2_data <= ex_rs2_data;/#core: a stalled EX does not keep the forwarded store data"
@@ -211,6 +217,10 @@ MUTATIONS=(
 "184#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%((take_branch != ex_pred_taken) .%(1'b0 |%#core: a branch that was predicted wrongly is not put right"
 "185#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%redirect_pc = take_branch ? target_pc : ex_seq_pc;%redirect_pc = target_pc;%#core: a wrong taken prediction does not go back to the next instruction"
 "187#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign btb_upd_is32   = ~ex_is_rvc;%assign btb_upd_is32   = 1'b0;%#core: the buffer is told every branch is compressed"
+"188#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign nx_rs1   = ex_advance ? (dec_use_rs1 ? dec_rs1 : 5'd0) : ex_rs1;%assign nx_rs1   = dec_use_rs1 ? dec_rs1 : 5'd0;%#core: the forwarding select of a stalled EX looks at the operands of the next instruction"
+"189#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%else                 nx_ma_wr = ma_valid \& ma_we_rd;%else                 nx_ma_wr = 1'b0;%#core: the forwarding select forgets a load that waits in MA"
+"190#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%nx_ma_wr = nx_ma_wr \& (nx_ma_rd != 5'd0);%nx_ma_wr = nx_ma_wr;%#core: a result written to x0 is forwarded from MA"
+"192#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%else if (ex_advance) nx_ma_wr = ex_valid \& ex_we_rd \& ~ex_exc;%else if (ex_advance) nx_ma_wr = ex_we_rd \& ~ex_exc;%#core: the forwarding select from MA does not check that the instruction is there"
 )
 
 # every mutation is run without and with back pressure on both cache ports

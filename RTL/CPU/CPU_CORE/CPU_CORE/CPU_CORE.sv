@@ -423,14 +423,22 @@ module CPU_CORE
     // address of the access and must not be forwarded
     assign ma_fwd_data = (ma_mem & ma_is_load) ? lsu_resp_data : ma_result;
 
+    // Where each operand comes from is decided one cycle early, into a flip
+    // flop per source (see "forwarding selects" next to the pipeline
+    // registers): this multiplexer heads the longest path of the design,
+    // the address of a load or store on its way through the DTLB and the
+    // PMP, and a comparison of register numbers in front of it would put
+    // its depth and the routing of ma_rd and wb_rd on that path as well.
+    logic fwd_a_ma, fwd_a_wb, fwd_b_ma, fwd_b_wb;
+
     always @(*) begin
         ex_a_fwd = ex_rs1_data;
-        if      (ma_valid && ma_we_rd && (ma_rd != 5'd0) && (ma_rd == ex_rs1)) ex_a_fwd = ma_fwd_data;
-        else if (wb_valid && wb_we_rd && (wb_rd != 5'd0) && (wb_rd == ex_rs1)) ex_a_fwd = wb_data;
+        if      (fwd_a_ma) ex_a_fwd = ma_fwd_data;
+        else if (fwd_a_wb) ex_a_fwd = wb_data;
 
         ex_b_fwd = ex_rs2_data;
-        if      (ma_valid && ma_we_rd && (ma_rd != 5'd0) && (ma_rd == ex_rs2)) ex_b_fwd = ma_fwd_data;
-        else if (wb_valid && wb_we_rd && (wb_rd != 5'd0) && (wb_rd == ex_rs2)) ex_b_fwd = wb_data;
+        if      (fwd_b_ma) ex_b_fwd = ma_fwd_data;
+        else if (fwd_b_wb) ex_b_fwd = wb_data;
     end
 
     //=================================================================
@@ -1011,6 +1019,58 @@ module CPU_CORE
                 id_exc_cause = EXC_BREAK;
                 id_exc_tval  = fq_pc;
             end
+        end
+    end
+
+    //=================================================================
+    // forwarding selects
+    //
+    //   Which instruction EX, MA and WB will hold in the next cycle is
+    //   decided by the same signals that load the pipeline registers
+    //   below, so the comparisons of register numbers can be made now on
+    //   what they are about to hold, and only their answers stored. The
+    //   rules here are those of the registers below, case for case; a
+    //   change to either has to be made to both.
+    //
+    //   MA : a trap or an xRET empties it, an advancing EX fills it, and
+    //        otherwise it either keeps what it has (stalled) or becomes a
+    //        bubble. Its write is cancelled by an exception in EX.
+    //   WB : gets what MA has unless MA is stalled; a trap in MA stops it.
+    //   EX : the source registers of the instruction ID hands over, or of
+    //        the one EX keeps. A kept instruction has already taken the
+    //        forwarded value into ex_rs1_data, and the source that gave it
+    //        either stays where it is or moves on to WB, which then has
+    //        the same value; so looking it up again gives the same answer.
+    //=================================================================
+    logic [4:0] nx_rs1, nx_rs2, nx_ma_rd;
+    logic       nx_ma_wr, nx_wb_wr;
+
+    assign nx_rs1   = ex_advance ? (dec_use_rs1 ? dec_rs1 : 5'd0) : ex_rs1;
+    assign nx_rs2   = ex_advance ? (dec_use_rs2 ? dec_rs2 : 5'd0) : ex_rs2;
+    assign nx_ma_rd = ex_advance ? ex_rd : ma_rd;
+
+    always @(*) begin
+        if      (flush)      nx_ma_wr = 1'b0;
+        else if (ex_advance) nx_ma_wr = ex_valid & ex_we_rd & ~ex_exc;
+        else if (!stall_ma)  nx_ma_wr = 1'b0;
+        else                 nx_ma_wr = ma_valid & ma_we_rd;
+        nx_ma_wr = nx_ma_wr & (nx_ma_rd != 5'd0);
+    end
+
+    assign nx_wb_wr = ~stall_ma & ma_valid & ~trap_taken & ma_we_rd &
+                      (ma_rd != 5'd0);
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            fwd_a_ma <= 1'b0;
+            fwd_a_wb <= 1'b0;
+            fwd_b_ma <= 1'b0;
+            fwd_b_wb <= 1'b0;
+        end else begin
+            fwd_a_ma <= nx_ma_wr & (nx_ma_rd == nx_rs1);
+            fwd_a_wb <= nx_wb_wr & (ma_rd    == nx_rs1);
+            fwd_b_ma <= nx_ma_wr & (nx_ma_rd == nx_rs2);
+            fwd_b_wb <= nx_wb_wr & (ma_rd    == nx_rs2);
         end
     end
 
