@@ -82,8 +82,12 @@ all: run-all
 
 tests: $(HEXES)
 
+# a test may come with a C part of the same name (t19_ldbench), which is
+# compiled with -O2 and linked behind its start
 tests/%.elf: tests/%.S tests/link.ld tests/test.h
-	$(RVCC) $(RVFLAGS) -o $@ $<
+	$(RVCC) $(RVFLAGS) -O2 -o $@ $< $(wildcard $(<:.S=.c))
+
+tests/t19_ldbench.elf: tests/t19_ldbench.c
 
 tests/%.hex: tests/%.elf tools/bin2hex.py
 	$(RVOBJCOPY) -O binary $< $(@:.hex=.bin)

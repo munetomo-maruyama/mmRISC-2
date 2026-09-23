@@ -338,6 +338,7 @@ module CPU_CORE
     logic ex_is_mem, stall_ma, stall_ex, ex_advance, ex_mmu_wait;
     logic id_ready, id_advance, pipe_busy, serial_busy, wfi_wait, flush;
     logic ma_exc, trap_taken, mret_taken, sret_taken, fencei_taken, fencei_busy;
+    logic refetch_taken;
     logic sfence_taken, commit, ex_mispredict;
 
     // the exception of the instruction in EX. `ex_exc_pre` is everything
@@ -393,6 +394,7 @@ module CPU_CORE
     logic [31:0] ma_insn;
     logic [4:0]  ma_rd;
     logic        ma_is_mret, ma_is_sret, ma_is_sfence, ma_is_fencei;
+    logic        ma_refetch;     // predicted taken but not a control transfer
     logic        ma_is_rvc, ma_serial;
     logic [63:0] ma_sfence_vaddr, ma_sfence_asid;
     logic        ma_is_fp, ma_fp_arith, ma_fp_we, ma_fp_box;
@@ -865,8 +867,12 @@ module CPU_CORE
     // instruction; the cache does not take a request while the invalidate is
     // running, so nothing of the old content can be fetched in between
     assign fencei_taken = ma_valid & ma_is_fencei & ~stall_ma & ~trap_taken;
+    // an instruction that the front end took for a taken branch although it
+    // is none (see "the front end guessed, EX knows") refetches from the
+    // instruction behind it, the way the fences do
+    assign refetch_taken = ma_valid & ma_refetch & ~stall_ma & ~trap_taken;
     assign flush        = trap_taken | mret_taken | sret_taken |
-                          fencei_taken | sfence_taken;
+                          fencei_taken | sfence_taken | refetch_taken;
     assign commit     = ma_valid & ~stall_ma & ~trap_taken;
 
     assign trap_en      = trap_taken;
@@ -922,20 +928,38 @@ module CPU_CORE
     // the front end guessed, EX knows
     //
     //   A redirect is only needed when the two disagree, which is the whole
-    //   point of the predictor. An instruction that is not a branch at all
-    //   but was predicted taken (an entry of the buffer that describes code
-    //   that has changed) disagrees here as well and is put right.
+    //   point of the predictor.
+    //
+    //   A control transfer never goes to the MMU or to a unit that takes
+    //   more than one cycle, so for one of them "EX moves on" is just "MA
+    //   is not stalled", and its exception is already complete in
+    //   ex_exc_pre. Saying so, instead of using ex_advance and ex_exc,
+    //   keeps the translation, the PMP and the cache handshake off the path
+    //   that ends in the whole front end: that path was the longest in the
+    //   design (LitexSystem/docs/TIMING.md 13).
+    //
+    //   An instruction that is not a control transfer but was predicted
+    //   taken is the other kind of disagreement. The buffer is tagged with
+    //   the virtual address alone, so it happens when the address space
+    //   changes under the same addresses without a fence: a switch of ASID
+    //   in satp. That one can be a load waiting for its translation, so it
+    //   is not put right from EX: it is marked, and when it commits it
+    //   refetches from the instruction behind it the way the fences do.
+    //   It costs a cycle more than a redirect from EX, and only in this
+    //   case.
     //=================================================================
     logic [63:0] ex_seq_pc;
-    assign ex_seq_pc = ex_pc + (ex_is_rvc ? 64'd2 : 64'd4);
+    logic        ex_is_ctrl;
+    assign ex_seq_pc  = ex_pc + (ex_is_rvc ? 64'd2 : 64'd4);
+    assign ex_is_ctrl = ex_is_branch | ex_is_jal | ex_is_jalr;
 
-    assign ex_mispredict = ex_valid & ~ex_exc &
+    assign ex_mispredict = ex_valid & ex_is_ctrl & ~ex_exc_pre &
                            ((take_branch != ex_pred_taken) |
                             (take_branch & (target_pc != ex_pred_target)));
 
     // the buffer learns from every control transfer that gets through
-    assign btb_upd_valid  = ex_valid & ex_advance & ~ex_exc & ~flush &
-                            (ex_is_branch | ex_is_jal | ex_is_jalr);
+    assign btb_upd_valid  = ex_valid & ex_is_ctrl & ~stall_ma & ~ex_exc_pre &
+                            ~flush;
     assign btb_upd_pc     = ex_pc;
     assign btb_upd_is32   = ~ex_is_rvc;
     assign btb_upd_target = target_pc;
@@ -943,12 +967,12 @@ module CPU_CORE
     assign btb_flush      = fencei_taken | sfence_taken;
 
     // a trap and an MRET come from the commit point and win
-    assign redirect_valid = flush | (ex_mispredict & ex_advance);
+    assign redirect_valid = flush | (ex_mispredict & ~stall_ma);
     always @(*) begin
         if      (trap_taken)   redirect_pc = trap_vector;
         else if (mret_taken)   redirect_pc = mret_target;
         else if (sret_taken)   redirect_pc = sret_target;
-        else if (fencei_taken || sfence_taken)
+        else if (fencei_taken || sfence_taken || refetch_taken)
                                redirect_pc = ma_pc + (ma_is_rvc ? 64'd2 : 64'd4);
         else                   redirect_pc = take_branch ? target_pc : ex_seq_pc;
     end
@@ -1151,6 +1175,7 @@ module CPU_CORE
             ma_is_sret    <= 1'b0;
             ma_is_sfence  <= 1'b0;
             ma_is_fencei  <= 1'b0;
+            ma_refetch    <= 1'b0;
             ma_sfence_vaddr <= 64'd0;
             ma_sfence_asid  <= 64'd0;
             ma_serial     <= 1'b0;
@@ -1275,6 +1300,7 @@ module CPU_CORE
                 ma_is_sret    <= ex_is_sret;
                 ma_is_sfence  <= ex_is_sfence;
                 ma_is_fencei  <= ex_is_fencei;
+                ma_refetch    <= ex_pred_taken & ~ex_is_ctrl;
                 // SFENCE.VMA rs2, rs1 : rs1 selects the address and rs2 the
                 // ASID, a zero register meaning "every one of them"
                 ma_sfence_vaddr <= (ex_rs1 == 5'd0) ? 64'd0 : ex_a_fwd;
@@ -1310,6 +1336,7 @@ module CPU_CORE
                 ma_is_sret <= 1'b0;
                 ma_is_sfence <= 1'b0;
                 ma_is_fencei <= 1'b0;
+                ma_refetch   <= 1'b0;
                 ma_serial  <= 1'b0;
                 ma_csr_wr  <= 1'b0;
                 ma_exc_r   <= 1'b0;
@@ -1357,6 +1384,7 @@ module CPU_CORE
                 ma_is_sret <= 1'b0;
                 ma_is_sfence <= 1'b0;
                 ma_is_fencei <= 1'b0;
+                ma_refetch   <= 1'b0;
                 ma_serial  <= 1'b0;
                 ma_csr_wr  <= 1'b0;
                 ma_exc_r   <= 1'b0;

@@ -260,6 +260,7 @@ module CORE_FPU
     logic               rnd_fmt;
     logic [63:0]        rnd_result;
     logic [4:0]         rnd_flags;
+    logic               rnd_load;       // S_RND : the rounder's first cycle
 
     // The rounder is given registered inputs. Selecting what it is to round
     // and rounding it are each about half of the longest path of this unit,
@@ -270,6 +271,9 @@ module CORE_FPU
 
     FPU_ROUND u_round
         (
+            .clk    (clk),
+            .rst_n  (rst_n),
+            .load   (rnd_load),
             .sign   (q_rnd_sign),
             .exp_in (q_rnd_exp),
             .sig_in (q_rnd_sig),
@@ -908,10 +912,13 @@ module CORE_FPU
     // sequencing
     //
     //   Every operation ends the same way: S_SEL decides what the answer is
-    //   made of and what the rounder is given, S_RND rounds it. Those are
-    //   two cycles because together they are the longest path in the unit --
-    //   a leading zero count over 129 bits, a shift of the same width, and
-    //   then the subnormal shift and the carry of the rounding.
+    //   made of and what the rounder is given, S_RND and S_PACK round it
+    //   (FPU_ROUND takes two cycles: the subnormal shift and the decision to
+    //   round up, then the increment and the packing). Selecting and
+    //   rounding are apart because together they are the longest path in
+    //   the unit -- a leading zero count over 129 bits, a shift of the same
+    //   width, and then the subnormal shift and the carry of the rounding;
+    //   the rounder alone was still 78 levels deep, which is why it is two.
     //
     //   In front of them every operation has two: S_IDLE takes the copy of
     //   the operands and the control, S_UNP unpacks them and holds the
@@ -927,10 +934,12 @@ module CORE_FPU
     //   order single issue pipeline can use.
     //=================================================================
     typedef enum logic [3:0] {S_IDLE, S_UNP, S_PP, S_M1, S_M2, S_M3,
-                              S_SEL, S_RND, S_DIV, S_SQRT, S_DONE} state_t;
+                              S_SEL, S_RND, S_PACK, S_DIV, S_SQRT,
+                              S_DONE} state_t;
     state_t state;
 
     assign busy = (state != S_IDLE) && (state != S_DONE);
+    assign rnd_load = (state == S_RND);
     assign done = (state == S_DONE);
 
     always_ff @(posedge clk or negedge rst_n) begin
@@ -1141,7 +1150,10 @@ module CORE_FPU
                     state        <= S_RND;
                 end
                 //-----------------------------------------------------
-                S_RND: begin
+                // the rounder takes its first cycle
+                S_RND: state <= S_PACK;
+                //-----------------------------------------------------
+                S_PACK: begin
                     result        <= q_use_rnd ? rnd_result : q_sp_res;
                     result_is_int <= q_sp_is_int;
                     flags         <= q_use_rnd ? (q_sp_flags | rnd_flags)

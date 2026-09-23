@@ -9,11 +9,13 @@ SECTIONS
     .text : { *(.text.init) *(.text) *(.text.*) }
 
     . = 0x80001000;
-    .data : { *(.data) *(.data.*) *(.rodata) *(.rodata.*) }
+    .data : { *(.data) *(.data.*) *(.sdata) *(.sdata.*)
+              *(.rodata) *(.rodata.*) *(.srodata) *(.srodata.*) }
 
     . = 0x80002000;
     .tohost : { *(.tohost) }
 
     . = 0x80003000;
-    .bss : { *(.bss) *(.bss.*) }
+    .bss : { __bss_start = .; *(.sbss) *(.sbss.*) *(.bss) *(.bss.*) *(COMMON)
+             . = ALIGN(8); __bss_end = .; }
 }
