@@ -165,7 +165,7 @@ MUTATIONS=(
 "74#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign fq_is_rvc = (p0\[1:0\] != 2'b11);/assign fq_is_rvc = 1'b0;/#IFU: every instruction is taken to be 32 bit wide"
 "75#CPU_CORE/CORE_EXU/CORE_EXU.sv#s/assign link_pc  = pc + (is_rvc ? 64'd2 : 64'd4);/assign link_pc  = pc + 64'd4;/#EXU: the link address of a compressed jump is four bytes on"
 "76#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/                mepc         <= {trap_epc\[63:1\], 1'b0};/                mepc         <= {trap_epc[63:2], 2'b00};/#CSR: mepc drops bit 1, which is wrong with the C extension"
-"91#CPU_MMU/CORE_MMU/CORE_MMU.sv#s+assign p_fail       = ~grant \& d_pmp_fail;+assign p_fail       = 1'b0;+#MMU: a load or store is never refused by the protection"
+"91#CPU_MMU/CORE_MMU/CORE_MMU.sv#s+assign p_fail       = d_pmp_fail;+assign p_fail       = 1'b0;+#MMU: a load or store is never refused by the protection"
 "92#CPU_MMU/CORE_MMU/CORE_MMU.sv#s+end else if (i_pmp_fail) begin+end else if (1'b0) begin+#MMU: a fetch is never refused by the protection"
 "93#CPU_MMU/CORE_MMU/CORE_MMU.sv#s+if (lsu_idle \&\& ptw_need \&\& !kill) begin+if (ptw_need \&\& !kill) begin+#MMU: the walker takes the cache port while the pipeline is using it"
 "94#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|.is_exec  (1'b1),|.is_exec  (1'b0),|#MMU: a fetch is checked against no permission at all"
@@ -238,6 +238,8 @@ MUTATIONS=(
 "198#CPU_CORE/CPU_CORE/CPU_CORE.sv#/assign mdu_start/{n;s/~lu_hazard;/1'b1;/}#core: the multiplier starts while its operand is a load in MR"
 "199#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%mr_exc_cause = mr_is_store ? EXC_SFAULT : EXC_LFAULT;%mr_exc_cause = EXC_LFAULT;%#core: a store refused by the PMP is reported as a load"
 "202#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign ex_ctrl_go = ex_valid \& ex_is_ctrl \& ~stall_ma \& ~lu_hazard \&%assign ex_ctrl_go = ex_valid \& ex_is_ctrl \& ~stall_ma \&%#core: a branch is decided before the load it reads has answered"
+"203#CPU_MMU/CORE_MMU/CORE_MMU.sv#s+assign ptw_pmp_fail = grant \& w_pmp_fail;+assign ptw_pmp_fail = 1'b0;+#MMU: the walker reads a page table the protection refuses"
+"204#CPU_MMU/CORE_MMU/CORE_MMU.sv#s+            .priv     (ptw_priv),+            .priv     (2'b11),+#MMU: the walker's reads are checked as machine mode"
 )
 
 # every mutation is run without and with back pressure on both cache ports

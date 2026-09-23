@@ -39,6 +39,8 @@ MUTATIONS=(
 "18#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/if (wb_empty \&\& (w_state == W_IDLE)) begin/if (1'b1) begin/#3#3#D\$: FLUSH answers before the writebacks finished"
 "19#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_ptag_v ? s1_ptag_r : addr_tag(d_req_paddr)/addr_tag(s1_addr)/#15#15#D\$: tag taken from the request address instead of the physical one"
 "20#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/s1_ptag_v ? s1_ptag_r : addr_tag(i_req_paddr)/addr_tag(s1_addr)/#15#15#I\$: tag taken from the request address instead of the physical one"
+"21#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s|assign amo_old    = s1_addr\[2\] ? {32'd0, hit_word\[63:32\]} : hit_word;|assign amo_old    = hit_word;|#4#4#D\$: a word AMO in the upper half reads the lower one"
+"22#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s|assign amo_wr     = s1_addr\[2\] ? {amo_result\[31:0\], 32'd0} : amo_result;|assign amo_wr     = amo_result;|#4#4#D\$: a word AMO in the upper half writes the lower one"
 )
 
 run_one() {
