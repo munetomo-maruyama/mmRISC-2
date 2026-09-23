@@ -125,6 +125,7 @@ module CPU_BFM
         output logic                         i_flush_valid,
         input  logic                         i_flush_done,
         output logic                         i_kill,
+        output logic                         i_cancel,
 
         output logic                         d_req_valid,
         input  logic                         d_req_ready,
@@ -249,6 +250,7 @@ module CPU_BFM
     end
     assign i_req_addr = ic_cmd_addr;
     assign i_kill     = 1'b0;
+    assign i_cancel   = 1'b0;
 
     // No MMU yet: the physical address is the address of the request that was
     // accepted in the previous cycle (CPU_CACHE_SPEC.md 5.2). This is where

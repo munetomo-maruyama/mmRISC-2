@@ -32,6 +32,8 @@ MUTATIONS=(
 "3#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign fencei_taken = ma_valid \& ma_is_fencei \& ~stall_ma \& ~trap_taken;%assign fencei_taken = ma_valid \& ma_is_fencei \& ~trap_taken;%#core: the instruction cache is invalidated before the write back is done"
 "4#CPU_CORE/CORE_LSU/CORE_LSU.sv#s%d_req_paddr <= req_paddr\[PADDR_WIDTH-1:0\];%d_req_paddr <= req_addr[PADDR_WIDTH-1:0];%#LSU: the cache is given the virtual address as a tag"
 "5#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%if (push_req) i_req_paddr <= tr_paddr\[PADDR_WIDTH-1:0\];%if (push_req) i_req_paddr <= i_req_addr;%#IFU: the cache is given the virtual address as a tag"
+"6#CPU_CACHE/ICACHE/ICACHE.sv#s%if (s1_valid \&\& (i_kill || i_cancel)) begin%if (s1_valid \&\& i_kill) begin%#I\$: a fetch the PMP refused still goes to memory"
+"7#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign i_req_valid = req_want \& tr_ready \& (tr_fault == 2'd0) \& ~i_cancel;%assign i_req_valid = req_want \& tr_ready \& (tr_fault == 2'd0);%#IFU: a fetch goes out in the cycle one is cancelled"
 )
 
 SEL=("$@")

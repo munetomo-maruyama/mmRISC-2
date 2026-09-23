@@ -287,6 +287,7 @@ CPU コア(パイプライン)と MMU は次フェーズで実装する。本フ
 | `i_resp_error` | out | バスエラー |
 | `i_flush_valid` / `i_flush_done` | in / out | 全ライン無効化(`fence.i`) |
 | `i_kill` | in | 未完了の要求を捨てる(分岐予測ミス時)。fill は完了させるが応答は返さない |
+| `i_cancel` | in | **ステージ 1 の要求だけ**を捨てる(`i_req_paddr` を渡しているサイクルの要求)。配列の応答もバスへのアクセスも始めない。それより前の要求には影響しない。コアが PMP に拒否されたフェッチに使う(`CPU_CORE_SPEC.md` 6.3) |
 
 ### 5.2 DCACHE
 

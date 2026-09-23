@@ -57,6 +57,9 @@ module CORE_MEM_MODEL
         // like the instruction cache: a kill drops every answer that is in
         // flight, nothing is returned for those requests
         input  logic                    i_kill,
+        // like the instruction cache: the request whose physical address is
+        // presented in this cycle is dropped, the ones before it are not
+        input  logic                    i_cancel,
         output logic                    i_resp_valid,
         output logic [63:0]             i_resp_data,
         output logic                    i_resp_error,
@@ -363,7 +366,7 @@ module CORE_MEM_MODEL
                 ip_data[i]  <= ip_data[i+1];
                 ip_error[i] <= ip_error[i+1];
             end
-            ip_valid[I_LATENCY] <= s1i_valid & ~i_kill;
+            ip_valid[I_LATENCY] <= s1i_valid & ~i_kill & ~i_cancel;
             ip_error[I_LATENCY] <= s1i_valid & ~in_range(s1i_addr);
             ip_data[I_LATENCY]  <= (s1i_valid & in_range(s1i_addr))
                                    ? mem[widx(s1i_addr)] : 64'd0;
