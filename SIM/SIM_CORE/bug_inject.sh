@@ -43,6 +43,15 @@
 #   - the stall of MA in the forwarding select from WB: a stalled MA keeps
 #     its instruction, so the select from MA is set whenever the one from
 #     WB would be, and MA comes first
+#   - a redirect of a control transfer repeated while EX waits for MR: it
+#     goes to the same place again and the counter of the buffer saturates;
+#     only the clock can tell (ex_ctrl_done)
+#   - the walker waiting for an access in MR before it takes the port: the
+#     access waits for the walk instead (the port is the walker's), and the
+#     PMP answer to MR is held back while the walker owns the checker
+#   - the select from MR forwarding the address of a load: EX waits for
+#     that load (lu_hazard) and takes nothing from MR in the meantime that
+#     it keeps
 #---------------------------------------------------------------------------
 cd "$(dirname "$0")"
 WORK=bug_work
@@ -82,31 +91,31 @@ MUTATIONS=(
 "15#CPU_CORE/CORE_LSU/CORE_LSU.sv#s/assign req_accept  = d_req_valid \& d_req_ready;/assign req_accept  = d_req_valid;/#LSU: the access counts as issued although the cache did not take it"
 "16#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign i_kill      = redirect_valid . self_redirect;%assign i_kill      = 1'b0;%#IFU: the cache is not told about a redirect"
 "17#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign fq_insn   = fq_is_rvc ? {16'd0, p0} : {p1, p0};/assign fq_insn   = fq_is_rvc ? {16'd0, p0} : {p0, p1};/#IFU: the two parcels of a 32 bit instruction are swapped"
-"18#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/if      (fwd_a_ma) ex_a_fwd = ma_fwd_data;/if      (1'b0) ex_a_fwd = ma_fwd_data;/#core: no forwarding from MA into the first operand"
+"18#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/else if (fwd_a_ma) ex_a_fwd = ma_fwd_data;/else if (1'b0) ex_a_fwd = ma_fwd_data;/#core: no forwarding from MA into the first operand"
 "19#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/else if (fwd_b_wb) ex_b_fwd = wb_data;/else if (1'b0) ex_b_fwd = wb_data;/#core: no forwarding from WB into the second operand"
 "20#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign ma_fwd_data = (ma_mem \& ma_is_load) ? lsu_resp_data : ma_result;/assign ma_fwd_data = ma_result;/#core: a load in MA forwards its address"
 "21#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ex_rs1_data <= ex_a_fwd;/                ex_rs1_data <= ex_rs1_data;/#core: a stalled EX does not keep the forwarded operand"
 "22#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ex_rs2_data <= ex_b_fwd;/                ex_rs2_data <= ex_rs2_data;/#core: a stalled EX does not keep the forwarded store data"
-"23#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/(ex_is_mem \& ~lsu_accept \& ~flush)/(1'b0)/#core: EX moves on although the cache did not take the access"
+"23#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/(mr_is_mem \& ~lsu_accept \& ~flush)/(1'b0)/#core: MR moves on although the cache did not take the access"
 "24#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ma_valid   <= 1'b0;/                ma_valid   <= ma_valid;/#core: MA is not emptied when EX has nothing to hand over"
 "25#CPU_CORE/CPU_CORE/CPU_CORE.sv#s@                wb_valid <= 1'b0;       // MA keeps its instruction : bubble@                wb_valid <= wb_valid;@#core: WB keeps its instruction while MA waits and retires it again"
 "26#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                ex_valid      <= id_advance \& fq_valid \& ~redirect_valid;/                ex_valid      <= id_advance \& fq_valid;/#core: the instruction behind a taken branch is not killed"
 "27#CPU_CORE/CPU_CORE/CPU_CORE.sv#s|id_exc_cause = EXC_ECALL_U + {3'd0, priv};|id_exc_cause = EXC_BREAK;|#core: ECALL is reported as a breakpoint"
 "28#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign pop_q     = fq_valid \& fq_ready;/assign pop_q     = fq_valid;/#IFU: the fetch queue drops an instruction that ID could not take"
 "77#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                       \& ~serial_busy \& ~wfi_wait;/                       \& ~wfi_wait;/#core: the instruction behind a CSR write is decoded with the old mstatus.FS"
-"78#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign fpu_start  = fpu_active \& ~fpu_busy \& ~fpu_done \& ~flush \& ~stall_ma;/assign fpu_start  = fpu_active \& ~fpu_busy \& ~fpu_done \& ~flush;/#core: the FPU starts before the load in front of it has answered"
-"79#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign mdu_start  = mdu_active \& ~mdu_busy \& ~mdu_done \& ~flush \& ~stall_ma;/assign mdu_start  = mdu_active \& ~mdu_busy \& ~mdu_done \& ~flush;/#core: the multiplier starts before the load in front of it has answered"
+"78#CPU_CORE/CPU_CORE/CPU_CORE.sv#/assign fpu_start/s/ \& ~stall_ma \&/ \&/#core: the FPU starts before the load in front of it has answered"
+"79#CPU_CORE/CPU_CORE/CPU_CORE.sv#/assign mdu_start/s/ \& ~stall_ma \&/ \&/#core: the multiplier starts before the load in front of it has answered"
 "80#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                         (dec_is_fp \& fp_off) ||/                         (1'b0) ||/#core: an FP instruction is allowed although mstatus.FS is off"
 "81#CPU_FPU/FPU_ROUND/FPU_ROUND.sv#s/        flags\[1\] = tiny \& inexact \& ~overflow;              \/\/ UF/        flags[1] = 1'b0;/#FPU: underflow is never reported"
 "82#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign ma_load_data  = ma_fp_box ? {32'hFFFF_FFFF, lsu_resp_data\[31:0\]}/assign ma_load_data  = 1'b0 ? {32'hFFFF_FFFF, lsu_resp_data[31:0]}/#core: FLW does not NaN box what it loaded"
-"83#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/            .req_wdata    (ex_is_fp_store ? ex_fs2_fwd : ex_b_fwd),/            .req_wdata    (ex_b_fwd),/#core: the store data of FSD comes from the integer file"
+"83#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/mr_wdata      <= ex_is_fp_store ? ex_fs2_fwd : ex_b_fwd;/mr_wdata      <= ex_b_fwd;/#core: the store data of FSD comes from the integer file"
 "84#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/            if (fflags_we) fflags <= fflags | fflags_set;/;/#CSR: fflags does not accumulate"
 "85#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|        mstatus_val\[14:13\] = mstatus_fs;|        mstatus_val[14:13] = 2'b11;|#CSR: mstatus.FS always reads as dirty"
 "86#CPU_FPU/FPU_ROUND/FPU_ROUND.sv#s/            RM_RNE:  inc = guard \& (rest | lsb);/            RM_RNE:  inc = guard;/#FPU: round to nearest never breaks a tie to even"
 "87#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/        ex_rm_eff = (ex_fp_rm == 3'b111) ? frm_csr : ex_fp_rm;/        ex_rm_eff = ex_fp_rm;/#core: the dynamic rounding mode ignores frm"
 "88#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/| (fpu_active \& ~fpu_done \& ~flush);/| (1'b0);/#core: EX does not wait for the FPU"
 "89#CPU_CORE/CORE_FRF/CORE_FRF.sv#s/        rs3_data = (we \&\& (rs3 == rd)) ? rd_data : regs\[rs3\];/        rs3_data = regs[rs3];/#FRF: the third read port has no write first bypass"
-"90#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/        if      (ex_use_fs1 \&\& ma_valid \&\& ma_fp_we \&\& (ma_fp_rd == ex_fs1)) ex_fs1_fwd = ma_fp_fwd_data;/        if      (1'b0) ex_fs1_fwd = ma_fp_fwd_data;/#core: no forwarding of a floating point result from MA"
+"90#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/        else if (ex_use_fs1 \&\& ma_valid \&\& ma_fp_we \&\& (ma_fp_rd == ex_fs1)) ex_fs1_fwd = ma_fp_fwd_data;/        else if (1'b0) ex_fs1_fwd = ma_fp_fwd_data;/#core: no forwarding of a floating point result from MA"
 "29#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|mstatus_val\[12:11\] = mstatus_mpp;|mstatus_val[12:11] = 2'b11;|#CSR: mstatus.MPP always reads as machine mode"
 "30#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/mstatus_mpie <= mstatus_mie;/mstatus_mpie <= 1'b0;/#CSR: a trap does not save the interrupt enable in MPIE"
 "31#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/mstatus_mie  <= mstatus_mpie;/mstatus_mie  <= 1'b0;/#CSR: MRET does not put the interrupt enable back"
@@ -119,13 +128,13 @@ MUTATIONS=(
 "38#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|assign m_enabled   = (priv_r != PRIV_M) . mstatus_mie;|assign m_enabled   = 1'b1;|#CSR: an interrupt is taken although mstatus.MIE is clear"
 "39#CPU_CLINT/CPU_CLINT.sv#s/mtimecmp\[cmp_safe\] <= merge(mtimecmp\[cmp_safe\], wdata, wstrb);/;/#CLINT: mtimecmp cannot be written"
 "40#CPU_CLINT/CPU_CLINT.sv#s/assign irq_m_soft = msip;/assign irq_m_soft = '0;/#CLINT: the software interrupt never reaches the core"
-"41#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign lsu_req_valid = ex_is_mem \& ~stall_ma \& ~flush;/assign lsu_req_valid = ex_is_mem \& ~stall_ma;/#core: the access behind a trapping instruction is still issued"
+"41#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign lsu_req_valid = mr_is_mem \& ~stall_ma \& ~flush;/assign lsu_req_valid = mr_is_mem \& ~stall_ma;/#core: the access behind a trapping instruction is still issued"
 "42#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/if (irq_req \&\& !dec_is_wfi) begin/if (irq_req) begin/#core: the interrupt is taken on the WFI itself, so mepc points at it"
 "43#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                                       dec_is_fence_i) \& pipe_busy)/                                       dec_is_fence_i) \& 1'b0)/#core: a CSR access is issued into a pipeline that is not empty"
 "44#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/    assign wfi_wait    = fq_valid \& dec_is_wfi \& ~irq_any;/    assign wfi_wait    = 1'b0;/#core: WFI does not wait"
 "45#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/            2'd3:    misaligned = |mem_addr\[2:0\];/            2'd3:    misaligned = 1'b0;/#core: a misaligned double word is not detected"
-"46#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%                                    \& ~ex_exc \& d_tr_ready;%                                    \& d_tr_ready;%#core: an instruction that trapped still touches memory"
-"146#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%\& ~ex_exc \& d_tr_ready;%\& ~ex_exc;%#core: an access is issued before its address is translated"
+"46#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign mr_is_mem     = mr_valid \& mr_mem \& ~mr_exc;%assign mr_is_mem     = mr_valid \& mr_mem;%#core: an instruction that trapped still touches memory"
+"146#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign ex_mmu_wait   = d_tr_req \& ~d_tr_ready \& ~flush;%assign ex_mmu_wait   = 1'b0;%#core: an access leaves EX before its address is translated"
 "47#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign trap_epc_c   = ma_pc;/assign trap_epc_c   = ma_pc + 64'd4;/#core: mepc points behind the instruction that trapped"
 "48#CPU_CORE/CPU_CORE/CPU_CORE.sv#s|                                             : {32'd0, ex_insn};|                                             : 64'd0;|#core: mtval of an illegal CSR access is empty"
 "49#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/csr_wr = (funct3\[1:0\] == 2'b01) || (rs1 != 5'd0);/csr_wr = 1'b1;/#decoder: CSRRS with x0 writes the CSR"
@@ -138,7 +147,7 @@ MUTATIONS=(
 "56#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/rem_neg <= a_signed \& a_prep\[63\];/rem_neg <= a_signed \& b_prep[63];/#MDU: the remainder takes the sign of the divisor"
 "57#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/count   <= word_op ? 7'd32 : 7'd64;/count   <= 7'd64;/#MDU: the 32 bit forms divide over 64 steps"
 "58#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/{64'd0, a_mag\[31:0\], 32'd0}/{64'd0, a_mag}/#MDU: the dividend of a 32 bit form is not moved up"
-"59#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/else if (ex_is_mdu)                ma_result <= mdu_result;/else if (1'b0)                     ma_result <= mdu_result;/#core: the result of the multiplier is thrown away"
+"59#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/else if (ex_is_mdu)                mr_result <= mdu_result;/else if (1'b0)                     mr_result <= mdu_result;/#core: the result of the multiplier is thrown away"
 "60#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/| (mdu_active \& ~mdu_done \& ~flush)/| (1'b0)/#core: EX does not wait for the multiplier"
 "61#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/5'b00000: mem_cmd = 4'd5;           \/\/ AMOADD/5'b00000: mem_cmd = 4'd4;/#decoder: AMOADD is issued as AMOSWAP"
 "62#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/5'b00011: mem_cmd = CMD_SC;/5'b00011: mem_cmd = CMD_LR;/#decoder: SC is issued as LR"
@@ -156,7 +165,7 @@ MUTATIONS=(
 "74#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign fq_is_rvc = (p0\[1:0\] != 2'b11);/assign fq_is_rvc = 1'b0;/#IFU: every instruction is taken to be 32 bit wide"
 "75#CPU_CORE/CORE_EXU/CORE_EXU.sv#s/assign link_pc  = pc + (is_rvc ? 64'd2 : 64'd4);/assign link_pc  = pc + 64'd4;/#EXU: the link address of a compressed jump is four bytes on"
 "76#CPU_CORE/CORE_CSR/CORE_CSR.sv#s/                mepc         <= {trap_epc\[63:1\], 1'b0};/                mepc         <= {trap_epc[63:2], 2'b00};/#CSR: mepc drops bit 1, which is wrong with the C extension"
-"91#CPU_MMU/CORE_MMU/CORE_MMU.sv#s+end else if (d_pmp_fail) begin+end else if (1'b0) begin+#MMU: a load or store is never refused by the protection"
+"91#CPU_MMU/CORE_MMU/CORE_MMU.sv#s+assign p_fail       = ~grant \& d_pmp_fail;+assign p_fail       = 1'b0;+#MMU: a load or store is never refused by the protection"
 "92#CPU_MMU/CORE_MMU/CORE_MMU.sv#s+end else if (i_pmp_fail) begin+end else if (1'b0) begin+#MMU: a fetch is never refused by the protection"
 "93#CPU_MMU/CORE_MMU/CORE_MMU.sv#s+if (lsu_idle \&\& ptw_need \&\& !kill) begin+if (ptw_need \&\& !kill) begin+#MMU: the walker takes the cache port while the pipeline is using it"
 "94#CPU_MMU/CORE_MMU/CORE_MMU.sv#s|.is_exec  (1'b1),|.is_exec  (1'b0),|#MMU: a fetch is checked against no permission at all"
@@ -220,10 +229,15 @@ MUTATIONS=(
 "188#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign nx_rs1   = ex_advance ? (dec_use_rs1 ? dec_rs1 : 5'd0) : ex_rs1;%assign nx_rs1   = dec_use_rs1 ? dec_rs1 : 5'd0;%#core: the forwarding select of a stalled EX looks at the operands of the next instruction"
 "189#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%else                 nx_ma_wr = ma_valid \& ma_we_rd;%else                 nx_ma_wr = 1'b0;%#core: the forwarding select forgets a load that waits in MA"
 "190#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%nx_ma_wr = nx_ma_wr \& (nx_ma_rd != 5'd0);%nx_ma_wr = nx_ma_wr;%#core: a result written to x0 is forwarded from MA"
-"192#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%else if (ex_advance) nx_ma_wr = ex_valid \& ex_we_rd \& ~ex_exc;%else if (ex_advance) nx_ma_wr = ex_we_rd \& ~ex_exc;%#core: the forwarding select from MA does not check that the instruction is there"
-"193#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%                ma_refetch    <= ex_pred_taken \& ~ex_is_ctrl;%                ma_refetch    <= 1'b0;%#core: a non branch predicted taken is not refetched"
+"192#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%else if (ex_advance) nx_mr_wr = ex_valid \& ex_we_rd \& ~ex_exc \& ~ex_mem;%else if (ex_advance) nx_mr_wr = ex_we_rd \& ~ex_exc \& ~ex_mem;%#core: the forwarding select from MR does not check that the instruction is there"
+"193#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%                mr_refetch    <= ex_pred_taken \& ~ex_is_ctrl;%                mr_refetch    <= 1'b0;%#core: a non branch predicted taken is not refetched"
 "194#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%else if (fencei_taken || sfence_taken || refetch_taken)%else if (fencei_taken || sfence_taken)%#core: the refetch goes to where EX says, not behind the instruction"
 "195#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign refetch_taken = ma_valid \& ma_refetch \& ~stall_ma \& ~trap_taken;%assign refetch_taken = ma_valid \& ma_refetch \& ~trap_taken;%#core: the refetch does not wait for the load it belongs to"
+"196#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign lu_hazard = ex_valid \& (lu_int | lu_fp) \& ~flush;%assign lu_hazard = ex_valid \& lu_fp \& ~flush;%#core: no load-use interlock on an integer register"
+"197#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign lu_hazard = ex_valid \& (lu_int | lu_fp) \& ~flush;%assign lu_hazard = ex_valid \& lu_int \& ~flush;%#core: no load-use interlock on a floating point register"
+"198#CPU_CORE/CPU_CORE/CPU_CORE.sv#/assign mdu_start/{n;s/~lu_hazard;/1'b1;/}#core: the multiplier starts while its operand is a load in MR"
+"199#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%mr_exc_cause = mr_is_store ? EXC_SFAULT : EXC_LFAULT;%mr_exc_cause = EXC_LFAULT;%#core: a store refused by the PMP is reported as a load"
+"202#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign ex_ctrl_go = ex_valid \& ex_is_ctrl \& ~stall_ma \& ~lu_hazard \&%assign ex_ctrl_go = ex_valid \& ex_is_ctrl \& ~stall_ma \&%#core: a branch is decided before the load it reads has answered"
 )
 
 # every mutation is run without and with back pressure on both cache ports

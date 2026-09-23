@@ -5,8 +5,9 @@
 //
 //   IF1 / IF2 : CORE_IFU, instruction cache and fetch queue
 //   ID        : CORE_DEC and the register file
-//   EX        : CORE_EXU (ALU, branch, address), the data cache request,
-//               the CSR read
+//   EX        : CORE_EXU (ALU, branch, address), the DTLB, the CSR read,
+//               the multi cycle units (MDU, FPU)
+//   MR        : the PMP check and the data cache request
 //   MA        : waits for the data cache answer. This is the commit point:
 //               a trap, an MRET and a CSR write happen here
 //   WB        : register write back and trace
@@ -16,10 +17,19 @@
 //   to decide which instructions are legal and which ECALL cause to raise.
 //
 //   Why the commit point is MA and not WB: a store hands its data to the
-//   cache in EX, so the trap of the instruction in front of it has to be
-//   decided while the store is still in EX. With the trap taken in MA the
+//   cache in MR, so the trap of the instruction in front of it has to be
+//   decided while the store is still in MR. With the trap taken in MA the
 //   store is one stage behind the trapping instruction and is held back by
 //   `trap_taken`.
+//
+//   Why MR is a stage of its own: deciding whether a memory access may go
+//   to the cache needs the forwarded operand, the address, the DTLB, the
+//   PMP and the exception that comes out of them, and at 50 MHz on an
+//   Artix-7 that did not fit in one cycle (LitexSystem/docs/TIMING.md 15).
+//   EX now ends with the translated address, MR checks it and issues it.
+//   A load is one stage further from EX, so an instruction that uses its
+//   result right behind it waits one cycle more (the load-use interlock
+//   below).
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -335,7 +345,8 @@ module CPU_CORE
     //   iterative unit must not start while MA is still waiting for the
     //   cache, and it has to be killed when a trap empties the pipeline.
     //=================================================================
-    logic ex_is_mem, stall_ma, stall_ex, ex_advance, ex_mmu_wait;
+    logic ex_mem, stall_ma, stall_ex, ex_advance, ex_mmu_wait;
+    logic mr_is_mem, stall_mr, mr_advance, lu_hazard;
     logic id_ready, id_advance, pipe_busy, serial_busy, wfi_wait, flush;
     logic ma_exc, trap_taken, mret_taken, sret_taken, fencei_taken, fencei_busy;
     logic refetch_taken;
@@ -343,7 +354,7 @@ module CPU_CORE
 
     // the exception of the instruction in EX. `ex_exc_pre` is everything
     // that is known before the address is translated, `ex_exc` has the
-    // fault of the translation on top of it.
+    // fault of the translation on top of it. The PMP comes in MR.
     logic        ex_exc_pre, ex_exc, ex_exc_int;
     logic [4:0]  ex_exc_cause_pre, ex_exc_cause;
     logic [63:0] ex_exc_tval_pre, ex_exc_tval;
@@ -387,6 +398,34 @@ module CPU_CORE
     logic [63:0] ex_exc_tval_r;
 
     //=================================================================
+    // MR stage registers
+    //
+    //   What MA used to be given by EX, and the access itself: the
+    //   translated address, the command and the data of a store.
+    //=================================================================
+    logic        mr_valid, mr_we_rd, mr_mem, mr_is_load, mr_is_store;
+    logic [63:0] mr_pc, mr_result;
+    logic [31:0] mr_insn;
+    logic [4:0]  mr_rd;
+    logic        mr_is_mret, mr_is_sret, mr_is_sfence, mr_is_fencei;
+    logic        mr_refetch;
+    logic        mr_is_rvc, mr_serial;
+    logic [63:0] mr_sfence_vaddr, mr_sfence_asid;
+    logic        mr_is_fp, mr_fp_arith, mr_fp_we, mr_fp_box;
+    logic [4:0]  mr_fp_flags;
+    logic        mr_csr_wr;
+    logic [11:0] mr_csr_addr;
+    logic [63:0] mr_csr_wdata;
+    logic        mr_exc_r, mr_exc_int_r;
+    logic [4:0]  mr_exc_cause_r;
+    logic [63:0] mr_exc_tval_r;
+    logic [3:0]  mr_cmd;
+    logic [63:0] mr_vaddr, mr_paddr, mr_wdata;
+    logic [1:0]  mr_size;
+    logic        mr_signed;
+    logic        mr_pmp_fail;     // from the PMP of the data side, for MR
+
+    //=================================================================
     // MA stage registers
     //=================================================================
     logic        ma_valid, ma_we_rd, ma_mem, ma_is_load, ma_is_store;
@@ -425,21 +464,27 @@ module CPU_CORE
     // address of the access and must not be forwarded
     assign ma_fwd_data = (ma_mem & ma_is_load) ? lsu_resp_data : ma_result;
 
+    // Three sources, the youngest first: MR, MA, WB. MR only forwards what
+    // EX computed; the answer of a load in MR is not there yet, and an
+    // instruction that needs it waits (lu_hazard) until the load is in MA.
+
     // Where each operand comes from is decided one cycle early, into a flip
     // flop per source (see "forwarding selects" next to the pipeline
     // registers): this multiplexer heads the longest path of the design,
     // the address of a load or store on its way through the DTLB and the
     // PMP, and a comparison of register numbers in front of it would put
     // its depth and the routing of ma_rd and wb_rd on that path as well.
-    logic fwd_a_ma, fwd_a_wb, fwd_b_ma, fwd_b_wb;
+    logic fwd_a_mr, fwd_a_ma, fwd_a_wb, fwd_b_mr, fwd_b_ma, fwd_b_wb;
 
     always @(*) begin
         ex_a_fwd = ex_rs1_data;
-        if      (fwd_a_ma) ex_a_fwd = ma_fwd_data;
+        if      (fwd_a_mr) ex_a_fwd = mr_result;
+        else if (fwd_a_ma) ex_a_fwd = ma_fwd_data;
         else if (fwd_a_wb) ex_a_fwd = wb_data;
 
         ex_b_fwd = ex_rs2_data;
-        if      (fwd_b_ma) ex_b_fwd = ma_fwd_data;
+        if      (fwd_b_mr) ex_b_fwd = mr_result;
+        else if (fwd_b_ma) ex_b_fwd = ma_fwd_data;
         else if (fwd_b_wb) ex_b_fwd = wb_data;
     end
 
@@ -456,17 +501,24 @@ module CPU_CORE
                                      : lsu_resp_data;
     assign ma_fp_fwd_data = (ma_mem & ma_is_load) ? ma_load_data : ma_result;
 
+    // what MR can forward : a floating point result EX computed (not a load)
+    logic mr_fp_fwd;
+    assign mr_fp_fwd = mr_valid & mr_fp_we & ~mr_mem;
+
     always @(*) begin
         ex_fs1_fwd = ex_fs1_data;
-        if      (ex_use_fs1 && ma_valid && ma_fp_we && (ma_fp_rd == ex_fs1)) ex_fs1_fwd = ma_fp_fwd_data;
+        if      (ex_use_fs1 && mr_fp_fwd && (mr_rd == ex_fs1))                ex_fs1_fwd = mr_result;
+        else if (ex_use_fs1 && ma_valid && ma_fp_we && (ma_fp_rd == ex_fs1)) ex_fs1_fwd = ma_fp_fwd_data;
         else if (ex_use_fs1 && wb_valid && wb_fp_we && (wb_fp_rd == ex_fs1)) ex_fs1_fwd = wb_fp_data;
 
         ex_fs2_fwd = ex_fs2_data;
-        if      (ex_use_fs2 && ma_valid && ma_fp_we && (ma_fp_rd == ex_fs2)) ex_fs2_fwd = ma_fp_fwd_data;
+        if      (ex_use_fs2 && mr_fp_fwd && (mr_rd == ex_fs2))                ex_fs2_fwd = mr_result;
+        else if (ex_use_fs2 && ma_valid && ma_fp_we && (ma_fp_rd == ex_fs2)) ex_fs2_fwd = ma_fp_fwd_data;
         else if (ex_use_fs2 && wb_valid && wb_fp_we && (wb_fp_rd == ex_fs2)) ex_fs2_fwd = wb_fp_data;
 
         ex_fs3_fwd = ex_fs3_data;
-        if      (ex_use_fs3 && ma_valid && ma_fp_we && (ma_fp_rd == ex_fs3)) ex_fs3_fwd = ma_fp_fwd_data;
+        if      (ex_use_fs3 && mr_fp_fwd && (mr_rd == ex_fs3))                ex_fs3_fwd = mr_result;
+        else if (ex_use_fs3 && ma_valid && ma_fp_we && (ma_fp_rd == ex_fs3)) ex_fs3_fwd = ma_fp_fwd_data;
         else if (ex_use_fs3 && wb_valid && wb_fp_we && (wb_fp_rd == ex_fs3)) ex_fs3_fwd = wb_fp_data;
     end
 
@@ -520,11 +572,14 @@ module CPU_CORE
             .result   (mdu_result)
         );
 
-    assign mdu_active = ex_valid & ex_is_mdu & ~ex_exc;
-    // Not while MA is waiting for the cache: the operand of this instruction
-    // may be the answer that has not arrived yet, and a unit that runs for
-    // several cycles latches what it is given at the start.
-    assign mdu_start  = mdu_active & ~mdu_busy & ~mdu_done & ~flush & ~stall_ma;
+    // ex_exc_pre is all an MDU instruction can raise (the translation never
+    // sees it), and it keeps the DTLB off the stall of EX
+    assign mdu_active = ex_valid & ex_is_mdu & ~ex_exc_pre;
+    // Not while MA is waiting for the cache, nor while a load an operand
+    // comes from is still in MR: the operand is not there yet, and a unit
+    // that runs for several cycles latches what it is given at the start.
+    assign mdu_start  = mdu_active & ~mdu_busy & ~mdu_done & ~flush & ~stall_ma &
+                        ~lu_hazard;
     assign mdu_ack    = mdu_active & mdu_done & ex_advance;
 
     //=================================================================
@@ -563,8 +618,9 @@ module CPU_CORE
             .flags         (fpu_flags)
         );
 
-    assign fpu_active = ex_valid & ex_fp_arith & ~ex_exc;
-    assign fpu_start  = fpu_active & ~fpu_busy & ~fpu_done & ~flush & ~stall_ma;
+    assign fpu_active = ex_valid & ex_fp_arith & ~ex_exc_pre;
+    assign fpu_start  = fpu_active & ~fpu_busy & ~fpu_done & ~flush & ~stall_ma &
+                        ~lu_hazard;
     assign fpu_ack    = fpu_active & fpu_done & ex_advance;
 
     //=================================================================
@@ -768,11 +824,16 @@ module CPU_CORE
             .d_ready      (d_tr_ready),
             .d_paddr      (d_tr_paddr),
             .d_fault      (d_tr_fault),
+            .p_paddr      (mr_paddr),
+            .p_size       (mr_size),
+            .p_is_load    (mr_is_load),
+            .p_is_store   (mr_is_store),
+            .p_fail       (mr_pmp_fail),
             .sfence_valid (sfence_taken),
             .sfence_vaddr (ma_sfence_vaddr),
             .sfence_asid  (ma_sfence_asid),
             .kill         (flush),
-            .lsu_idle     (lsu_idle),
+            .lsu_idle     (lsu_idle & ~(mr_valid & mr_mem)),
             .ptw_active   (ptw_active),
             .m_req_valid  (ptw_req_valid),
             .m_req_ready  (ptw_req_ready),
@@ -812,12 +873,12 @@ module CPU_CORE
             .clk          (clk),
             .rst_n        (rst_n),
             .req_valid    (lsu_req_valid),
-            .req_cmd      (ex_mem_cmd),
-            .req_addr     (mem_addr),
-            .req_size     (ex_mem_size),
-            .req_signed   (ex_mem_signed),
-            .req_paddr    (d_tr_paddr),
-            .req_wdata    (ex_is_fp_store ? ex_fs2_fwd : ex_b_fwd),
+            .req_cmd      (mr_cmd),
+            .req_addr     (mr_vaddr),
+            .req_size     (mr_size),
+            .req_signed   (mr_signed),
+            .req_paddr    (mr_paddr),
+            .req_wdata    (mr_wdata),
             .req_accept   (lsu_accept),
             .resp_valid   (lsu_resp_valid),
             .resp_data    (lsu_resp_data),
@@ -838,6 +899,28 @@ module CPU_CORE
             .d_resp_data  (d_resp_data),
             .d_resp_error (d_resp_error)
         );
+
+    //=================================================================
+    // MR : the protection check, and the access goes to the cache
+    //
+    //   The PMP looks at the address the DTLB gave in EX, which MR holds.
+    //   It only decides when nothing before it has: a misaligned address
+    //   and a fault of the translation were already found in EX.
+    //=================================================================
+    logic        mr_exc;
+    logic [4:0]  mr_exc_cause;
+    logic [63:0] mr_exc_tval;
+
+    always @(*) begin
+        mr_exc       = mr_exc_r;
+        mr_exc_cause = mr_exc_cause_r;
+        mr_exc_tval  = mr_exc_tval_r;
+        if (!mr_exc_r && (mr_is_load || mr_is_store) && mr_pmp_fail) begin
+            mr_exc       = 1'b1;
+            mr_exc_cause = mr_is_store ? EXC_SFAULT : EXC_LFAULT;
+            mr_exc_tval  = mr_vaddr;
+        end
+    end
 
     //=================================================================
     // the commit point (MA) : trap, MRET, CSR write
@@ -890,16 +973,33 @@ module CPU_CORE
     // fence.i goes out on the data port as well: it is the flush of the
     // data cache, and MA waits for its answer before the instruction cache
     // is invalidated
-    assign ex_is_mem     = ex_valid & (ex_is_load | ex_is_store | ex_is_fencei)
-                                    & ~ex_exc & d_tr_ready;
+    assign ex_mem        = ex_is_load | ex_is_store | ex_is_fencei;
+    assign mr_is_mem     = mr_valid & mr_mem & ~mr_exc;
     // a memory access must not be started when the instruction in front of it
     // traps, because the cache cannot take the write back
-    assign lsu_req_valid = ex_is_mem & ~stall_ma & ~flush;
+    assign lsu_req_valid = mr_is_mem & ~stall_ma & ~flush;
     assign stall_ma      = ma_valid & ma_mem & ~lsu_resp_valid;
+    assign stall_mr      = stall_ma | (mr_is_mem & ~lsu_accept & ~flush);
+    assign mr_advance    = ~stall_mr;
     // the page table is being walked : the address is not there yet
     assign ex_mmu_wait   = d_tr_req & ~d_tr_ready & ~flush;
-    assign stall_ex      = stall_ma | ex_mmu_wait
-                                    | (ex_is_mem & ~lsu_accept & ~flush)
+
+    // Load-use: an instruction in EX reads a register that a load in MR is
+    // about to bring. It waits one cycle, after which the load is in MA and
+    // its answer is forwarded the cycle it arrives. Compared on the
+    // registers of both stages, so it is short. A load, LR, SC and an AMO
+    // all write their register from the cache; a store and fence.i write
+    // none.
+    logic lu_int, lu_fp;
+    assign lu_int = mr_valid & mr_mem & mr_we_rd & (mr_rd != 5'd0) &
+                    ((mr_rd == ex_rs1) | (mr_rd == ex_rs2));
+    assign lu_fp  = mr_valid & mr_mem & mr_fp_we &
+                    ((ex_use_fs1 & (mr_rd == ex_fs1)) |
+                     (ex_use_fs2 & (mr_rd == ex_fs2)) |
+                     (ex_use_fs3 & (mr_rd == ex_fs3)));
+    assign lu_hazard = ex_valid & (lu_int | lu_fp) & ~flush;
+
+    assign stall_ex      = stall_mr | ex_mmu_wait | lu_hazard
                                     | (mdu_active & ~mdu_done & ~flush)
                                     | (fpu_active & ~fpu_done & ~flush);
     assign ex_advance    = ~stall_ex;
@@ -914,8 +1014,9 @@ module CPU_CORE
     //   rounding mode of an instruction that asks for the dynamic one. An
     //   instruction decoded one cycle too early would see the old value of
     //   either and be turned into an illegal instruction.
-    assign pipe_busy   = ex_valid | ma_valid | wb_valid;
-    assign serial_busy = (ex_valid & ex_serial) | (ma_valid & ma_serial);
+    assign pipe_busy   = ex_valid | mr_valid | ma_valid | wb_valid;
+    assign serial_busy = (ex_valid & ex_serial) | (mr_valid & mr_serial) |
+                         (ma_valid & ma_serial);
     assign wfi_wait    = fq_valid & dec_is_wfi & ~irq_any;
     assign id_ready    = ~(fq_valid & (dec_is_csr | dec_is_mret | dec_is_sret |
                                        dec_is_sfence | dec_is_fence |
@@ -931,12 +1032,15 @@ module CPU_CORE
     //   point of the predictor.
     //
     //   A control transfer never goes to the MMU or to a unit that takes
-    //   more than one cycle, so for one of them "EX moves on" is just "MA
-    //   is not stalled", and its exception is already complete in
-    //   ex_exc_pre. Saying so, instead of using ex_advance and ex_exc,
-    //   keeps the translation, the PMP and the cache handshake off the path
-    //   that ends in the whole front end: that path was the longest in the
-    //   design (LitexSystem/docs/TIMING.md 13).
+    //   more than one cycle, and its exception is already complete in
+    //   ex_exc_pre. What it has to wait for is only that its operands are
+    //   there: MA is not waiting for a load, and no load it reads is in MR.
+    //   It does not wait for EX to move on, which also depends on whether
+    //   the cache takes the access in MR, and that keeps the PMP and the
+    //   cache handshake off the path that ends in the whole front end
+    //   (LitexSystem/docs/TIMING.md 13 and 15). If EX does stay where it
+    //   is, the redirect and the update of the buffer have happened already
+    //   and must not happen again: ex_ctrl_done remembers that.
     //
     //   An instruction that is not a control transfer but was predicted
     //   taken is the other kind of disagreement. The buffer is tagged with
@@ -957,9 +1061,18 @@ module CPU_CORE
                            ((take_branch != ex_pred_taken) |
                             (take_branch & (target_pc != ex_pred_target)));
 
+    logic ex_ctrl_go, ex_ctrl_done;
+    assign ex_ctrl_go = ex_valid & ex_is_ctrl & ~stall_ma & ~lu_hazard &
+                        ~ex_ctrl_done & ~flush;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n)                     ex_ctrl_done <= 1'b0;
+        else if (flush || ex_advance)   ex_ctrl_done <= 1'b0;
+        else if (ex_ctrl_go)            ex_ctrl_done <= 1'b1;
+    end
+
     // the buffer learns from every control transfer that gets through
-    assign btb_upd_valid  = ex_valid & ex_is_ctrl & ~stall_ma & ~ex_exc_pre &
-                            ~flush;
+    assign btb_upd_valid  = ex_ctrl_go & ~ex_exc_pre;
     assign btb_upd_pc     = ex_pc;
     assign btb_upd_is32   = ~ex_is_rvc;
     assign btb_upd_target = target_pc;
@@ -967,7 +1080,7 @@ module CPU_CORE
     assign btb_flush      = fencei_taken | sfence_taken;
 
     // a trap and an MRET come from the commit point and win
-    assign redirect_valid = flush | (ex_mispredict & ~stall_ma);
+    assign redirect_valid = flush | (ex_mispredict & ex_ctrl_go);
     always @(*) begin
         if      (trap_taken)   redirect_pc = trap_vector;
         else if (mret_taken)   redirect_pc = mret_target;
@@ -1049,33 +1162,45 @@ module CPU_CORE
     //=================================================================
     // forwarding selects
     //
-    //   Which instruction EX, MA and WB will hold in the next cycle is
+    //   Which instruction EX, MR, MA and WB will hold in the next cycle is
     //   decided by the same signals that load the pipeline registers
     //   below, so the comparisons of register numbers can be made now on
     //   what they are about to hold, and only their answers stored. The
     //   rules here are those of the registers below, case for case; a
     //   change to either has to be made to both.
     //
-    //   MA : a trap or an xRET empties it, an advancing EX fills it, and
+    //   MR : a trap or an xRET empties it, an advancing EX fills it, and
     //        otherwise it either keeps what it has (stalled) or becomes a
-    //        bubble. Its write is cancelled by an exception in EX.
+    //        bubble. Its write is cancelled by an exception in EX. It only
+    //        forwards what EX computed, never the answer of a load.
+    //   MA : the same with MR in front of it; its write is cancelled by an
+    //        exception in MR (the PMP).
     //   WB : gets what MA has unless MA is stalled; a trap in MA stops it.
     //   EX : the source registers of the instruction ID hands over, or of
     //        the one EX keeps. A kept instruction has already taken the
     //        forwarded value into ex_rs1_data, and the source that gave it
-    //        either stays where it is or moves on to WB, which then has
+    //        either stays where it is or moves one stage on, where it has
     //        the same value; so looking it up again gives the same answer.
+    //        The one exception is the load in MR that EX waits for: it is
+    //        not forwarded from MR, and one cycle later it is in MA.
     //=================================================================
-    logic [4:0] nx_rs1, nx_rs2, nx_ma_rd;
-    logic       nx_ma_wr, nx_wb_wr;
+    logic [4:0] nx_rs1, nx_rs2, nx_mr_rd, nx_ma_rd;
+    logic       nx_mr_wr, nx_ma_wr, nx_wb_wr;
 
     assign nx_rs1   = ex_advance ? (dec_use_rs1 ? dec_rs1 : 5'd0) : ex_rs1;
     assign nx_rs2   = ex_advance ? (dec_use_rs2 ? dec_rs2 : 5'd0) : ex_rs2;
-    assign nx_ma_rd = ex_advance ? ex_rd : ma_rd;
+    assign nx_mr_rd = ex_advance ? ex_rd : mr_rd;
+    assign nx_ma_rd = mr_advance ? mr_rd : ma_rd;
 
     always @(*) begin
+        if      (flush)      nx_mr_wr = 1'b0;
+        else if (ex_advance) nx_mr_wr = ex_valid & ex_we_rd & ~ex_exc & ~ex_mem;
+        else if (mr_advance) nx_mr_wr = 1'b0;
+        else                 nx_mr_wr = mr_valid & mr_we_rd & ~mr_mem;
+        nx_mr_wr = nx_mr_wr & (nx_mr_rd != 5'd0);
+
         if      (flush)      nx_ma_wr = 1'b0;
-        else if (ex_advance) nx_ma_wr = ex_valid & ex_we_rd & ~ex_exc;
+        else if (mr_advance) nx_ma_wr = mr_valid & mr_we_rd & ~mr_exc;
         else if (!stall_ma)  nx_ma_wr = 1'b0;
         else                 nx_ma_wr = ma_valid & ma_we_rd;
         nx_ma_wr = nx_ma_wr & (nx_ma_rd != 5'd0);
@@ -1086,13 +1211,17 @@ module CPU_CORE
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
+            fwd_a_mr <= 1'b0;
             fwd_a_ma <= 1'b0;
             fwd_a_wb <= 1'b0;
+            fwd_b_mr <= 1'b0;
             fwd_b_ma <= 1'b0;
             fwd_b_wb <= 1'b0;
         end else begin
+            fwd_a_mr <= nx_mr_wr & (nx_mr_rd == nx_rs1);
             fwd_a_ma <= nx_ma_wr & (nx_ma_rd == nx_rs1);
             fwd_a_wb <= nx_wb_wr & (ma_rd    == nx_rs1);
+            fwd_b_mr <= nx_mr_wr & (nx_mr_rd == nx_rs2);
             fwd_b_ma <= nx_ma_wr & (nx_ma_rd == nx_rs2);
             fwd_b_wb <= nx_wb_wr & (ma_rd    == nx_rs2);
         end
@@ -1161,6 +1290,43 @@ module CPU_CORE
             ex_exc_int_r  <= 1'b0;
             ex_exc_cause_r<= 5'd0;
             ex_exc_tval_r <= 64'd0;
+
+            mr_valid      <= 1'b0;
+            mr_we_rd      <= 1'b0;
+            mr_mem        <= 1'b0;
+            mr_is_load    <= 1'b0;
+            mr_is_store   <= 1'b0;
+            mr_pc         <= 64'd0;
+            mr_insn       <= 32'd0;
+            mr_result     <= 64'd0;
+            mr_rd         <= 5'd0;
+            mr_is_mret    <= 1'b0;
+            mr_is_sret    <= 1'b0;
+            mr_is_sfence  <= 1'b0;
+            mr_is_fencei  <= 1'b0;
+            mr_refetch    <= 1'b0;
+            mr_sfence_vaddr <= 64'd0;
+            mr_sfence_asid  <= 64'd0;
+            mr_serial     <= 1'b0;
+            mr_is_rvc     <= 1'b0;
+            mr_csr_wr     <= 1'b0;
+            mr_csr_addr   <= 12'd0;
+            mr_csr_wdata  <= 64'd0;
+            mr_is_fp      <= 1'b0;
+            mr_fp_arith   <= 1'b0;
+            mr_fp_we      <= 1'b0;
+            mr_fp_box     <= 1'b0;
+            mr_fp_flags   <= 5'd0;
+            mr_exc_r      <= 1'b0;
+            mr_exc_int_r  <= 1'b0;
+            mr_exc_cause_r<= 5'd0;
+            mr_exc_tval_r <= 64'd0;
+            mr_cmd        <= 4'd0;
+            mr_vaddr      <= 64'd0;
+            mr_paddr      <= 64'd0;
+            mr_wdata      <= 64'd0;
+            mr_size       <= 2'd0;
+            mr_signed     <= 1'b0;
 
             ma_valid      <= 1'b0;
             ma_we_rd      <= 1'b0;
@@ -1276,57 +1442,119 @@ module CPU_CORE
                 ex_fs2_data <= ex_fs2_fwd;
                 ex_fs3_data <= ex_fs3_fwd;
                 // EX is stalled : keep the operands it has been given. The
-                // forwarding sources move on (MA hands its instruction over,
-                // WB becomes a bubble) while the instruction stays here, so
-                // the value has to be captured instead of being looked up
-                // again every cycle.
+                // forwarding sources move on (MR and MA hand their
+                // instructions over, WB becomes a bubble) while the
+                // instruction stays here, so the value has to be captured
+                // instead of being looked up again every cycle.
                 ex_rs1_data <= ex_a_fwd;
                 ex_rs2_data <= ex_b_fwd;
             end
 
             //---------------------------------------------------------
-            // EX -> MA
+            // EX -> MR
             //---------------------------------------------------------
             if (ex_advance) begin
-                ma_valid      <= ex_valid;
-                ma_pc         <= ex_pc;
-                ma_insn       <= ex_insn;
-                ma_rd         <= ex_rd;
-                ma_we_rd      <= ex_we_rd & ~ex_exc;
-                ma_mem        <= ex_is_mem;
-                ma_is_load    <= ex_is_load;
-                ma_is_store   <= ex_is_store;
-                ma_is_mret    <= ex_is_mret;
-                ma_is_sret    <= ex_is_sret;
-                ma_is_sfence  <= ex_is_sfence;
-                ma_is_fencei  <= ex_is_fencei;
-                ma_refetch    <= ex_pred_taken & ~ex_is_ctrl;
+                mr_valid      <= ex_valid;
+                mr_pc         <= ex_pc;
+                mr_insn       <= ex_insn;
+                mr_rd         <= ex_rd;
+                mr_we_rd      <= ex_we_rd & ~ex_exc;
+                mr_mem        <= ex_mem;
+                mr_is_load    <= ex_is_load;
+                mr_is_store   <= ex_is_store;
+                mr_is_mret    <= ex_is_mret;
+                mr_is_sret    <= ex_is_sret;
+                mr_is_sfence  <= ex_is_sfence;
+                mr_is_fencei  <= ex_is_fencei;
+                mr_refetch    <= ex_pred_taken & ~ex_is_ctrl;
                 // SFENCE.VMA rs2, rs1 : rs1 selects the address and rs2 the
                 // ASID, a zero register meaning "every one of them"
-                ma_sfence_vaddr <= (ex_rs1 == 5'd0) ? 64'd0 : ex_a_fwd;
-                ma_sfence_asid  <= (ex_rs2 == 5'd0) ? 64'd0 : ex_b_fwd;
-                ma_serial     <= ex_serial;
-                ma_is_rvc     <= ex_is_rvc;
-                ma_is_fp      <= ex_is_fp;
-                ma_fp_arith   <= ex_fp_arith & ~ex_exc;
-                ma_fp_we      <= ex_fp_we_rd & ~ex_exc;
-                ma_fp_rd      <= ex_rd;
-                ma_fp_box     <= ex_fp_box;
-                ma_fp_flags   <= fpu_flags;
-                ma_csr_wr     <= ex_is_csr & ex_csr_wr & ~ex_exc;
-                ma_csr_addr   <= ex_csr_addr;
-                ma_csr_wdata  <= csr_wval;
-                ma_exc_r      <= ex_exc;
-                ma_exc_int_r  <= ex_exc_int;
-                ma_exc_cause_r<= ex_exc_cause;
-                ma_exc_tval_r <= ex_exc_tval;
-                if      (ex_is_csr)                ma_result <= csr_rdata;
-                else if (ex_fp_arith)              ma_result <= fpu_result;
-                else if (ex_is_mdu)                ma_result <= mdu_result;
-                else if (ex_is_jal || ex_is_jalr)  ma_result <= link_pc;
-                else                               ma_result <= alu_result;
+                mr_sfence_vaddr <= (ex_rs1 == 5'd0) ? 64'd0 : ex_a_fwd;
+                mr_sfence_asid  <= (ex_rs2 == 5'd0) ? 64'd0 : ex_b_fwd;
+                mr_serial     <= ex_serial;
+                mr_is_rvc     <= ex_is_rvc;
+                mr_is_fp      <= ex_is_fp;
+                mr_fp_arith   <= ex_fp_arith & ~ex_exc;
+                mr_fp_we      <= ex_fp_we_rd & ~ex_exc;
+                mr_fp_box     <= ex_fp_box;
+                mr_fp_flags   <= fpu_flags;
+                mr_csr_wr     <= ex_is_csr & ex_csr_wr & ~ex_exc;
+                mr_csr_addr   <= ex_csr_addr;
+                mr_csr_wdata  <= csr_wval;
+                mr_exc_r      <= ex_exc;
+                mr_exc_int_r  <= ex_exc_int;
+                mr_exc_cause_r<= ex_exc_cause;
+                mr_exc_tval_r <= ex_exc_tval;
+                // the access
+                mr_cmd        <= ex_mem_cmd;
+                mr_vaddr      <= mem_addr;
+                mr_paddr      <= d_tr_paddr;
+                mr_size       <= ex_mem_size;
+                mr_signed     <= ex_mem_signed;
+                mr_wdata      <= ex_is_fp_store ? ex_fs2_fwd : ex_b_fwd;
+                if      (ex_is_csr)                mr_result <= csr_rdata;
+                else if (ex_fp_arith)              mr_result <= fpu_result;
+                else if (ex_is_mdu)                mr_result <= mdu_result;
+                else if (ex_is_jal || ex_is_jalr)  mr_result <= link_pc;
+                else                               mr_result <= alu_result;
+            end else if (mr_advance) begin
+                // MR handed its instruction over but EX has nothing to give
+                // (a unit is still working, or EX waits for a load) : bubble
+                mr_valid   <= 1'b0;
+                mr_we_rd   <= 1'b0;
+                mr_mem     <= 1'b0;
+                mr_is_load <= 1'b0;
+                mr_is_store<= 1'b0;
+                mr_is_mret <= 1'b0;
+                mr_is_sret <= 1'b0;
+                mr_is_sfence <= 1'b0;
+                mr_is_fencei <= 1'b0;
+                mr_refetch   <= 1'b0;
+                mr_serial  <= 1'b0;
+                mr_csr_wr  <= 1'b0;
+                mr_exc_r   <= 1'b0;
+                mr_is_fp   <= 1'b0;
+                mr_fp_arith<= 1'b0;
+                mr_fp_we   <= 1'b0;
+            end
+
+            //---------------------------------------------------------
+            // MR -> MA
+            //---------------------------------------------------------
+            if (mr_advance) begin
+                ma_valid      <= mr_valid;
+                ma_pc         <= mr_pc;
+                ma_insn       <= mr_insn;
+                ma_rd         <= mr_rd;
+                ma_we_rd      <= mr_we_rd & ~mr_exc;
+                ma_mem        <= mr_is_mem;
+                ma_is_load    <= mr_is_load;
+                ma_is_store   <= mr_is_store;
+                ma_is_mret    <= mr_is_mret;
+                ma_is_sret    <= mr_is_sret;
+                ma_is_sfence  <= mr_is_sfence;
+                ma_is_fencei  <= mr_is_fencei;
+                ma_refetch    <= mr_refetch;
+                ma_sfence_vaddr <= mr_sfence_vaddr;
+                ma_sfence_asid  <= mr_sfence_asid;
+                ma_serial     <= mr_serial;
+                ma_is_rvc     <= mr_is_rvc;
+                ma_is_fp      <= mr_is_fp;
+                ma_fp_arith   <= mr_fp_arith & ~mr_exc;
+                ma_fp_we      <= mr_fp_we & ~mr_exc;
+                ma_fp_rd      <= mr_rd;
+                ma_fp_box     <= mr_fp_box;
+                ma_fp_flags   <= mr_fp_flags;
+                ma_csr_wr     <= mr_csr_wr & ~mr_exc;
+                ma_csr_addr   <= mr_csr_addr;
+                ma_csr_wdata  <= mr_csr_wdata;
+                ma_exc_r      <= mr_exc;
+                ma_exc_int_r  <= mr_exc_int_r;
+                ma_exc_cause_r<= mr_exc_cause;
+                ma_exc_tval_r <= mr_exc_tval;
+                ma_result     <= mr_result;
             end else if (!stall_ma) begin
-                // MA handed its instruction over but EX has nothing to give
+                // MA handed its instruction over but MR has nothing to give
                 // (the cache did not take the next access yet) : bubble
                 ma_valid   <= 1'b0;
                 ma_we_rd   <= 1'b0;
@@ -1370,13 +1598,27 @@ module CPU_CORE
             end
 
             //---------------------------------------------------------
-            // a trap or an MRET empties EX and MA
+            // a trap or an MRET empties EX, MR and MA
             //---------------------------------------------------------
             if (flush) begin
                 ex_valid   <= 1'b0;
                 ex_exc_r   <= 1'b0;
                 ex_serial  <= 1'b0;
                 ex_pred_taken <= 1'b0;
+                mr_valid   <= 1'b0;
+                mr_we_rd   <= 1'b0;
+                mr_mem     <= 1'b0;
+                mr_is_mret <= 1'b0;
+                mr_is_sret <= 1'b0;
+                mr_is_sfence <= 1'b0;
+                mr_is_fencei <= 1'b0;
+                mr_refetch   <= 1'b0;
+                mr_serial  <= 1'b0;
+                mr_csr_wr  <= 1'b0;
+                mr_exc_r   <= 1'b0;
+                mr_is_fp   <= 1'b0;
+                mr_fp_arith<= 1'b0;
+                mr_fp_we   <= 1'b0;
                 ma_valid   <= 1'b0;
                 ma_we_rd   <= 1'b0;
                 ma_mem     <= 1'b0;
