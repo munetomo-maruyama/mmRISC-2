@@ -684,7 +684,21 @@ module DCACHE
     logic [WAY_BITS-1:0]   s1_wr_way;
     logic [DADDR_BITS-1:0] s1_wr_addr;
 
-    assign amo_result = amo_calc(s1_cmd, s1_size, extract(hit_word, s1_addr[2:0], s1_size), s1_wdata);
+    // An atomic operation is a naturally aligned word or double word (the
+    // core traps a misaligned one before it gets here), so its lanes are
+    // the whole word or one of its halves, picked by address bit 2. That is
+    // one 2:1 multiplexer on each side of the arithmetic instead of the
+    // byte shifters of extract and align_wdata: this path runs from the tag
+    // array through the way select and the arithmetic into the data array
+    // in one cycle, and was the longest of the design once the core was cut
+    // (LitexSystem/docs/TIMING.md 17). For a word, amo_calc only looks at
+    // the low half of what it is given, and the write strobe only lets the
+    // four bytes of the word through.
+    logic [63:0] amo_old, amo_wr;
+
+    assign amo_old    = s1_addr[2] ? {32'd0, hit_word[63:32]} : hit_word;
+    assign amo_result = amo_calc(s1_cmd, s1_size, amo_old, s1_wdata);
+    assign amo_wr     = s1_addr[2] ? {amo_result[31:0], 32'd0} : amo_result;
 
     always @(*) begin
         s1_store_hit = 1'b0;
@@ -695,7 +709,7 @@ module DCACHE
         s1_wr_data   = align_wdata(s1_addr[2:0], s1_wdata);
         if (s1_valid && s1_data_ok && s1_cacheable && hit && s1_can_retire && s1_writes) begin
             s1_store_hit = 1'b1;
-            if (s1_is_amo) s1_wr_data = align_wdata(s1_addr[2:0], amo_result);
+            if (s1_is_amo) s1_wr_data = amo_wr;
         end
         // write through hit: update the data array, leave valid / dirty alone
         if (s1_valid && s1_data_ok && s1_cacheable && hit && s1_can_retire && s1_is_stwthr)

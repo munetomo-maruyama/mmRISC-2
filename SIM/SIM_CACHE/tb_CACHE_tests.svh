@@ -153,15 +153,24 @@
         //=============================================================
         if (from_sec <= 4 && 4 <= to_sec) begin
             e0 = n_error;
-            for (int size = 2; size <= 3; size++) begin
+            // a word at both halves of the double word: the upper half of
+            // the double word has to be left alone when the word is the
+            // lower one, and the word has to land there when it is the
+            // upper one
+            for (int k = 0; k < 3; k++) begin
+                int size;
+                size = (k == 2) ? 3 : 2;
                 for (int c = 4; c <= 12; c++) begin
                     logic [PADDR_WIDTH-1:0] a;
-                    a = a_mem(200 + c) + ((size == 2) ? PADDR_WIDTH'(4) : PADDR_WIDTH'(0));
+                    a = a_mem(200 + c + 16 * k) + ((k == 1) ? PADDR_WIDTH'(4) : PADDR_WIDTH'(0));
                     d_store($sformatf("amo init cmd%0d size%0d", c, size), a, 2'(size),
                             64'h0000_0000_8000_0000);
                     d_push($sformatf("amo cmd%0d size%0d", c, size), 4'(c), a, 2'(size),
                            64'h0000_0000_7FFF_FFFF);
                     d_load($sformatf("amo result cmd%0d size%0d", c, size), a, 2'(size));
+                    if (size == 2)
+                        d_load($sformatf("amo both halves cmd%0d at +%0d", c, 4 * k),
+                               a_mem(200 + c + 16 * k), 2'd3);
                 end
             end
             d_drain();

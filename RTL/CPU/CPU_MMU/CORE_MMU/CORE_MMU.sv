@@ -11,7 +11,7 @@
 //   in the same cycle the request is made. The data side is checked in two
 //   steps: the translation and its permissions with the request (EX), the
 //   PMP one cycle later on the physical address the pipeline has kept (MR,
-//   the p_ port). One cycle could not hold both behind the address adder
+//   the p_ port). The walker has a PMP checker of its own. One cycle could not hold both behind the address adder
 //   (LitexSystem/docs/TIMING.md 15). The instruction side still does both
 //   at once: its address comes from a register. The cache is indexed with the
 //   virtual address and tagged with the physical one (CPU_CACHE_SPEC.md
@@ -26,8 +26,7 @@
 //   started while the load store unit has nothing in flight, and it then
 //   holds the port until it is finished, so the two can never be in the
 //   cache at the same time. While it holds the port the data side is told
-//   "not this cycle": no access could be issued anyway, and it frees the
-//   protection checker of that side for the walker's own reads.
+//   "not this cycle": no access could be issued anyway.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -333,23 +332,15 @@ module CORE_MMU
     //-----------------------------------------------------------------
     // protection
     //
-    //   The checker of the data side is lent to the walker while it owns
-    //   the port. The pipeline has no access waiting in MR then: the walker
-    //   is only started while nothing is (lsu_idle), and while it runs EX
-    //   is held, so none can arrive.
+    //   Three checkers: the fetch, the data side (MR), and the walker's
+    //   reads of the page table. The walker used to borrow the one of the
+    //   data side, but the multiplexer in front of it sat on the path from
+    //   MR to the cache request, which was just too long (TIMING.md 17).
     //-----------------------------------------------------------------
-    logic        i_pmp_fail, d_pmp_fail;
-    logic [63:0] pmp_d_addr;
-    logic [1:0]  pmp_d_priv, pmp_d_size;
-    logic        pmp_d_read, pmp_d_write;
+    logic        i_pmp_fail, d_pmp_fail, w_pmp_fail;
 
-    assign pmp_d_addr  = grant ? ptw_pmp_addr : p_paddr;
-    assign pmp_d_priv  = grant ? ptw_priv     : d_priv;
-    assign pmp_d_size  = grant ? 2'd3         : p_size;
-    assign pmp_d_read  = grant ? 1'b1         : p_is_load;
-    assign pmp_d_write = grant ? 1'b0         : p_is_store;
-    assign ptw_pmp_fail = grant & d_pmp_fail;
-    assign p_fail       = ~grant & d_pmp_fail;
+    assign p_fail       = d_pmp_fail;
+    assign ptw_pmp_fail = grant & w_pmp_fail;
 
     MMU_PMP #(.ENTRIES(PMP_ENTRIES)) u_pmp_i
         (
@@ -368,13 +359,28 @@ module CORE_MMU
         (
             .cfg      (pmpcfg),
             .addr     (pmpaddr),
-            .priv     (pmp_d_priv),
-            .paddr    (pmp_d_addr),
-            .size     (pmp_d_size),
-            .is_read  (pmp_d_read),
-            .is_write (pmp_d_write),
+            .priv     (d_priv),
+            .paddr    (p_paddr),
+            .size     (p_size),
+            .is_read  (p_is_load),
+            .is_write (p_is_store),
             .is_exec  (1'b0),
             .fail     (d_pmp_fail)
+        );
+
+    // the walker reads double words, at the privilege of the access it
+    // walks for
+    MMU_PMP #(.ENTRIES(PMP_ENTRIES)) u_pmp_w
+        (
+            .cfg      (pmpcfg),
+            .addr     (pmpaddr),
+            .priv     (ptw_priv),
+            .paddr    (ptw_pmp_addr),
+            .size     (2'd3),
+            .is_read  (1'b1),
+            .is_write (1'b0),
+            .is_exec  (1'b0),
+            .fail     (w_pmp_fail)
         );
 
     //-----------------------------------------------------------------

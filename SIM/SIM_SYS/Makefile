@@ -68,7 +68,7 @@ VERILATOR_FLAGS := --binary --timing -j 0 --top-module $(TOP) \
 # the programs that do not need anything SIM_CORE puts in its own test bench
 TESTS    := t01_alu t02_branch t03_ldst t04_hazard t05_csr t07_trap t08_rvc \
             t09_muldiv t10_atomic t11_fp t12_priv t13_pmp t14_mmu \
-            t16_bench t17_btb t18_asid t19_ldbench
+            t16_bench t17_btb t18_asid t19_ldbench t20_ptw_pmp
 TEST     ?= t01_alu
 PLUSARGS ?=
 
