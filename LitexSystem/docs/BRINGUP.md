@@ -57,7 +57,8 @@ WNS +0.409ns @50MHz だった。mmRISC-2 は FPU と MMU を持つので、
 ### 3. デバイスツリーと OpenSBI
 
 `software/mmrisc_arty.dts` は Rocket 用から CPU ノードだけ変えたもの。
-変更点は ISA 文字列、TLB 16 エントリ、PMP 16 領域、デバッグトリガの削除。
+変更点は ISA 文字列、TLB 8 エントリ、PMP 8 領域、デバッグトリガの削除
+(TLB と PMP は当初 16 だったが、FPGA に入れるために 8 にした。`docs/TIMING.md` 7 章)。
 
 `timebase-frequency = <500000>` は **ハードウェアの `CLINT_TICK_DIV`= 100 と
 対でなければならない**(50MHz / 100 = 500kHz)。片方だけ変えると Linux の
