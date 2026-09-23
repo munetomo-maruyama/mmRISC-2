@@ -27,7 +27,7 @@ VFLAGS="--binary --timing -j 2 --top-module tb_SYS -Wno-fatal"
 
 # id # file # sed expression # description
 MUTATIONS=(
-"1#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign ex_is_mem     = ex_valid \& (ex_is_load . ex_is_store . ex_is_fencei)%assign ex_is_mem     = ex_valid \& (ex_is_load | ex_is_store)%#core: fence.i does not write the data cache back"
+"1#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign ex_mem        = ex_is_load | ex_is_store | ex_is_fencei;%assign ex_mem        = ex_is_load | ex_is_store;%#core: fence.i does not write the data cache back"
 "2#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign i_flush_valid = fencei_busy;%assign i_flush_valid = 1'b0;%#core: fence.i does not invalidate the instruction cache"
 "3#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign fencei_taken = ma_valid \& ma_is_fencei \& ~stall_ma \& ~trap_taken;%assign fencei_taken = ma_valid \& ma_is_fencei \& ~trap_taken;%#core: the instruction cache is invalidated before the write back is done"
 "4#CPU_CORE/CORE_LSU/CORE_LSU.sv#s%d_req_paddr <= req_paddr\[PADDR_WIDTH-1:0\];%d_req_paddr <= req_addr[PADDR_WIDTH-1:0];%#LSU: the cache is given the virtual address as a tag"

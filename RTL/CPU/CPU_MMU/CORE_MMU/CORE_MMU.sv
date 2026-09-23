@@ -8,7 +8,12 @@
 //   fault, or "not this cycle" while the page table is being walked.
 //
 //   A TLB hit translates combinationally, so the physical address is ready
-//   in the same cycle the request is made. The cache is indexed with the
+//   in the same cycle the request is made. The data side is checked in two
+//   steps: the translation and its permissions with the request (EX), the
+//   PMP one cycle later on the physical address the pipeline has kept (MR,
+//   the p_ port). One cycle could not hold both behind the address adder
+//   (LitexSystem/docs/TIMING.md 15). The instruction side still does both
+//   at once: its address comes from a register. The cache is indexed with the
 //   virtual address and tagged with the physical one (CPU_CACHE_SPEC.md
 //   5.6); because the index and the offset together stay inside a page, the
 //   two agree on those bits and nothing in the cache has to change.
@@ -63,7 +68,14 @@ module CORE_MMU
         input  logic        d_is_store,
         output logic        d_ready,
         output logic [63:0] d_paddr,
-        output logic [1:0]  d_fault,
+        output logic [1:0]  d_fault,        // of the translation only
+
+        // the PMP check of the data side, one cycle after the translation
+        input  logic [63:0] p_paddr,
+        input  logic [1:0]  p_size,
+        input  logic        p_is_load,
+        input  logic        p_is_store,
+        output logic        p_fail,
 
         // SFENCE.VMA at the commit point
         input  logic        sfence_valid,
@@ -322,19 +334,22 @@ module CORE_MMU
     // protection
     //
     //   The checker of the data side is lent to the walker while it owns
-    //   the port; the data side is held back in those cycles anyway.
+    //   the port. The pipeline has no access waiting in MR then: the walker
+    //   is only started while nothing is (lsu_idle), and while it runs EX
+    //   is held, so none can arrive.
     //-----------------------------------------------------------------
     logic        i_pmp_fail, d_pmp_fail;
     logic [63:0] pmp_d_addr;
     logic [1:0]  pmp_d_priv, pmp_d_size;
     logic        pmp_d_read, pmp_d_write;
 
-    assign pmp_d_addr  = grant ? ptw_pmp_addr : d_paddr;
+    assign pmp_d_addr  = grant ? ptw_pmp_addr : p_paddr;
     assign pmp_d_priv  = grant ? ptw_priv     : d_priv;
-    assign pmp_d_size  = grant ? 2'd3         : d_size;
-    assign pmp_d_read  = grant ? 1'b1         : d_is_load;
-    assign pmp_d_write = grant ? 1'b0         : d_is_store;
+    assign pmp_d_size  = grant ? 2'd3         : p_size;
+    assign pmp_d_read  = grant ? 1'b1         : p_is_load;
+    assign pmp_d_write = grant ? 1'b0         : p_is_store;
     assign ptw_pmp_fail = grant & d_pmp_fail;
+    assign p_fail       = ~grant & d_pmp_fail;
 
     MMU_PMP #(.ENTRIES(PMP_ENTRIES)) u_pmp_i
         (
@@ -397,8 +412,6 @@ module CORE_MMU
             else           d_ready = 1'b0;
         end else if (d_trans && !d_perm_ok) begin
             d_fault = FAULT_PAGE;
-        end else if (d_pmp_fail) begin
-            d_fault = FAULT_ACC;
         end
     end
 
