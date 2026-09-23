@@ -49,7 +49,7 @@ MUTATIONS=(
 "a cancelling sum keeps the sign of the larger side|CORE_FPU/CORE_FPU.sv|s|                        sum_sign <= al_sgn_ls;|                        sum_sign <= al_sgn_gt;|"
 "the alignment sticky does not reach the rounder|CORE_FPU/CORE_FPU.sv|s|stick_sum <= al_st;|stick_sum <= 1'b0;|"
 
-# the select and round cycles (S_SEL / S_RND)
+# the select and round cycles (S_SEL / S_RND / S_PACK)
 "the rounder is given a stale sticky|CORE_FPU/CORE_FPU.sv|s|q_rnd_sticky <= rnd_sticky;|q_rnd_sticky <= 1'b0;|"
 "the rounder is given the wrong format|CORE_FPU/CORE_FPU.sv|s|q_rnd_fmt    <= rnd_fmt;|q_rnd_fmt    <= 1'b1;|"
 "the rounded answer is used even when nothing was rounded|CORE_FPU/CORE_FPU.sv|s|result        <= q_use_rnd ? rnd_result : q_sp_res;|result        <= rnd_result;|"
@@ -59,6 +59,13 @@ MUTATIONS=(
 # the rounder itself
 "underflow is never reported|FPU_ROUND/FPU_ROUND.sv|s|flags\[1\] = tiny \& inexact \& ~overflow;|flags[1] = 1'b0;|"
 "round to nearest never breaks a tie to even|FPU_ROUND/FPU_ROUND.sv|s|RM_RNE:  inc = guard \& (rest \| lsb);|RM_RNE:  inc = guard;|"
+"the rounder takes its inputs in the wrong cycle|CORE_FPU/CORE_FPU.sv|s|assign rnd_load = (state == S_RND);|assign rnd_load = (state == S_PACK);|"
+
+# the seam inside the rounder: what the first cycle works out for the second
+"the carry of the increment ignores the format|FPU_ROUND/FPU_ROUND.sv|s|assign carry = inc \& ((mant \| ~prec_ones) == {53{1'b1}});|assign carry = inc \& (mant == {53{1'b1}});|"
+"a carry leaves the exponent where it was|FPU_ROUND/FPU_ROUND.sv|s|(q_carry ? q_ef_1 : q_ef_0)|q_ef_0|"
+"overflow does not see the carry|FPU_ROUND/FPU_ROUND.sv|s|assign overflow = q_carry ? q_ovf_1 : q_ovf_0;|assign overflow = q_ovf_0;|"
+"tininess is judged without the carry|FPU_ROUND/FPU_ROUND.sv|s|tiny_1   = (int'(exp_in) + (carry_u ? 1 : 0)) < e_min;|tiny_1   = int'(exp_in) < e_min;|"
 )
 
 FILTER=${1:-}
