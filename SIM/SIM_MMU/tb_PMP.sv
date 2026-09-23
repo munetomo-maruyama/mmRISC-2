@@ -11,6 +11,10 @@
 //   the boundary of a region, two entries that overlap, a locked entry seen
 //   from machine mode) come up often.
 //
+//   The checker looks at the naturally aligned block of 2^size bytes that
+//   holds the address, so the model is handed that block; an address in the
+//   middle of it is drawn now and then to check that the low bits are ignored.
+//
 //   +n=<count>    number of random cases   (default 200000)
 //   +seed=<n>
 //---------------------------------------------------------------------------
@@ -129,6 +133,8 @@ module tb_PMP;
     int unsigned seed;
     int          n_cases, n_checks, n_bad;
     logic [63:0] anchor;
+    logic [63:0] blk;               // the aligned block that holds paddr
+    logic        misalign, flip;
 
     function automatic logic [53:0] rand_napot(input logic [53:0] base,
                                                input int k);
@@ -197,11 +203,26 @@ module tb_PMP;
             if (priv == 2'd2) priv = 2'b11;
             size     = 2'($urandom() % 4);
             paddr    = (anchor + 64'($urandom() % 64'd320)) & ~((64'd1 << size) - 64'd1);
+            // Now and then an address that is not aligned to the size. What
+            // is checked then is the aligned block that holds it, which is
+            // what a fetch after a predicted branch relies on: its address
+            // can point into the middle of the double word it brings.
+            //
             // Every so often one of the upper bits of the address is turned
             // over. The entries are all built around the anchor, so without
             // this the top bits of the comparison would never differ and a
             // comparison that is a bit too short would go unnoticed.
-            if ($urandom() % 8 == 0)
+            //
+            // Both decisions are drawn into variables first. Verilator 5.020
+            // merges two if statements in a row whose conditions read the
+            // same, $urandom() or not, and written as two times
+            // "if ($urandom() % 8 == 0)" every misaligned address was also
+            // moved far away from all the regions.
+            misalign = ($urandom() % 8 == 0);
+            flip     = ($urandom() % 8 == 0);
+            if (misalign)
+                paddr = paddr | 64'($urandom() % 8);
+            if (flip)
                 paddr = paddr ^ (64'd1 << (12 + ($urandom() % 44)));
             is_read  = 1'b0; is_write = 1'b0; is_exec = 1'b0;
             case ($urandom() % 3)
@@ -212,12 +233,13 @@ module tb_PMP;
 
             #1;
             n_checks++;
-            if (fail !== model_fail(paddr, 1 << size)) begin
+            blk = paddr & ~((64'd1 << size) - 64'd1);
+            if (fail !== model_fail(blk, 1 << size)) begin
                 n_bad++;
                 if (n_bad <= 10)
                     $display("MISMATCH case %0d : paddr=%016h size=%0d priv=%0d r%0b w%0b x%0b  rtl=%0b model=%0b",
                              t, paddr, size, priv, is_read, is_write, is_exec,
-                             fail, model_fail(paddr, 1 << size));
+                             fail, model_fail(blk, 1 << size));
             end
         end
 

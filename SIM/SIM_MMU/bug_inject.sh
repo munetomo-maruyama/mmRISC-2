@@ -22,13 +22,13 @@ VERILATOR_FLAGS="--binary --timing -j 0 -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC \
 # name | file | sed expression
 MUTATIONS=(
 "pmp napot mask off by one|MMU_PMP/MMU_PMP.sv|s|napot_mask = this_a ^ (this_a + 54'd1);|napot_mask = this_a ^ (this_a + 54'd2);|"
-"pmp napot mask not inverted|MMU_PMP/MMU_PMP.sv|s|((a \& ~napot_mask) == (this_a \& ~napot_mask))|((a \& napot_mask) == (this_a \& napot_mask))|"
-"pmp TOR top inclusive|MMU_PMP/MMU_PMP.sv|s|(a >= prev_a) \&\& (a < this_a)|(a >= prev_a) \&\& (a <= this_a)|"
-"pmp TOR bottom exclusive|MMU_PMP/MMU_PMP.sv|s|(a >= prev_a) \&\& (a < this_a)|(a > prev_a) \&\& (a < this_a)|"
-"pmp TOR base is not the entry before|MMU_PMP/MMU_PMP.sv|s|prev_a = (i == 0) ? 54'd0 : addr\[64\*(i-1) +: 54\];|prev_a = 54'd0;|"
-"pmp NA4 compares too few bits|MMU_PMP/MMU_PMP.sv|s|A_NA4   : match_one = (a == this_a);|A_NA4   : match_one = (a\[52:0\] == this_a\[52:0\]);|"
-"pmp NA4 behaves like NAPOT|MMU_PMP/MMU_PMP.sv|s|A_NA4   : match_one = (a == this_a);|A_NA4   : match_one = ((a \& ~napot_mask) == (this_a \& ~napot_mask));|"
-"pmp OFF still matches|MMU_PMP/MMU_PMP.sv|s|default : match_one = 1'b0;      // A = 0 : OFF|default : match_one = 1'b1;|"
+"pmp napot mask not inverted|MMU_PMP/MMU_PMP.sv|s|((a_up \& ~napot_mask\[53:1\]) == (this_a\[53:1\] \& ~napot_mask\[53:1\]))|((a_up \& napot_mask\[53:1\]) == (this_a\[53:1\] \& napot_mask\[53:1\]))|"
+"pmp TOR top inclusive|MMU_PMP/MMU_PMP.sv|s#below = up_lt | (up_eq \& ~x0 \& t0);#below = up_lt | (up_eq \& (~x0 | t0));#"
+"pmp TOR bottom exclusive|MMU_PMP/MMU_PMP.sv|s#ge_lo = (i == 0) ? 1'b1 : ~lt_lo\[(i+N-1)%N\];#ge_lo = (i == 0) ? 1'b1 : ~lt_lo[(i+N-1)%N] \& ~eq_lo[(i+N-1)%N];#; s#ge_hi = (i == 0) ? 1'b1 : ~lt_hi\[(i+N-1)%N\];#ge_hi = (i == 0) ? 1'b1 : ~lt_hi[(i+N-1)%N] \& ~eq_hi[(i+N-1)%N];#"
+"pmp TOR base is not the entry before|MMU_PMP/MMU_PMP.sv|s|A_TOR   : begin m_lo\[i\] = ge_lo \& lt_lo\[i\]; m_hi\[i\] = ge_hi \& lt_hi\[i\];|A_TOR   : begin m_lo[i] = lt_lo[i]; m_hi[i] = lt_hi[i];|"
+"pmp NA4 compares too few bits|MMU_PMP/MMU_PMP.sv|s|eq_lo\[i\] = up_eq\[i\] \& (lo0 == this_a\[0\]);|eq_lo[i] = up_eq[i];|; s|eq_hi\[i\] = up_eq\[i\] \& (hi0 == this_a\[0\]);|eq_hi[i] = up_eq[i];|"
+"pmp NA4 behaves like NAPOT|MMU_PMP/MMU_PMP.sv|s|A_NA4   : begin m_lo\[i\] = eq_lo\[i\];         m_hi\[i\] = eq_hi\[i\];|A_NA4   : begin m_lo[i] = napot[i]; m_hi[i] = napot[i];|"
+"pmp OFF still matches|MMU_PMP/MMU_PMP.sv|s|default : begin m_lo\[i\] = 1'b0;             m_hi\[i\] = 1'b0;|default : begin m_lo[i] = 1'b1; m_hi[i] = 1'b1;|"
 "pmp highest match wins|MMU_PMP/MMU_PMP.sv|s%assign sel_lo = m_lo \& (~m_lo + N'(1));%always @(*) begin sel_lo = '0; for (int i = 0; i < ENTRIES; i++) if (m_lo[i]) sel_lo = N'(1) << i; end%; s%assign sel_hi = m_hi \& (~m_hi + N'(1));%always @(*) begin sel_hi = '0; for (int i = 0; i < ENTRIES; i++) if (m_hi[i]) sel_hi = N'(1) << i; end%"
 "pmp machine mode ignores the lock|MMU_PMP/MMU_PMP.sv|s|((priv == PRIV_M) \&\& !win_cfg\[7\])|(priv == PRIV_M)|"
 "pmp lock bit read from the wrong place|MMU_PMP/MMU_PMP.sv|s|!win_cfg\[7\])|!win_cfg\[6\])|"
@@ -38,8 +38,10 @@ MUTATIONS=(
 "pmp access half outside allowed|MMU_PMP/MMU_PMP.sv|s|else if (!hit_lo \&\& !hit_hi)       fail = (priv != PRIV_M);|else if (!hit_lo \|\| !hit_hi)       fail = (priv != PRIV_M);|"
 "pmp execute checked against R|MMU_PMP/MMU_PMP.sv|s|!(is_exec  \&\& !win_cfg\[2\])|!(is_exec  \&\& !win_cfg\[0\])|"
 "pmp write checked against R|MMU_PMP/MMU_PMP.sv|s|!(is_write \&\& !win_cfg\[1\])|!(is_write \&\& !win_cfg\[0\])|"
-"pmp size ignored : only the first byte|MMU_PMP/MMU_PMP.sv|s|default: last_byte = paddr + 64'd7;|default: last_byte = paddr;|"
-"pmp address not shifted|MMU_PMP/MMU_PMP.sv|s|assign a_lo = paddr\[55:2\];|assign a_lo = paddr\[53:0\];|"
+"pmp size ignored : only the first byte|MMU_PMP/MMU_PMP.sv|s#assign hi0  = paddr\[2\] | (size == 2'd3);#assign hi0  = paddr[2];#"
+"pmp address not shifted|MMU_PMP/MMU_PMP.sv|s|assign a_up = paddr\[55:3\];|assign a_up = paddr[53:1];|"
+"pmp upper bits compared too short|MMU_PMP/MMU_PMP.sv|s|up_lt\[i\] = (a_up < this_a\[53:1\]);|up_lt[i] = (a_up[51:0] < this_a[52:1]);|"
+"pmp misaligned block start not cleared|MMU_PMP/MMU_PMP.sv|s|assign lo0  = paddr\[2\] \& (size != 2'd3);|assign lo0  = paddr[2];|"
 )
 
 pass=0; miss=0; skip=0

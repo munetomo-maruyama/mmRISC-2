@@ -37,7 +37,7 @@ module MMU_PMP
 
         input  logic [1:0]  priv,           // privilege of the access (MPRV
                                             // already taken into account)
-        input  logic [63:0] paddr,
+        input  logic [63:0] paddr,          // any byte of the block (see below)
         input  logic [1:0]  size,           // 0 byte, 1 half, 2 word, 3 double
         input  logic        is_read,
         input  logic        is_write,
@@ -52,45 +52,65 @@ module MMU_PMP
     localparam logic [1:0] A_NAPOT = 2'd3;
 
     //-----------------------------------------------------------------
-    // the first and the last byte of the access, shifted right by two
+    // the access, as word addresses (the byte address shifted right by two)
+    //
+    //   What is checked is the naturally aligned block of 2^size bytes that
+    //   holds paddr. For every access that is the access itself: the data
+    //   side never lets a misaligned one reach here (it traps as misaligned
+    //   first) and the walker reads aligned double words. The fetch side is
+    //   the one that relies on it, since after a predicted branch its
+    //   address can point into the middle of the double word it brings.
+    //
+    //   A block of one, two or four bytes is one word, a block of eight is
+    //   two, and so the two ends differ in bit 0 of the word address at
+    //   most. Nothing has to be added to find the last byte, and the bits
+    //   above bit 0 are the same for both ends, so every comparison against
+    //   them is made once and shared.
     //-----------------------------------------------------------------
-    logic [63:0] last_byte;
-    logic [53:0] a_lo, a_hi;
+    logic [52:0] a_up;              // bits 53:1 of the word address, both ends
+    logic        lo0, hi0;          // bit 0 of the word address at each end
+
+    assign a_up = paddr[55:3];
+    assign lo0  = paddr[2] & (size != 2'd3);
+    assign hi0  = paddr[2] | (size == 2'd3);
+
+    //-----------------------------------------------------------------
+    // compare, once per entry
+    //
+    //   below(x) : x < pmpaddr, for either end. The bits above bit 0 decide
+    //              unless they are equal, and then bit 0 does.
+    //   TOR      : pmpaddr[i-1] <= x < pmpaddr[i]. The lower bound is the
+    //              upper one of the entry before, already worked out.
+    //   NA4      : x == pmpaddr.
+    //   NAPOT    : the bits above the region agree. The mask comes from
+    //              the entry alone: the bits from the lowest zero of
+    //              pmpaddr downwards are the ones inside the region, and
+    //              an entry of all ones matches the whole address space.
+    //              Its bit 0 is always set (the smallest region is eight
+    //              bytes), so both ends give the same answer.
+    //-----------------------------------------------------------------
+    function automatic logic below(input logic up_lt, input logic up_eq,
+                                   input logic x0,    input logic t0);
+        below = up_lt | (up_eq & ~x0 & t0);
+    endfunction
+
+    logic [N-1:0] up_lt, up_eq, napot;
+    logic [N-1:0] lt_lo, lt_hi, eq_lo, eq_hi;
 
     always @(*) begin
-        case (size)
-            2'd0:    last_byte = paddr;
-            2'd1:    last_byte = paddr + 64'd1;
-            2'd2:    last_byte = paddr + 64'd3;
-            default: last_byte = paddr + 64'd7;
-        endcase
-    end
-
-    assign a_lo = paddr[55:2];
-    assign a_hi = last_byte[55:2];
-
-    //-----------------------------------------------------------------
-    // match, both ends against every entry
-    //
-    //   The NAPOT mask comes from the entry alone, so it is built once per
-    //   entry and handed to both ends : the bits from the lowest zero of
-    //   pmpaddr downwards are the ones inside the region, and an entry of
-    //   all ones matches the whole address space.
-    //-----------------------------------------------------------------
-    function automatic logic match_one(input logic [53:0] a,
-                                       input logic [53:0] this_a,
-                                       input logic [53:0] prev_a,
-                                       input logic [53:0] napot_mask,
-                                       input logic [1:0]  mode);
-        begin
-            case (mode)
-                A_TOR   : match_one = (a >= prev_a) && (a < this_a);
-                A_NA4   : match_one = (a == this_a);
-                A_NAPOT : match_one = ((a & ~napot_mask) == (this_a & ~napot_mask));
-                default : match_one = 1'b0;      // A = 0 : OFF
-            endcase
+        for (int i = 0; i < N; i++) begin
+            logic [53:0] this_a, napot_mask;
+            this_a     = addr[64*i +: 54];
+            napot_mask = this_a ^ (this_a + 54'd1);
+            up_lt[i] = (a_up < this_a[53:1]);
+            up_eq[i] = (a_up == this_a[53:1]);
+            napot[i] = ((a_up & ~napot_mask[53:1]) == (this_a[53:1] & ~napot_mask[53:1]));
+            lt_lo[i] = below(up_lt[i], up_eq[i], lo0, this_a[0]);
+            lt_hi[i] = below(up_lt[i], up_eq[i], hi0, this_a[0]);
+            eq_lo[i] = up_eq[i] & (lo0 == this_a[0]);
+            eq_hi[i] = up_eq[i] & (hi0 == this_a[0]);
         end
-    endfunction
+    end
 
     logic [N-1:0] m_lo, m_hi;
 
@@ -98,14 +118,15 @@ module MMU_PMP
         m_lo = '0;
         m_hi = '0;
         for (int i = 0; i < ENTRIES; i++) begin
-            logic [53:0] this_a, prev_a, napot_mask;
-            logic [1:0]  mode;
-            this_a = addr[64*i +: 54];
-            prev_a = (i == 0) ? 54'd0 : addr[64*(i-1) +: 54];
-            mode   = cfg[8*i+3 +: 2];
-            napot_mask = this_a ^ (this_a + 54'd1);
-            m_lo[i] = match_one(a_lo, this_a, prev_a, napot_mask, mode);
-            m_hi[i] = match_one(a_hi, this_a, prev_a, napot_mask, mode);
+            logic ge_lo, ge_hi;
+            ge_lo = (i == 0) ? 1'b1 : ~lt_lo[(i+N-1)%N];
+            ge_hi = (i == 0) ? 1'b1 : ~lt_hi[(i+N-1)%N];
+            case (cfg[8*i+3 +: 2])
+                A_TOR   : begin m_lo[i] = ge_lo & lt_lo[i]; m_hi[i] = ge_hi & lt_hi[i]; end
+                A_NA4   : begin m_lo[i] = eq_lo[i];         m_hi[i] = eq_hi[i];         end
+                A_NAPOT : begin m_lo[i] = napot[i];         m_hi[i] = napot[i];         end
+                default : begin m_lo[i] = 1'b0;             m_hi[i] = 1'b0;             end   // A = 0 : OFF
+            endcase
         end
     end
 
