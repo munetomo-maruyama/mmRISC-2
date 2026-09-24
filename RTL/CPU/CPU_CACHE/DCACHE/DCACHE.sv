@@ -990,12 +990,20 @@ module DCACHE
                     u_rob  <= s1_rob;
                     u_lsb  <= s1_addr[2:0];
                     u_size <= s1_size;
+                    // The address goes out exact, down to the byte, and the
+                    // strobes say which lanes of the double word are meant.
+                    // A slave that decodes 32 bit registers needs bit 2: the
+                    // PLIC keeps two registers in one double word, and the
+                    // one at +4 (claim) is read with a side effect, so an
+                    // aligned address would make a read of the threshold
+                    // claim an interrupt and a write to +4 miss its register
+                    // (LitexSystem/docs/TIMING.md 20, the BIOS hung on it).
                     if (s1_is_load) begin
-                        m_axil_araddr  <= {s1_paddr[PADDR_WIDTH-1:3], 3'b000};
+                        m_axil_araddr  <= s1_paddr;
                         m_axil_arvalid <= 1'b1;
                         u_state        <= U_AR;
                     end else if (s1_is_store || s1_is_stwthr) begin
-                        m_axil_awaddr  <= {s1_paddr[PADDR_WIDTH-1:3], 3'b000};
+                        m_axil_awaddr  <= s1_paddr;
                         m_axil_awvalid <= 1'b1;
                         m_axil_wdata   <= align_wdata(s1_addr[2:0], s1_wdata);
                         m_axil_wstrb   <= size_strb(s1_addr[2:0], s1_size);
