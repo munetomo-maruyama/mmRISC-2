@@ -6,7 +6,7 @@
 // not locked and is bound by one that is, and the three permissions are told
 // apart.
 //
-//   entry 0 : 64 bytes around no_x_code, read and write but no execute
+//   entry 0 : 128 bytes around no_x_code, read and write but no execute
 //   entry 1 : 64 bytes around prot_data, read only
 //   entry 2 : everything, read write execute
 //
@@ -35,7 +35,7 @@ _start:
     // ---- the entries ----
     la   x10, no_x_code
     srli x10, x10, 2
-    ori  x10, x10, 0x7                   // NAPOT, 64 bytes
+    ori  x10, x10, 0xF                   // NAPOT, 128 bytes
     csrw pmpaddr0, x10
 
     la   x11, prot_data
@@ -106,6 +106,23 @@ in_s:
     li   x29, 0
     ld   x19, 0(x18)
     TEST_EQ(12, x29, 0)
+
+    // A refused fetch of a line the instruction cache does not hold. The
+    // cache must not go to memory for it: if it did, its answer would come
+    // after the fetch unit has answered the request with the fault, and be
+    // taken for the answer to the request behind it.
+    li   x29, 0
+    la   x18, no_x_cold
+    la   x24, 1f
+    jalr x1, x18, 0
+1:
+    TEST_EQ(31, x29, 1)
+    TEST_EQ(32, x28, 1)                  // instruction access fault
+    TEST_EQ_REG(33, x26, x18)
+    li   x29, 0
+    addi x30, x0, 7                      // the instructions behind the
+    addi x30, x30, 5                     // refused fetch are the real ones
+    TEST_EQ(34, x30, 12)
 
     // an access that hangs over the edge of an entry is refused as a whole:
     // the last eight bytes of the read only region plus the eight behind it
@@ -263,10 +280,16 @@ back_in_m2:
     TEST_DONE
 
     //-----------------------------------------------------------------
-    // a piece of code in its own 64 byte region
+    // a piece of code in its own 128 byte region, two cache lines. The
+    // first line is executed from machine mode and so sits in the
+    // instruction cache; the second is only ever fetched when the fetch is
+    // refused, so it is not.
     //-----------------------------------------------------------------
-    .align 6
+    .align 7
 no_x_code:
+    jalr x0, x1, 0
+    .align 6
+no_x_cold:
     jalr x0, x1, 0
     .align 6
 

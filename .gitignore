@@ -39,3 +39,7 @@ SIM/SIM_FPU/obj_dir/
 SIM/SIM_BIOS/bios.hex
 SIM/SIM_BIOS/fw_jump.hex
 SIM/SIM_BIOS/Image.hex
+SIM/SIM_SYS/progs/*.elf
+SIM/SIM_SYS/progs/*.bin
+SIM/SIM_SYS/progs/*.hex
+SIM/SIM_SYS/progs/*.dis

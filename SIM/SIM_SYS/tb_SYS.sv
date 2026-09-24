@@ -81,6 +81,15 @@ module tb_SYS
     logic                           axil_rvalid, axil_rready;
 
     logic                           ndmreset;
+
+    // the DMA port of CPU_TOP, driven by the DMA model below
+    logic [SOC_ADDR_WIDTH-1:0]      dma_awaddr, dma_araddr;
+    logic                           dma_awvalid, dma_awready, dma_wvalid, dma_wready;
+    logic [63:0]                    dma_wdata, dma_rdata;
+    logic [7:0]                     dma_wstrb;
+    logic [1:0]                     dma_bresp, dma_rresp;
+    logic                           dma_bvalid, dma_bready, dma_arvalid, dma_arready;
+    logic                           dma_rvalid, dma_rready;
     logic [31:0]                    ext_irq;
 
     //=================================================================
@@ -157,6 +166,23 @@ module tb_SYS
             .m_axil_rresp   (axil_rresp),
             .m_axil_rvalid  (axil_rvalid),
             .m_axil_rready  (axil_rready),
+            .s_dma_awaddr   (dma_awaddr),
+            .s_dma_awvalid  (dma_awvalid),
+            .s_dma_awready  (dma_awready),
+            .s_dma_wdata    (dma_wdata),
+            .s_dma_wstrb    (dma_wstrb),
+            .s_dma_wvalid   (dma_wvalid),
+            .s_dma_wready   (dma_wready),
+            .s_dma_bresp    (dma_bresp),
+            .s_dma_bvalid   (dma_bvalid),
+            .s_dma_bready   (dma_bready),
+            .s_dma_araddr   (dma_araddr),
+            .s_dma_arvalid  (dma_arvalid),
+            .s_dma_arready  (dma_arready),
+            .s_dma_rdata    (dma_rdata),
+            .s_dma_rresp    (dma_rresp),
+            .s_dma_rvalid   (dma_rvalid),
+            .s_dma_rready   (dma_rready),
             .ext_irq        (ext_irq),
             .jtag_tck       (1'b0),
             .jtag_tms_i     (1'b0),
@@ -256,7 +282,106 @@ module tb_SYS
         // Two of the three are compressed, so the run also fetches RVC
         // parcels over AXI4-Lite.
         u_per.mem[0] = 64'h828202fe_0010029b;
+        // the mailbox of the DMA model and the window it writes to
+        for (int i = 256; i < 512; i++) u_per.mem[i] = 64'd0;
     end
+
+    //=================================================================
+    // a DMA master on the DMA port of CPU_TOP (CPU_DMA/DMA_CACHE)
+    //
+    //   A program talks to it through a mailbox in the peripheral memory,
+    //   which the CPU does not cache (0x1000_0800, words 256..261):
+    //
+    //     256 cmd  : 1 read n double words from addr and compare them with
+    //                  the pattern, 2 write the pattern, 3 write only bytes
+    //                  2..5 of each double word (strobe 0x3C)
+    //     257 addr, 258 n, 259 seed
+    //     260 the number of double words a read found different
+    //     261 done : written last, the program waits for it
+    //
+    //   pattern(seed, i) = seed + i * 0x9E3779B97F4A7C15
+    //=================================================================
+    localparam logic [63:0] DMA_K = 64'h9E37_79B9_7F4A_7C15;
+
+    // The bus is driven on the falling edge with blocking assignments, so
+    // that the RTL, which samples on the rising edge, never races with it.
+    task automatic dma_write(input logic [SOC_ADDR_WIDTH-1:0] a,
+                             input logic [63:0] d, input logic [7:0] st);
+        bit aw_done, w_done;
+        @(negedge clk);
+        dma_awaddr = a; dma_awvalid = 1'b1;
+        dma_wdata  = d; dma_wstrb   = st; dma_wvalid = 1'b1;
+        dma_bready = 1'b1;
+        aw_done = 1'b0; w_done = 1'b0;
+        while (!(aw_done && w_done)) begin
+            @(posedge clk);
+            if (dma_awvalid && dma_awready) aw_done = 1'b1;
+            if (dma_wvalid  && dma_wready)  w_done  = 1'b1;
+            @(negedge clk);
+            if (aw_done) dma_awvalid = 1'b0;
+            if (w_done)  dma_wvalid  = 1'b0;
+        end
+        while (!dma_bvalid) @(negedge clk);
+        @(posedge clk);          // the response is taken on this edge
+        @(negedge clk);
+    endtask
+
+    task automatic dma_read(input logic [SOC_ADDR_WIDTH-1:0] a, output logic [63:0] d);
+        @(negedge clk);
+        dma_araddr = a; dma_arvalid = 1'b1; dma_rready = 1'b1;
+        do @(posedge clk); while (!dma_arready);
+        @(negedge clk);
+        dma_arvalid = 1'b0;
+        while (!dma_rvalid) @(negedge clk);
+        d = dma_rdata;
+        @(posedge clk);
+        @(negedge clk);
+    endtask
+
+    initial begin
+        dma_awaddr = '0; dma_awvalid = 1'b0; dma_wdata = 64'd0; dma_wstrb = 8'd0;
+        dma_wvalid = 1'b0; dma_bready = 1'b1; dma_araddr = '0; dma_arvalid = 1'b0;
+        dma_rready = 1'b1;
+        forever begin
+            @(posedge clk);
+            if (rst_n && (u_per.mem[256] != 64'd0) && (u_per.mem[261] == 64'd0)) begin
+                logic [63:0] cmd, addr, n, seed, got, want;
+                int bad;
+                cmd  = u_per.mem[256];
+                addr = u_per.mem[257];
+                n    = u_per.mem[258];
+                seed = u_per.mem[259];
+                bad  = 0;
+                if ($test$plusargs("dmadbg"))
+                    $display("[DMA] cmd %0d addr %h n %0d seed %h", cmd, addr, n, seed);
+                for (int i = 0; i < int'(n); i++) begin
+                    want = seed + 64'(i) * DMA_K;
+                    case (cmd)
+                        64'd1: begin
+                            dma_read(SOC_ADDR_WIDTH'(addr + 64'(8 * i)), got);
+                            if (got !== want) bad++;
+                        end
+                        64'd2: dma_write(SOC_ADDR_WIDTH'(addr + 64'(8 * i)), want, 8'hFF);
+                        64'd3: dma_write(SOC_ADDR_WIDTH'(addr + 64'(8 * i)), want, 8'h3C);
+                        default: ;
+                    endcase
+                end
+                u_per.mem[260] = 64'(bad);
+                u_per.mem[256] = 64'd0;
+                u_per.mem[261] = 64'd1;
+            end
+        end
+    end
+
+    //=================================================================
+    // reads of 0x1000_0F00 on the peripheral bus, counted into word 500
+    // (0x1000_0FA0) : a program checks that a fetch the PMP refuses never
+    // reaches the bus (d02_pmp_fetch)
+    //=================================================================
+    always @(posedge clk)
+        if (rst_n && axil_arvalid && axil_arready &&
+            ((axil_araddr & ~40'd7) == 40'h00_1000_0F00))
+            u_per.mem[500] = u_per.mem[500] + 64'd1;
 
     //=================================================================
     // tohost, caught on the cache port

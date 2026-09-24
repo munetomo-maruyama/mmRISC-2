@@ -16,6 +16,16 @@
 #
 # The programs come from SIM_CORE, and one riscv-test is added because
 # rv64ui-p-fence_i is the sharpest of the lot.
+#
+# Not listed, because they cannot change what any program sees:
+#   - a fetch going out in the cycle another is cancelled (IFU). The cache
+#     drops it with the cancelled one, but it is younger than a fetch that
+#     either traps or is thrown away by a branch first, so nobody waits for
+#     its answer.
+#   - a DMA write made an ordinary store instead of a write through. The
+#     line is then allocated and left dirty, which the CPU sees just as
+#     well; memory gets the value when the line is written back. The write
+#     through is there so that memory has it at once, not for coherence.
 #---------------------------------------------------------------------------
 cd "$(dirname "$0")"
 RTL=../../RTL
@@ -23,7 +33,11 @@ WORK=bug_work
 RVTESTS=${RVTESTS:-$HOME/RISCV/riscv-tests}
 PREFIX=/opt/riscv/bin/riscv64-unknown-elf-
 
-VFLAGS="--binary --timing -j 2 --top-module tb_SYS -Wno-fatal"
+VFLAGS="--binary --timing -j 2 --top-module tb_SYS -Wno-fatal -Wno-INITIALDLY"
+
+# the programs "make run-all" runs, read from the Makefile
+RUN_LIST="$(make -s -p -n 2>/dev/null | awk -F' := ' '/^TESTS := /{print $2}' | tr ' ' '\n' | sed 's|^|tests/|') \
+$(make -s -p -n 2>/dev/null | awk -F' := ' '/^PROGS := /{print $2}' | tr ' ' '\n' | sed 's|^|progs/|')"
 
 # id # file # sed expression # description
 MUTATIONS=(
@@ -33,7 +47,9 @@ MUTATIONS=(
 "4#CPU_CORE/CORE_LSU/CORE_LSU.sv#s%d_req_paddr <= req_paddr\[PADDR_WIDTH-1:0\];%d_req_paddr <= req_addr[PADDR_WIDTH-1:0];%#LSU: the cache is given the virtual address as a tag"
 "5#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%if (push_req) i_req_paddr <= tr_paddr\[PADDR_WIDTH-1:0\];%if (push_req) i_req_paddr <= i_req_addr;%#IFU: the cache is given the virtual address as a tag"
 "6#CPU_CACHE/ICACHE/ICACHE.sv#s%if (s1_valid \&\& (i_kill || i_cancel)) begin%if (s1_valid \&\& i_kill) begin%#I\$: a fetch the PMP refused still goes to memory"
-"7#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign i_req_valid = req_want \& tr_ready \& (tr_fault == 2'd0) \& ~i_cancel;%assign i_req_valid = req_want \& tr_ready \& (tr_fault == 2'd0);%#IFU: a fetch goes out in the cycle one is cancelled"
+"8#CPU_DMA/DMA_CACHE.sv#s%w_got <= 1'b1; w_q <= s_wdata; left <= s_wstrb;%w_got <= 1'b1; w_q <= s_wdata; left <= 8'hFF;%#DMA: the write strobes are ignored"
+"9#CPU_DMA/DMA_CACHE.sv#s%assign dc_req_wdata = w_q >> (8 \* int'(p_off));%assign dc_req_wdata = w_q;%#DMA: the data of a piece is not moved to the right"
+"11#CPU_DMA/DMA_CACHE.sv#s%else                      dc_req_addr = {ar_q\[ADDR_WIDTH-1:3\], 3'b000};%else                      dc_req_addr = {aw_q[ADDR_WIDTH-1:3], 3'b000};%#DMA: a read goes to the address of the last write"
 )
 
 SEL=("$@")
@@ -61,12 +77,15 @@ for m in "${MUTATIONS[@]}"; do
         echo "M$id [BUILD FAILED] $desc"; miss=$((miss+1)); continue
     fi
 
+    # Exactly the programs of "make run-all". The tests of SIM_CORE that
+    # need its own bench (t06_irq, t15_plic) fail here whatever the RTL,
+    # and running them made every mutation look detected.
     fails=0
-    for t in $(ls tests/t*.S | xargs -n1 basename | sed 's/\.S$//'); do
-        [ -f tests/$t.hex ] || continue
-        timeout 300 ./$WORK/obj/Vtb_SYS +hex=tests/$t.hex +name=$t \
-            > $WORK/$t.log 2>&1
-        grep -q ": PASS" $WORK/$t.log || fails=$((fails+1))
+    for t in $RUN_LIST; do
+        [ -f $t.hex ] || continue
+        timeout 300 ./$WORK/obj/Vtb_SYS +hex=$t.hex +name=$(basename $t) \
+            > $WORK/$(basename $t).log 2>&1
+        grep -q ": PASS" $WORK/$(basename $t).log || fails=$((fails+1))
     done
     if [ -f rvtests/rv64ui-p-fence_i.hex ]; then
         th=$(${PREFIX}nm rvtests/rv64ui-p-fence_i | awk '$3=="tohost"{print $1}')

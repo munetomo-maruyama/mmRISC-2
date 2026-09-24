@@ -7,6 +7,9 @@
 #
 #   memory bus     AXI4       cache line bursts to LiteDRAM
 #   peripheral bus AXI4-Lite  single beats, turned into Wishbone here
+#   DMA bus        AXI4-Lite  a slave: the DMA masters of the SoC (the SD
+#                             card) reach memory through the data cache,
+#                             coherent with the CPU (CPU_DMA/DMA_CACHE)
 #
 # Everything below MEM_BASE leaves the caches on the peripheral bus, so the
 # LiteX map falls out of a single boundary: the CSRs at 0x1200_0000 are
@@ -76,6 +79,7 @@ RTL_SOURCES = [
     "CPU/CPU_PLIC/CPU_PLIC.sv",
     "CPU/CPU_MMIO/CPU_MMIO.sv",
     "BUS/BUS_ARB/BUS_ARB.sv",
+    "CPU/CPU_DMA/DMA_CACHE.sv",
     "CPU/CPU_BFM/CPU_BFM.sv",
     "CPU/CPU_TOP/CPU_TOP.sv",
 ]
@@ -157,6 +161,13 @@ class MMRISC(CPU):
 
         self.memory_buses = [mem_axi]  # to LiteDRAM
         self.periph_buses = [mmio_wb]  # to the SoC bus
+
+        # The DMA port. Declaring it makes LiteX put the DMA masters on it
+        # instead of on the SoC bus, and define CPU_HAS_DMA_BUS, so the BIOS
+        # skips its cache flushes after a transfer; Linux treats DMA as
+        # coherent anyway. Without it the SD card wrote to memory behind the
+        # data cache, and Linux read stale lines (docs/BRINGUP.md).
+        self.dma_bus    = dma_axil  = axi.AXILiteInterface(data_width=64, address_width=32)
 
         # # #
 
@@ -263,6 +274,25 @@ class MMRISC(CPU):
             i_m_axil_rresp   = mmio_axil.r.resp,
             i_m_axil_rvalid  = mmio_axil.r.valid,
             o_m_axil_rready  = mmio_axil.r.ready,
+
+            # DMA bus (AXI4-Lite slave), 32 bit addresses made 40 bit.
+            i_s_dma_awaddr   = Cat(dma_axil.aw.addr, C(0, 8)),
+            i_s_dma_awvalid  = dma_axil.aw.valid,
+            o_s_dma_awready  = dma_axil.aw.ready,
+            i_s_dma_wdata    = dma_axil.w.data,
+            i_s_dma_wstrb    = dma_axil.w.strb,
+            i_s_dma_wvalid   = dma_axil.w.valid,
+            o_s_dma_wready   = dma_axil.w.ready,
+            o_s_dma_bresp    = dma_axil.b.resp,
+            o_s_dma_bvalid   = dma_axil.b.valid,
+            i_s_dma_bready   = dma_axil.b.ready,
+            i_s_dma_araddr   = Cat(dma_axil.ar.addr, C(0, 8)),
+            i_s_dma_arvalid  = dma_axil.ar.valid,
+            o_s_dma_arready  = dma_axil.ar.ready,
+            o_s_dma_rdata    = dma_axil.r.data,
+            o_s_dma_rresp    = dma_axil.r.resp,
+            o_s_dma_rvalid   = dma_axil.r.valid,
+            i_s_dma_rready   = dma_axil.r.ready,
 
             # JTAG : not wired to pins yet (see docs/JTAG.md).
             i_jtag_tck     = 0,
