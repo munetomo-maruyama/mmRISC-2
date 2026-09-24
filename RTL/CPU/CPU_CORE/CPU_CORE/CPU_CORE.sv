@@ -1058,6 +1058,17 @@ module CPU_CORE
     //   It costs a cycle more than a redirect from EX, and only in this
     //   case.
     //=================================================================
+    // A CSR write that changes how instructions are fetched: satp, and the
+    // PMP. The instructions behind it are already in the fetch queue,
+    // fetched under the old setting, so they are fetched again when it
+    // commits. Linux relies on it: it turns the MMU on from S mode by
+    // writing satp and expecting the very next fetch to fault into stvec
+    // at the virtual address (head.S relocate_enable_mmu; t21_satp).
+    logic        ex_csr_fetch;
+    assign ex_csr_fetch = ex_is_csr & ex_csr_wr &
+                          ((ex_csr_addr == 12'h180) ||                          // satp
+                           ((ex_csr_addr >= 12'h3A0) && (ex_csr_addr <= 12'h3EF))); // pmp*
+
     logic [63:0] ex_seq_pc;
     logic        ex_is_ctrl;
     assign ex_seq_pc  = ex_pc + (ex_is_rvc ? 64'd2 : 64'd4);
@@ -1472,7 +1483,7 @@ module CPU_CORE
                 mr_is_sret    <= ex_is_sret;
                 mr_is_sfence  <= ex_is_sfence;
                 mr_is_fencei  <= ex_is_fencei;
-                mr_refetch    <= ex_pred_taken & ~ex_is_ctrl;
+                mr_refetch    <= (ex_pred_taken & ~ex_is_ctrl) | ex_csr_fetch;
                 // SFENCE.VMA rs2, rs1 : rs1 selects the address and rs2 the
                 // ASID, a zero register meaning "every one of them"
                 mr_sfence_vaddr <= (ex_rs1 == 5'd0) ? 64'd0 : ex_a_fwd;
