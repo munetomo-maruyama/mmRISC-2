@@ -6,6 +6,8 @@
 #   make check   the regression: a faster UART, PASS once the BIOS reaches
 #                "Initializing SDRAM" with the UART interrupt working
 #   make trace   the same as run with a retirement trace
+#   make linux   OpenSBI and the kernel, loaded straight into memory
+#                (LINUX_ARGS adds plusargs, e.g. +pcmon=5000000)
 #---------------------------------------------------------------------------
 TOP      := tb_BIOS
 RTL_DIR  := ../../RTL
@@ -61,7 +63,11 @@ VERILATOR_FLAGS := --binary --timing -j 0 --top-module $(TOP) \
 
 PLUSARGS ?=
 
-.PHONY: all run check trace clean FORCE
+.PHONY: all run check trace linux clean FORCE
+
+FW_BIN    := ../../LitexSystem/software/boot/fw_jump.bin
+IMAGE_BIN := ../../LitexRocket/software/boot/Image
+LINUX_ARGS ?= +pcmon=10000000 +uart_cycles=20 +maxcycles=2000000000
 all: check
 
 # the shared folder keeps file times to the second: rebuild on a new hash
@@ -86,5 +92,14 @@ check: obj_dir/V$(TOP) bios.hex
 trace: obj_dir/V$(TOP) bios.hex
 	./obj_dir/V$(TOP) +bios=bios.hex +trace $(PLUSARGS)
 
+fw_jump.hex: $(FW_BIN)
+	python3 ../SIM_CORE/tools/bin2hex.py $(FW_BIN) $@
+
+Image.hex: $(IMAGE_BIN)
+	python3 ../SIM_CORE/tools/bin2hex.py $(IMAGE_BIN) $@
+
+linux: obj_dir/V$(TOP) fw_jump.hex Image.hex
+	./obj_dir/V$(TOP) +linux +fw=fw_jump.hex +image=Image.hex $(LINUX_ARGS)
+
 clean:
-	rm -rf obj_dir bios.hex
+	rm -rf obj_dir bios.hex fw_jump.hex Image.hex

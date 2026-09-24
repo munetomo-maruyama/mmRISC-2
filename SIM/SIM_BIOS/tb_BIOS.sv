@@ -21,6 +21,19 @@
 //   +trace            retirement trace
 //   +traps            every trap, with the interrupt lines
 //
+// With +linux the BIOS is not run. The ROM holds a stub that jumps to
+// OpenSBI at 0x8000_0000 (a0 = hart 0), and main memory is loaded the way
+// the BIOS would have left it after an SD card boot:
+//
+//   +fw=<file>        fw_jump.bin as hex, at 0x8000_0000
+//   +image=<file>     the kernel Image as hex, at 0x8020_0000
+//   +pcmon=<n>        print the PC of the last retired instruction every
+//                     n cycles, to follow the boot where it prints nothing
+//
+// The run ends at maxcycles, at "Kernel panic", or at "Waiting for root
+// device" / "VFS: Unable to mount", which is as far as a boot can get
+// without an SD card model.
+//
 // Everything the UART sends is printed. Every trap is reported, with the
 // state of the interrupt lines, so that a BIOS that stops talking can be
 // told apart from one that never gets its UART interrupt.
@@ -40,7 +53,8 @@ module tb_BIOS
 
     localparam int          SOC_ADDR_WIDTH = 40;
     localparam logic [39:0] MEM_BASE    = 40'h00_8000_0000;
-    localparam int          MEM_WORDS   = 262144;             // 2 MiB
+    // the 256 MiB of the Arty: Linux takes its memory from the top down
+    localparam int          MEM_WORDS   = 32 * 1024 * 1024;   // 256 MiB
     // the peripheral window sits where LiteX puts its ROM
     localparam logic [39:0] PERIPH_BASE = 40'h00_1000_0000;
 
@@ -93,6 +107,9 @@ module tb_BIOS
             .MEM_BASE        (MEM_BASE),
             .RESET_VECTOR    ({24'd0, RESET_ADDR}),
             .NUM_IRQ         (32),
+            // as on the Arty (LitexSystem/cpu/mmrisc/core.py): mtime steps
+            // every 100 cycles, the 500 kHz of timebase-frequency
+            .CLINT_TICK_DIV  (100),
             .USE_BFM         (0)
         )
     u_cpu_top
@@ -235,11 +252,15 @@ module tb_BIOS
     //=================================================================
     `define CORE u_cpu_top.g_core.u_cpu_core
     int  cycle_count, max_cycles, n_retired, n_traps, n_uart_int;
-    string bios_file;
+    string bios_file, fw_file, image_file;
+    int    pcmon;
+    bit    linux_mode;
 
     always @(posedge clk) begin
         if (rst_n) begin
             cycle_count <= cycle_count + 1;
+            if ((pcmon > 0) && (cycle_count % pcmon == 0))
+                $display("\n@@PC %0d %016h retired %0d", cycle_count, `CORE.trace_pc, n_retired);
             if (`CORE.trace_valid) begin
                 n_retired <= n_retired + 1;
                 if ($test$plusargs("trace"))
@@ -262,9 +283,23 @@ module tb_BIOS
         #1;
         if (!$value$plusargs("bios=%s", bios_file)) bios_file = "bios.hex";
         if (!$value$plusargs("maxcycles=%d", max_cycles)) max_cycles = 3000000;
+        if (!$value$plusargs("pcmon=%d", pcmon)) pcmon = 0;
+        linux_mode = $test$plusargs("linux");
         for (int i = 0; i < MEM_WORDS; i++) u_mem.mem[i] = 64'd0;
         for (int i = 0; i < 128 * 1024 / 8; i++) u_per.rom[i] = 64'd0;
-        $readmemh(bios_file, u_per.rom);
+        if (!linux_mode) begin
+            $readmemh(bios_file, u_per.rom);
+        end else begin
+            if (!$value$plusargs("fw=%s", fw_file))       fw_file    = "fw_jump.hex";
+            if (!$value$plusargs("image=%s", image_file)) image_file = "Image.hex";
+            // addi t0,x0,1 ; slli t0,t0,31 ; addi a0,x0,0 ; addi a1,x0,0 ;
+            // jalr x0,0(t0) ; nop
+            u_per.rom[0] = 64'h01f29293_00100293;
+            u_per.rom[1] = 64'h00000593_00000513;
+            u_per.rom[2] = 64'h00000013_00028067;
+            $readmemh(fw_file, u_mem.mem, 0);
+            $readmemh(image_file, u_mem.mem, 32'h20_0000 / 8);
+        end
     end
 
     initial begin
@@ -277,12 +312,23 @@ module tb_BIOS
         repeat (20) @(posedge clk);
         rst_n     = 1'b1;
         rst_dbg_n = 1'b1;
-        while ((cycle_count < max_cycles) &&
-               (u_per.tx_tail[8*18-1:0] != "Initializing SDRAM"))
-            @(posedge clk);
+        if (linux_mode) begin
+            while ((cycle_count < max_cycles) &&
+                   (u_per.tx_tail[8*12-1:0] != "Kernel panic") &&
+                   (u_per.tx_tail[8*23-1:0] != "Waiting for root device") &&
+                   (u_per.tx_tail[8*20-1:0] != "VFS: Unable to mount"))
+                @(posedge clk);
+            repeat (20000) @(posedge clk);     // the rest of the line
+        end else begin
+            while ((cycle_count < max_cycles) &&
+                   (u_per.tx_tail[8*18-1:0] != "Initializing SDRAM"))
+                @(posedge clk);
+        end
         $display("");
         $display("==========================================================");
-        if ((u_per.tx_tail[8*18-1:0] == "Initializing SDRAM") && (n_uart_int > 0))
+        if (linux_mode)
+            $display(" LINUX RUN ENDED");
+        else if ((u_per.tx_tail[8*18-1:0] == "Initializing SDRAM") && (n_uart_int > 0))
             $display(" BIOS TEST RESULT : PASS   (%0d cycles, %0d UART interrupts)",
                      cycle_count, n_uart_int);
         else

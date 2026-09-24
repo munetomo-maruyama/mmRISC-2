@@ -37,3 +37,5 @@ SIM/*/rvtests/
 # SIM_FPU is built against Berkeley SoftFloat, which lives outside the project
 SIM/SIM_FPU/obj_dir/
 SIM/SIM_BIOS/bios.hex
+SIM/SIM_BIOS/fw_jump.hex
+SIM/SIM_BIOS/Image.hex

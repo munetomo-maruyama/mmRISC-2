@@ -106,6 +106,31 @@ CSR 書き込みは直列化されるが、**後ろの命令は書き込みの�
 (最初に書いた版は、失敗の分岐自身がフォールトして stvec に戻り、偶然 PASS
 していた。「そのラベルに何回来たか」を数えて直した)。
 
+### Linux の起動をシミュレーションで確かめた(`SIM/SIM_BIOS`、`make linux`)
+
+`+linux` では BIOS を走らせず、ROM の小さなスタブから OpenSBI に飛ぶ。
+主記憶(256 MiB、Linux は上から取るので全部要る)には `fw_jump.bin` を
+0x8000_0000 に、Rocket 構成の `Image`(同じカーネル)を 0x8020_0000 に置く。
+`+pcmon=<n>` で n サイクルごとに PC を出し、`System.map` で関数名に直せる。
+CLINT の分周は実機と同じ 100(これを 1 のままにすると時刻が 100 倍速く進み、
+タイマ割り込みが 100 倍来る)。
+
+satp の修正を入れた RTL で:
+
+```
+OpenSBI v1.9 ... → Linux version 7.2.0-rc2 ... → earlycon
+riscv-plic: interrupt-controller@c000000: mapped 4 interrupts
+LiteX SoC Controller driver initialized
+12003800.serial: ttyLXU0 ... is a liteuart
+litex-mmc 12002000.mmc: LiteX MMC controller initialized.
+cpu0: scalar unaligned word access speed is 0.01x byte access speed (slow)
+Waiting for root device /dev/mmcblk0p2...
+```
+
+2 億 3300 万サイクル(50 MHz で約 4.7 秒)。**カーネルは SD カードを要る
+ところまで全部通る**。SD のコマンドがタイムアウトするのはベンチに SD カードの
+モデルが無いから。不整列アクセスは OpenSBI がエミュレートしている(遅いのは想定どおり)。
+
 ### この先で当たるはずの問題: Linux の SD ドライバと DMA の一貫性
 
 BIOS は DMA のあとに `fence.i`(D$ の書き戻し + 無効化)を呼ぶので問題ない。
