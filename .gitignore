@@ -43,3 +43,7 @@ SIM/SIM_SYS/progs/*.elf
 SIM/SIM_SYS/progs/*.bin
 SIM/SIM_SYS/progs/*.hex
 SIM/SIM_SYS/progs/*.dis
+SIM/SIM_BIOS/fw_jump_initrd.hex
+SIM/SIM_BIOS/initrd.hex
+SIM/SIM_BIOS/sim_initrd.dts
+SIM/SIM_BIOS/initrd_fw/

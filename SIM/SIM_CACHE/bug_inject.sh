@@ -41,6 +41,9 @@ MUTATIONS=(
 "20#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/s1_ptag_v ? s1_ptag_r : addr_tag(i_req_paddr)/addr_tag(s1_addr)/#15#15#I\$: tag taken from the request address instead of the physical one"
 "21#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s|assign amo_old    = s1_addr\[2\] ? {32'd0, hit_word\[63:32\]} : hit_word;|assign amo_old    = hit_word;|#4#4#D\$: a word AMO in the upper half reads the lower one"
 "22#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s|assign amo_wr     = s1_addr\[2\] ? {amo_result\[31:0\], 32'd0} : amo_result;|assign amo_wr     = amo_result;|#4#4#D\$: a word AMO in the upper half writes the lower one"
+"23#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/assign f_ar_block = wb_has_line(ms_line\[ms_head\]) |/assign f_ar_block = 1'b0 |/#16#16#D\$: a fill does not wait for the writeback of its line"
+"24#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/(sw_busy \& (sw_line == ms_line\[ms_head\]));/1'b0;/#16#16#D\$: a fill does not wait for the write through of its line"
+"25#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/if (sw_pend \&\& !sw_wait_wb) begin/if (sw_pend) begin/#16#16#D\$: a write through overtakes the writeback of its line"
 )
 
 run_one() {

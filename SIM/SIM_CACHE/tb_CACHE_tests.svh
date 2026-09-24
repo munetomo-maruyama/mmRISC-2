@@ -16,6 +16,9 @@
 //   13. Write through, no allocate (CMD_STWTHR, used by the debug port)
 //   14. Debug port : the second port of the data cache (CACHE_PORT_ARB)
 //   15. VIPT : virtual index with a physical tag (fake MMU in the driver)
+//   16. The write-back queue against a fill and a write through of the same
+//       line (the memory model holds AWREADY low to keep the write-back
+//       waiting)
 //
 //   Plusargs: +from=<n> +to=<n> run only sections n..m
 //             +perf[=<n>]        run the throughput patterns afterwards
@@ -36,6 +39,27 @@
     function automatic int set_word(input int set, input int n);
         return (n * DC_SETS * DC_BLOCK + set * DC_BLOCK) / 8;
     endfunction
+
+    // load other lines of `set` until line `n` of it has left the cache.
+    // Every load is given time to finish its fill, which is when the tag
+    // changes; a fence would wait for the write-backs as well, and those may
+    // be held on purpose.
+    task automatic evict(input string name, input int set, input int n);
+        for (int m = 1; m < 64 && dc_line_present(a_mem(set_word(set, n))); m++) begin
+            if (set_word(set, n + m) >= MEM_WORDS) break;
+            d_load($sformatf("%s : evicting load %0d", name, m),
+                   a_mem(set_word(set, n + m)), 2'd3);
+            d_drain();
+            repeat (40) @(posedge clk);
+        end
+        check({name, " : the line was evicted"}, !dc_line_present(a_mem(set_word(set, n))));
+    endtask
+
+    // let the memory model take write addresses again after `cycles`
+    task automatic aw_release(input int cycles);
+        repeat (cycles) @(posedge clk);
+        u_mem.aw_hold = 1'b0;
+    endtask
 
     initial begin : main
         $display("==========================================================");
@@ -678,6 +702,103 @@
                 d_drain();
             end
             if (n_error == e0) ok("VIPT: index from the virtual, tag from the physical address");
+        end
+
+        //=============================================================
+        section("16. Write-back queue against a fill and a write through");
+        //=============================================================
+        //   A dirty line that is evicted waits in the write-back queue until
+        //   the write engine gets to it. Until then memory holds the old
+        //   line, so
+        //     - a fill of that line (CPU miss or debug / DMA read) must wait
+        //       for the write-back, or it reads the old line (a, d);
+        //     - a write through of that line must not be written before the
+        //       write-back, or the old line overwrites it (b);
+        //   and a fill must not overtake a write through of its own line
+        //   either (c). The memory model holds the write address channel
+        //   (aw_hold) so that the writes really are still waiting.
+        if (from_sec <= 16 && 16 <= to_sec) begin
+            logic [PADDR_WIDTH-1:0] lx, ly;
+            int sx, sy;
+            e0 = n_error;
+            sx = DC_SETS - 3;
+            sy = DC_SETS - 2;
+            lx = a_mem(set_word(sx, 0));
+            ly = a_mem(set_word(sy, 0));
+
+            // (a) CPU miss on a line that is waiting in the write-back queue
+            d_flush("flush before the write-back queue tests");
+            d_drain();
+            d_store("(a) make the line dirty, word 0", lx,       2'd3, 64'hA160_0000_0000_0000);
+            d_store("(a) make the line dirty, word 1", lx + 8,   2'd3, 64'hA160_0000_0000_0001);
+            d_drain();
+            u_mem.aw_hold = 1'b1;
+            evict("(a)", sx, 0);
+            check("(a) the write-back is held", u_mem.mem[ref_index(lx)] !== ref_mem[ref_index(lx)]);
+            fork
+                aw_release(300);
+                begin
+                    d_load("(a) CPU load of the line in the write-back queue, word 0", lx,     2'd3);
+                    d_load("(a) CPU load of the line in the write-back queue, word 1", lx + 8, 2'd3);
+                    d_drain();
+                end
+            join
+
+            // (b) write through of a line queued behind another write-back
+            if (NUM_WB >= 2) begin
+                d_flush("(b) flush");
+                d_drain();
+                d_store("(b) dirty line y",        ly,     2'd3, 64'hB160_0000_0000_0000);
+                d_store("(b) dirty line x word 0", lx,     2'd3, 64'hB160_0000_0000_0001);
+                d_store("(b) dirty line x word 1", lx + 8, 2'd3, 64'hB160_0000_0000_0002);
+                d_drain();
+                u_mem.aw_hold = 1'b1;
+                evict("(b) y, taken by the write engine", sy, 0);
+                evict("(b) x, queued behind y",           sx, 0);
+                fork
+                    aw_release(300);
+                    dbg_store("(b) debug write through to x", lx, 2'd3, 64'hB160_0000_0000_0003);
+                join
+                d_drain();
+                check_mem_word("(b) word written through", lx);
+                check_mem_word("(b) other word of the line", lx + 8);
+            end else begin
+                $display("[%0t] [SKIP] (b) needs two write-back entries", $time);
+            end
+
+            // (c) fill of a line whose write through is still on the bus
+            d_flush("(c) flush");
+            d_drain();
+            u_mem.aw_hold = 1'b1;
+            fork
+                aw_release(300);
+                dbg_store("(c) debug write through, held on the bus", lx, 2'd3,
+                          64'hC160_0000_0000_0000);
+                begin
+                    repeat (30) @(posedge clk);
+                    d_load("(c) CPU load of the line being written through", lx, 2'd3);
+                    d_drain();
+                end
+            join
+            d_load("(c) CPU load after the write through", lx, 2'd3);
+            d_drain();
+
+            // (d) debug (DMA) read of a line that is waiting in the queue
+            d_flush("(d) flush");
+            d_drain();
+            d_store("(d) make the line dirty", lx, 2'd3, 64'hD160_0000_0000_0000);
+            d_drain();
+            u_mem.aw_hold = 1'b1;
+            evict("(d)", sx, 0);
+            fork
+                aw_release(300);
+                dbg_load("(d) debug read of the line in the write-back queue", lx, 2'd3);
+            join
+
+            d_flush("flush after the write-back queue tests");
+            d_drain();
+            check_memory("memory image after the write-back queue tests");
+            if (n_error == e0) ok("write-back queue: fills and write throughs wait for it");
         end
 
         //=============================================================

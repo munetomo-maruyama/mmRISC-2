@@ -20,9 +20,11 @@ LITEX_SYSTEM=$(dirname "$HERE")
 REPO=$(dirname "$LITEX_SYSTEM")
 
 OPENSBI=${1:-$REPO/LitexRocket/software/opensbi}
-DTS="$LITEX_SYSTEM/software/mmrisc_arty.dts"
-DTB="$LITEX_SYSTEM/software/mmrisc_arty.dtb"
-OUT="$LITEX_SYSTEM/software/boot"
+# DTS / DTB / OUT may be given from outside: SIM/SIM_BIOS builds a variant
+# of the device tree with an initramfs for its Linux run
+DTS=${DTS:-"$LITEX_SYSTEM/software/mmrisc_arty.dts"}
+DTB=${DTB:-"$LITEX_SYSTEM/software/mmrisc_arty.dtb"}
+OUT=${OUT:-"$LITEX_SYSTEM/software/boot"}
 
 [ -d "$OPENSBI" ] || { echo "no OpenSBI source at $OPENSBI"; exit 1; }
 
