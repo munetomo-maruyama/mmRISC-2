@@ -53,6 +53,7 @@ RTL_SRCS := \
 	$(RTL_DIR)/CPU/CPU_PLIC/CPU_PLIC.sv \
 	$(RTL_DIR)/CPU/CPU_MMIO/CPU_MMIO.sv \
 	$(RTL_DIR)/BUS/BUS_ARB/BUS_ARB.sv \
+	$(RTL_DIR)/CPU/CPU_DMA/DMA_CACHE.sv \
 	$(RTL_DIR)/CPU/CPU_BFM/CPU_BFM.sv \
 	$(RTL_DIR)/CPU/CPU_TOP/CPU_TOP.sv
 
@@ -63,7 +64,7 @@ VERILATOR       := verilator
 VERILATOR_FLAGS := --binary --timing -j 0 --top-module $(TOP) \
                    -Wno-WIDTHEXPAND -Wno-WIDTHTRUNC -Wno-UNUSEDSIGNAL \
                    -Wno-UNUSEDPARAM -Wno-DECLFILENAME -Wno-PINCONNECTEMPTY \
-                   -Wno-BLKSEQ -Wno-MULTIDRIVEN -Wno-UNDRIVEN
+                   -Wno-BLKSEQ -Wno-MULTIDRIVEN -Wno-UNDRIVEN -Wno-INITIALDLY
 
 # the programs that do not need anything SIM_CORE puts in its own test bench
 TESTS    := t01_alu t02_branch t03_ldst t04_hazard t05_csr t07_trap t08_rvc \
@@ -90,19 +91,31 @@ obj_dir/V$(TOP): obj_dir/.srchash
 tests/%.hex:
 	$(MAKE) -C ../SIM_CORE tests/$*.hex
 
+# Programs that need something only this bench has (the DMA model), built
+# the same way as the tests of SIM_CORE
+PROGS    := d01_dma d02_pmp_fetch d03_fencei
+RVPREFIX := /opt/riscv/bin/riscv64-unknown-elf-
+progs/%.hex: progs/%.S ../SIM_CORE/tests/link.ld ../SIM_CORE/tests/test.h
+	$(RVPREFIX)gcc -march=rv64imafd_zicsr_zifencei -mabi=lp64 -mcmodel=medany \
+	    -nostdlib -nostartfiles -Wl,--no-warn-rwx-segments \
+	    -T ../SIM_CORE/tests/link.ld -I ../SIM_CORE/tests -o progs/$*.elf $<
+	$(RVPREFIX)objcopy -O binary progs/$*.elf progs/$*.bin
+	python3 ../SIM_CORE/tools/bin2hex.py progs/$*.bin $@
+	$(RVPREFIX)objdump -d progs/$*.elf > progs/$*.dis
+
 run: obj_dir/V$(TOP) tests/$(TEST).hex
 	./obj_dir/V$(TOP) +hex=tests/$(TEST).hex +name=$(TEST) $(PLUSARGS)
 
 profile:
 	@$(MAKE) --no-print-directory run PLUSARGS="+profile"
 
-run-all: obj_dir/V$(TOP)
+run-all: obj_dir/V$(TOP) $(addprefix progs/,$(addsuffix .hex,$(PROGS)))
 	@$(MAKE) -s -C ../SIM_CORE tests > /dev/null
 	@fail=0; \
-	for t in $(TESTS); do \
-	    ./obj_dir/V$(TOP) +hex=tests/$$t.hex +name=$$t $(PLUSARGS) \
+	for t in $(addprefix tests/,$(TESTS)) $(addprefix progs/,$(PROGS)); do \
+	    ./obj_dir/V$(TOP) +hex=$$t.hex +name=`basename $$t` $(PLUSARGS) \
 	        | grep -E "PASS|FAIL" || fail=1; \
-	    ./obj_dir/V$(TOP) +hex=tests/$$t.hex +name=$$t $(PLUSARGS) \
+	    ./obj_dir/V$(TOP) +hex=$$t.hex +name=`basename $$t` $(PLUSARGS) \
 	        | grep -q PASS || fail=1; \
 	done; \
 	echo ""; \

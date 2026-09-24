@@ -19,6 +19,7 @@
 //
 // Current contents:
 //   CPU_DBG  : debug logic with a pseudo hart and a debug bus master
+//   DMA_CACHE: the DMA port of the SoC, through the data cache
 //   BUS_ARB  : arbitration of the debug bus master and the CPU
 //   CPU_CORE : the CPU core (USE_BFM=0)
 //   CPU_MMIO : the peripheral bus with the CLINT and the PLIC on it
@@ -185,6 +186,29 @@ module CPU_TOP
         input  logic [1:0]                   m_axil_rresp,
         input  logic                         m_axil_rvalid,
         output logic                         m_axil_rready,
+
+        //-------------------------------------------------------------
+        // DMA port (AXI4-Lite slave, 64 bit) : masters of the SoC reach
+        // memory through the data cache here, coherent with the CPU
+        // (CPU_DMA/DMA_CACHE). Tie the valid lines to 0 when unused.
+        //-------------------------------------------------------------
+        input  logic [AXI4_ADDR_WIDTH-1:0]   s_dma_awaddr,
+        input  logic                         s_dma_awvalid,
+        output logic                         s_dma_awready,
+        input  logic [63:0]                  s_dma_wdata,
+        input  logic [7:0]                   s_dma_wstrb,
+        input  logic                         s_dma_wvalid,
+        output logic                         s_dma_wready,
+        output logic [1:0]                   s_dma_bresp,
+        output logic                         s_dma_bvalid,
+        input  logic                         s_dma_bready,
+        input  logic [AXI4_ADDR_WIDTH-1:0]   s_dma_araddr,
+        input  logic                         s_dma_arvalid,
+        output logic                         s_dma_arready,
+        output logic [63:0]                  s_dma_rdata,
+        output logic [1:0]                   s_dma_rresp,
+        output logic                         s_dma_rvalid,
+        input  logic                         s_dma_rready,
 
         //-------------------------------------------------------------
         // External Interrupts (-> internal PLIC)
@@ -611,6 +635,97 @@ module CPU_TOP
         );
 
     //=================================================================
+    // the second port of the data cache : the debug module and the DMA
+    // port share it (CPU_CACHE_SPEC.md 4.8). The debug module comes first;
+    // the DMA port cannot be starved (CACHE_PORT_ARB lets s1 in after a
+    // while). Each of the two has one access in flight at most.
+    //=================================================================
+    logic                       dma_dc_req_valid, dma_dc_req_ready;
+    logic [AXI4_ADDR_WIDTH-1:0] dma_dc_req_addr, dma_dc_req_paddr;
+    logic [1:0]                 dma_dc_req_size;
+    logic [3:0]                 dma_dc_req_cmd;
+    logic [63:0]                dma_dc_req_wdata;
+    logic                       dma_dc_resp_valid, dma_dc_resp_error;
+    logic [63:0]                dma_dc_resp_data;
+
+    logic                       p2_req_valid, p2_req_ready;
+    logic [AXI4_ADDR_WIDTH-1:0] p2_req_addr, p2_req_paddr;
+    logic [1:0]                 p2_req_size;
+    logic [3:0]                 p2_req_cmd;
+    logic [63:0]                p2_req_wdata;
+    logic                       p2_resp_valid, p2_resp_error;
+    logic [63:0]                p2_resp_data;
+
+    DMA_CACHE #(.ADDR_WIDTH(AXI4_ADDR_WIDTH)) u_dma
+        (
+            .clk           (clk),
+            .rst_n         (rst_bus_n),
+            .s_awaddr      (s_dma_awaddr),
+            .s_awvalid     (s_dma_awvalid),
+            .s_awready     (s_dma_awready),
+            .s_wdata       (s_dma_wdata),
+            .s_wstrb       (s_dma_wstrb),
+            .s_wvalid      (s_dma_wvalid),
+            .s_wready      (s_dma_wready),
+            .s_bresp       (s_dma_bresp),
+            .s_bvalid      (s_dma_bvalid),
+            .s_bready      (s_dma_bready),
+            .s_araddr      (s_dma_araddr),
+            .s_arvalid     (s_dma_arvalid),
+            .s_arready     (s_dma_arready),
+            .s_rdata       (s_dma_rdata),
+            .s_rresp       (s_dma_rresp),
+            .s_rvalid      (s_dma_rvalid),
+            .s_rready      (s_dma_rready),
+            .dc_req_valid  (dma_dc_req_valid),
+            .dc_req_ready  (dma_dc_req_ready),
+            .dc_req_addr   (dma_dc_req_addr),
+            .dc_req_size   (dma_dc_req_size),
+            .dc_req_cmd    (dma_dc_req_cmd),
+            .dc_req_wdata  (dma_dc_req_wdata),
+            .dc_req_paddr  (dma_dc_req_paddr),
+            .dc_resp_valid (dma_dc_resp_valid),
+            .dc_resp_data  (dma_dc_resp_data),
+            .dc_resp_error (dma_dc_resp_error)
+        );
+
+    CACHE_PORT_ARB #(.PADDR_WIDTH(AXI4_ADDR_WIDTH), .XLEN(64), .DEPTH(2)) u_p2_arb
+        (
+            .clk           (clk),
+            .rst_n         (rst_bus_n),
+            .s0_req_valid  (dbg_dc_req_valid),
+            .s0_req_ready  (dbg_dc_req_ready),
+            .s0_req_addr   (dbg_dc_req_addr),
+            .s0_req_size   (dbg_dc_req_size),
+            .s0_req_cmd    (dbg_dc_req_cmd),
+            .s0_req_wdata  (dbg_dc_req_wdata),
+            .s0_req_paddr  (dbg_dc_req_paddr),
+            .s0_resp_valid (dbg_dc_resp_valid),
+            .s0_resp_data  (dbg_dc_resp_data),
+            .s0_resp_error (dbg_dc_resp_error),
+            .s1_req_valid  (dma_dc_req_valid),
+            .s1_req_ready  (dma_dc_req_ready),
+            .s1_req_addr   (dma_dc_req_addr),
+            .s1_req_size   (dma_dc_req_size),
+            .s1_req_cmd    (dma_dc_req_cmd),
+            .s1_req_wdata  (dma_dc_req_wdata),
+            .s1_req_paddr  (dma_dc_req_paddr),
+            .s1_resp_valid (dma_dc_resp_valid),
+            .s1_resp_data  (dma_dc_resp_data),
+            .s1_resp_error (dma_dc_resp_error),
+            .m_req_valid   (p2_req_valid),
+            .m_req_ready   (p2_req_ready),
+            .m_req_addr    (p2_req_addr),
+            .m_req_size    (p2_req_size),
+            .m_req_cmd     (p2_req_cmd),
+            .m_req_wdata   (p2_req_wdata),
+            .m_req_paddr   (p2_req_paddr),
+            .m_resp_valid  (p2_resp_valid),
+            .m_resp_data   (p2_resp_data),
+            .m_resp_error  (p2_resp_error)
+        );
+
+    //=================================================================
     // A debug write may have changed instruction memory, so the
     // instruction cache is invalidated afterwards (fence.i on behalf of
     // the debugger, CPU_CACHE_SPEC.md 4.7)
@@ -676,16 +791,16 @@ module CPU_TOP
             .d_resp_valid    (cc_d_resp_valid),
             .d_resp_data     (cc_d_resp_data),
             .d_resp_error    (cc_d_resp_error),
-            .dbg_req_valid   (dbg_dc_req_valid),
-            .dbg_req_ready   (dbg_dc_req_ready),
-            .dbg_req_addr    (dbg_dc_req_addr),
-            .dbg_req_paddr  (dbg_dc_req_paddr),
-            .dbg_req_size    (dbg_dc_req_size),
-            .dbg_req_cmd     (dbg_dc_req_cmd),
-            .dbg_req_wdata   (dbg_dc_req_wdata),
-            .dbg_resp_valid  (dbg_dc_resp_valid),
-            .dbg_resp_data   (dbg_dc_resp_data),
-            .dbg_resp_error  (dbg_dc_resp_error),
+            .dbg_req_valid   (p2_req_valid),
+            .dbg_req_ready   (p2_req_ready),
+            .dbg_req_addr    (p2_req_addr),
+            .dbg_req_paddr   (p2_req_paddr),
+            .dbg_req_size    (p2_req_size),
+            .dbg_req_cmd     (p2_req_cmd),
+            .dbg_req_wdata   (p2_req_wdata),
+            .dbg_resp_valid  (p2_resp_valid),
+            .dbg_resp_data   (p2_resp_data),
+            .dbg_resp_error  (p2_resp_error),
             .m_axi4_awid     (cc_axi4_awid),
             .m_axi4_awaddr   (cc_axi4_awaddr),
             .m_axi4_awlen    (cc_axi4_awlen),
