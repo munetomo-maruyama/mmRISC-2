@@ -250,7 +250,7 @@ module DCACHE
     //=================================================================
     // State declarations
     //=================================================================
-    typedef enum logic [2:0] {F_IDLE, F_WB_READ, F_WB_WAIT, F_WB_PUSH, F_AR, F_DATA} f_state_t;
+    typedef enum logic [2:0] {F_IDLE, F_WB_READ, F_WB_WAIT, F_WB_PUSH, F_ARW, F_AR, F_DATA} f_state_t;
     typedef enum logic [1:0] {W_IDLE, W_ADDR, W_DATA, W_RESP} w_state_t;
     typedef enum logic [2:0] {U_IDLE, U_AR, U_R, U_AW, U_B} u_state_t;
     typedef enum logic [2:0] {FL_IDLE, FL_TAG, FL_LOOK, FL_READ, FL_WAIT, FL_PUSH, FL_INV,
@@ -390,6 +390,37 @@ module DCACHE
     logic                  sw_busy;
 
     assign sw_busy = sw_pend | w_single;
+
+    //-----------------------------------------------------------------
+    // Memory is behind a line that is still on its way out
+    //
+    //   An entry of the writeback queue stays valid until its write has
+    //   been answered, and so does the single write through. Until then
+    //   memory holds the old contents of that line, and the AXI4 read and
+    //   write channels are not ordered against each other, so
+    //     - a fill of the line waits (f_ar_block), or it would read the old
+    //       line: a CPU miss on a line it has just evicted, or a DMA read
+    //       of it through the second port;
+    //     - a write through of the line waits for the writeback (the write
+    //       engine takes the queue first), or the old line would be written
+    //       over it: a DMA write into a page the CPU has just evicted.
+    //   (CPU_CACHE_SPEC.md 4.3)
+    //-----------------------------------------------------------------
+    function automatic logic wb_has_line(input logic [LINE_BITS-1:0] l);
+        logic r;
+        r = 1'b0;
+        for (int e = 0; e < NUM_WB; e++)
+            if (wb_valid[e] && (wb_line[e] == l)) r = 1'b1;
+        return r;
+    endfunction
+
+    logic [LINE_BITS-1:0]  sw_line;
+    logic                  f_ar_block, sw_wait_wb;
+
+    assign sw_line    = sw_addr[PADDR_WIDTH-1:OFF_BITS];
+    assign f_ar_block = wb_has_line(ms_line[ms_head]) |
+                        (sw_busy & (sw_line == ms_line[ms_head]));
+    assign sw_wait_wb = wb_has_line(sw_line);
 
     logic [15:0]           lfsr;
 
@@ -1131,7 +1162,7 @@ module DCACHE
                                 f_wb_way  <= ms_way[ms_head];
                                 f_state   <= F_WB_READ;
                             end
-                        end else begin
+                        end else if (!f_ar_block) begin
                             m_axi4_araddr  <= {ms_line[ms_head], {OFF_BITS{1'b0}}};
                             m_axi4_arvalid <= 1'b1;
                             f_state        <= F_AR;
@@ -1152,9 +1183,22 @@ module DCACHE
                         wb_data[wb_tail][i] <= f_wb_buf[i];
                     wb_tail        <= wb_next(wb_tail);
                     wb_push        = 1'b1;
-                    m_axi4_araddr  <= {ms_line[ms_head], {OFF_BITS{1'b0}}};
-                    m_axi4_arvalid <= 1'b1;
-                    f_state        <= F_AR;
+                    // the victim is another line of the set, so it does not
+                    // hold this fill up; an older writeback may
+                    if (!f_ar_block) begin
+                        m_axi4_araddr  <= {ms_line[ms_head], {OFF_BITS{1'b0}}};
+                        m_axi4_arvalid <= 1'b1;
+                        f_state        <= F_AR;
+                    end else begin
+                        f_state        <= F_ARW;
+                    end
+                end
+                F_ARW: begin
+                    if (!f_ar_block) begin
+                        m_axi4_araddr  <= {ms_line[ms_head], {OFF_BITS{1'b0}}};
+                        m_axi4_arvalid <= 1'b1;
+                        f_state        <= F_AR;
+                    end
                 end
                 F_AR: begin
                     if (m_axi4_arvalid && m_axi4_arready) begin
@@ -1207,7 +1251,7 @@ module DCACHE
             //---------------------------------------------------------
             case (w_state)
                 W_IDLE: begin
-                    if (sw_pend) begin
+                    if (sw_pend && !sw_wait_wb) begin
                         m_axi4_awaddr  <= sw_addr;
                         m_axi4_awvalid <= 1'b1;
                         w_single       <= 1'b1;

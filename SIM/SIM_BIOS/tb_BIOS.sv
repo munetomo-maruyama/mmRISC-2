@@ -27,12 +27,16 @@
 //
 //   +fw=<file>        fw_jump.bin as hex, at 0x8000_0000
 //   +image=<file>     the kernel Image as hex, at 0x8020_0000
+//   +initrd=<file>    an initramfs as hex, at 0x8200_0000 (make linux-initrd)
 //   +pcmon=<n>        print the PC of the last retired instruction every
 //                     n cycles, to follow the boot where it prints nothing
+//   +utrace=<n>       from the first instruction retired in user mode on,
+//                     every trap, and the first n user mode instructions
 //
 // The run ends at maxcycles, at "Kernel panic", or at "Waiting for root
 // device" / "VFS: Unable to mount", which is as far as a boot can get
-// without an SD card model.
+// without an SD card model; with an initramfs, at the prompt of the shell
+// ("\n# ", make linux-initrd).
 //
 // Everything the UART sends is printed. Every trap is reported, with the
 // state of the interrupt lines, so that a BIOS that stops talking can be
@@ -270,9 +274,11 @@ module tb_BIOS
     //=================================================================
     `define CORE u_cpu_top.g_core.u_cpu_core
     int  cycle_count, max_cycles, n_retired, n_traps, n_uart_int;
-    string bios_file, fw_file, image_file;
+    string bios_file, fw_file, image_file, initrd_file;
     int    pcmon;
     bit    linux_mode;
+    int    utrace, n_user;
+    bit    in_user;
 
     always @(posedge clk) begin
         if (rst_n) begin
@@ -283,12 +289,18 @@ module tb_BIOS
                 n_retired <= n_retired + 1;
                 if ($test$plusargs("trace"))
                     $display("[%0d] %010h : %08h", cycle_count, `CORE.trace_pc, `CORE.trace_insn);
+                if ((utrace > 0) && (`CORE.trace_priv == 2'd0)) begin
+                    in_user = 1'b1;
+                    if (n_user < utrace)
+                        $display("\n@@U [%0d] %010h : %08h", cycle_count, `CORE.trace_pc, `CORE.trace_insn);
+                    n_user = n_user + 1;
+                end
             end
             if (`CORE.trap_valid) begin
                 n_traps <= n_traps + 1;
                 if (`CORE.trap_is_int && (`CORE.trap_cause == 5'd11))
                     n_uart_int <= n_uart_int + 1;
-                if ($test$plusargs("traps"))
+                if ($test$plusargs("traps") || in_user)
                     $display("\n[%0d] TRAP int=%0b cause=%0d epc=%010h tval=%010h  uart_irq=%b meip=%b",
                              cycle_count, `CORE.trap_is_int, `CORE.trap_cause,
                              `CORE.trap_epc, `CORE.trap_tval, uart_irq,
@@ -302,6 +314,9 @@ module tb_BIOS
         if (!$value$plusargs("bios=%s", bios_file)) bios_file = "bios.hex";
         if (!$value$plusargs("maxcycles=%d", max_cycles)) max_cycles = 3000000;
         if (!$value$plusargs("pcmon=%d", pcmon)) pcmon = 0;
+        if (!$value$plusargs("utrace=%d", utrace)) utrace = 0;
+        in_user = 1'b0;
+        n_user  = 0;
         linux_mode = $test$plusargs("linux");
         for (int i = 0; i < MEM_WORDS; i++) u_mem.mem[i] = 64'd0;
         for (int i = 0; i < 128 * 1024 / 8; i++) u_per.rom[i] = 64'd0;
@@ -317,6 +332,8 @@ module tb_BIOS
             u_per.rom[2] = 64'h00000013_00028067;
             $readmemh(fw_file, u_mem.mem, 0);
             $readmemh(image_file, u_mem.mem, 32'h20_0000 / 8);
+            if ($value$plusargs("initrd=%s", initrd_file))
+                $readmemh(initrd_file, u_mem.mem, 32'h200_0000 / 8);
         end
     end
 
@@ -334,7 +351,8 @@ module tb_BIOS
             while ((cycle_count < max_cycles) &&
                    (u_per.tx_tail[8*12-1:0] != "Kernel panic") &&
                    (u_per.tx_tail[8*23-1:0] != "Waiting for root device") &&
-                   (u_per.tx_tail[8*20-1:0] != "VFS: Unable to mount"))
+                   (u_per.tx_tail[8*20-1:0] != "VFS: Unable to mount") &&
+                   (u_per.tx_tail[8*3-1:0]  != "\n# "))
                 @(posedge clk);
             repeat (20000) @(posedge clk);     // the rest of the line
         end else begin
@@ -344,7 +362,9 @@ module tb_BIOS
         end
         $display("");
         $display("==========================================================");
-        if (linux_mode)
+        if (linux_mode && (u_per.tx_tail[8*3-1:0] == "\n# "))
+            $display(" LINUX RUN ENDED : the shell prompt");
+        else if (linux_mode)
             $display(" LINUX RUN ENDED");
         else if ((u_per.tx_tail[8*18-1:0] == "Initializing SDRAM") && (n_uart_int > 0))
             $display(" BIOS TEST RESULT : PASS   (%0d cycles, %0d UART interrupts)",

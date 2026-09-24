@@ -7,6 +7,7 @@
 #                "Initializing SDRAM" with the UART interrupt working
 #   make trace   the same as run with a retirement trace
 #   make linux   OpenSBI and the kernel, loaded straight into memory
+#   make linux-initrd  the same with the BusyBox initramfs, into user space
 #                (LINUX_ARGS adds plusargs, e.g. +pcmon=5000000)
 #---------------------------------------------------------------------------
 TOP      := tb_BIOS
@@ -64,7 +65,7 @@ VERILATOR_FLAGS := --binary --timing -j 0 --top-module $(TOP) \
 
 PLUSARGS ?=
 
-.PHONY: all run check trace linux clean FORCE
+.PHONY: all run check trace linux linux-initrd clean FORCE
 
 FW_BIN    := ../../LitexSystem/software/boot/fw_jump.bin
 IMAGE_BIN := ../../LitexRocket/software/boot/Image
@@ -102,5 +103,34 @@ Image.hex: $(IMAGE_BIN)
 linux: obj_dir/V$(TOP) fw_jump.hex Image.hex
 	./obj_dir/V$(TOP) +linux +fw=fw_jump.hex +image=Image.hex $(LINUX_ARGS)
 
+# The same kernel with the BusyBox initramfs of the Rocket build instead of
+# the SD card, so that user space can be reached without an SD card model.
+# The device tree is the one of the Arty with two changes made here, so the
+# two cannot drift apart: the initramfs at 0x8200_0000, and bootargs that
+# run BusyBox init from it (/init; on the SD card /sbin/init, the same
+# program: its applet links are made at run time by inittab).
+INITRD_BIN := /home/taka/mmlitex_build/initrd_bb
+INITRD_ADDR := 0x82000000
+
+sim_initrd.dts: ../../LitexSystem/software/mmrisc_arty.dts $(INITRD_BIN)
+	sz=`stat -c %s $(INITRD_BIN)`; \
+	end=`printf '0x%x' $$(( $(INITRD_ADDR) + $$sz ))`; \
+	sed -e 's|bootargs = ".*";|bootargs = "console=liteuart earlycon=liteuart,0x12003800 rdinit=/init";\
+		linux,initrd-start = <$(INITRD_ADDR)>;\
+		linux,initrd-end = <'$$end'>;|' $< > $@
+
+fw_jump_initrd.hex: sim_initrd.dts
+	mkdir -p initrd_fw
+	DTS=$(CURDIR)/sim_initrd.dts DTB=$(CURDIR)/initrd_fw/sim.dtb OUT=$(CURDIR)/initrd_fw \
+	    ../../LitexSystem/scripts/build_opensbi.sh > initrd_fw/build.log 2>&1
+	python3 ../SIM_CORE/tools/bin2hex.py initrd_fw/fw_jump.bin $@
+
+initrd.hex: $(INITRD_BIN)
+	python3 ../SIM_CORE/tools/bin2hex.py $(INITRD_BIN) $@
+
+linux-initrd: obj_dir/V$(TOP) fw_jump_initrd.hex Image.hex initrd.hex
+	./obj_dir/V$(TOP) +linux +fw=fw_jump_initrd.hex +image=Image.hex \
+	    +initrd=initrd.hex $(LINUX_ARGS)
+
 clean:
-	rm -rf obj_dir bios.hex fw_jump.hex Image.hex
+	rm -rf obj_dir bios.hex fw_jump.hex Image.hex fw_jump_initrd.hex initrd.hex sim_initrd.dts initrd_fw
