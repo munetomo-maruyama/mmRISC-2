@@ -54,6 +54,44 @@ SIM_SYS / SIM_CPU は外部割り込みを 0 に固定していた。**実際の
 `bios.bin` を載せ、LiteX の UART(16 段 FIFO、レベルのイベント)をモデル化して
 その穴を埋める。修正前の RTL で同じ 16 文字で止まることを確かめてから直した。
 
+## 2 回目: `Booting from boot.json...` で止まった(2026-09-24)
+
+BIOS は最後まで立ち上がった: SDRAM の較正(m0 / m1 とも b01)、memtest、
+memspeed(書き 37.7 / 読み 41.6 MiB/s)、ブートメニュー。止まったのは
+SD カードからの読み込みの途中。
+
+### 1. SD カードの PMOD は **JD**
+
+LiteX の Arty 用プラットフォームは SD カード PMOD を `pmodd`(**JD**、
+`D4 D3 F4 F3 E2 D2 H2 G2`)に置く。このビルドの XDC も Rocket のビルドも同じ
+ピン。**JA に挿すと SD コントローラには何もつながっていない**。
+
+### 2. L2 キャッシュを外した(`--l2-size 0`)
+
+mmRISC-2 は LiteDRAM への専用のメモリバスを持ち、DMA ポートは持たない。
+この組み合わせだと LiteX は SoC バス(= SD カードの DMA)を **8 KiB の
+ライトバック L2 経由**で LiteDRAM につなぐ(`soc.py` の
+`connect_main_bus_to_dram`)。CPU はその L2 を通らないので:
+
+- SD カードから DRAM に読み込んだデータ(OpenSBI、カーネル)の最後の数 KiB が
+  L2 に残ったままになりうる
+- BIOS の `flush_l2_cache()` は「CPU でメインメモリを読んで L2 を追い出す」
+  実装なので、L2 を通らない mmRISC-2 では何も起きない
+
+Rocket は一貫性のある DMA ポート(`dma_bus`)を持つのでこの問題が無い。
+`scripts/build_soc.sh` に `--l2-size 0` を入れた。メモリマップは変わらない
+(`csr.csv` の差は `config_l2_size` が消えただけ)。
+
+### この先で当たるはずの問題: Linux の SD ドライバと DMA の一貫性
+
+BIOS は DMA のあとに `fence.i`(D$ の書き戻し + 無効化)を呼ぶので問題ない。
+**Linux は呼ばない**。LiteX の `litex_mmc` ドライバは DMA の受け皿を
+`dma_alloc_coherent` で取り、ハードウェアが一貫性を保つ前提で使う。mmRISC-2 の
+D$ は DMA の書き込みを知らないので、ルートファイルシステムを SD から読むと
+古いキャッシュ内容を読む可能性が高い。Rocket では `dma_bus` がこれを解決していた。
+対策(D$ を通る DMA ポートを CPU_TOP に足す、など)は、カーネルが起動するのを
+見てから決める。まずは initramfs で起動させるのが安全。
+
 ## 手順
 
 ### 1. SoC を生成(Linux VM)

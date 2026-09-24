@@ -17,6 +17,14 @@
 #---------------------------------------------------------------------------
 set -e
 
+# --l2-size 0 : no L2 cache between the SoC bus and LiteDRAM. mmRISC-2 has
+# a memory bus of its own straight to LiteDRAM and no DMA port, so LiteX
+# hangs the SoC bus -- and with it the DMA of the SD card -- on LiteDRAM
+# through that L2, which the CPU never sees. Data the SD card loads (the
+# kernel, OpenSBI) could stay in it, and the BIOS's flush_l2_cache() cannot
+# get it out: it reads main memory through the CPU, which bypasses the L2.
+# See docs/BRINGUP.md.
+
 HERE=$(cd "$(dirname "$0")" && pwd)
 LITEX_SYSTEM=$(dirname "$HERE")
 REPO=$(dirname "$LITEX_SYSTEM")
@@ -41,6 +49,7 @@ python3 "$LITEX_WS/litex-boards/litex_boards/targets/digilent_arty.py" \
     --cpu-type mmrisc \
     --sys-clk-freq 50e6 \
     --with-sdcard \
+    --l2-size 0 \
     --output-dir "$BUILD" \
     "$@"
 
