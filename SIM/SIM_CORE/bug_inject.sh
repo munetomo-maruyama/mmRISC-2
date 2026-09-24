@@ -244,6 +244,7 @@ MUTATIONS=(
 "206#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%((i_resp_error | resp_cancel) ? 2'd1 : 2'd0)%(i_resp_error ? 2'd1 : 2'd0)%#IFU: a cancelled fetch is answered without a fault"
 "207#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%if (i_cancel) pr_cancel\[pr_tail - OS_BITS'(1)\] <= 1'b1;%%#IFU: a cancelled fetch is never answered"
 "208#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign i_cancel    = chk_valid \& pmp_fail%assign i_cancel    = pmp_fail%#IFU: the PMP answer is taken when no request is being checked"
+"209#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%mr_refetch    <= (ex_pred_taken \& ~ex_is_ctrl) | ex_csr_fetch;%mr_refetch    <= (ex_pred_taken \& ~ex_is_ctrl);%#core: a write of satp does not refetch what behind it was fetched untranslated"
 )
 
 # every mutation is run without and with back pressure on both cache ports
