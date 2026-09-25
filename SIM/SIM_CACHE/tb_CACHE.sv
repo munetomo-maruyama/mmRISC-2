@@ -674,6 +674,34 @@ module tb_CACHE;
     //=================================================================
     // CPU BFM : data side
     //=================================================================
+    bit oplog;
+    initial oplog = $test$plusargs("oplog");
+    logic [$clog2(NUM_MSHR > 1 ? NUM_MSHR : 2)-1:0] ms_tail_q = '0;
+    // +oplog : the bus traffic of the data cache and its answers, too
+    always @(posedge clk) if (oplog && rst_n) begin
+        if (m_axi4_arvalid && m_axi4_arready)
+            $display("[%0t] BUS  fill   %010h", $time, m_axi4_araddr);
+        if (m_axi4_awvalid && m_axi4_awready)
+            $display("[%0t] BUS  write  %010h len=%0d", $time, m_axi4_awaddr, m_axi4_awlen);
+        if (m_axi4_wvalid && m_axi4_wready)
+            $display("[%0t] BUS  wdata  %016h", $time, m_axi4_wdata);
+        if (m_axi4_rvalid && m_axi4_rready)
+            $display("[%0t] BUS  rdata  %016h", $time, m_axi4_rdata);
+        if (d_resp_valid)
+            $display("[%0t] RESP %016h err=%b", $time, d_resp_data, d_resp_error);
+        if (d_req_valid && d_req_ready)
+            $display("[%0t] REQ  cmd=%0d %010h", $time, d_req_cmd, d_req_addr);
+        if (u_cache.u_dcache.tag_wr_en)
+            $display("[%0t] TAGW idx=%0d way=%0d tag=%0h v=%b d=%b", $time,
+                     u_cache.u_dcache.tag_wr_index, u_cache.u_dcache.tag_wr_way,
+                     u_cache.u_dcache.tag_wr_tag, u_cache.u_dcache.tag_wr_valid,
+                     u_cache.u_dcache.tag_wr_dirty);
+        if (u_cache.u_dcache.ms_tail != ms_tail_q)
+            $display("[%0t] MSHR %0d line=%0h way=%0d wb_needed=%b", $time, ms_tail_q,
+                     u_cache.u_dcache.ms_line[ms_tail_q], u_cache.u_dcache.ms_way[ms_tail_q],
+                     u_cache.u_dcache.ms_wb_needed[ms_tail_q]);
+        ms_tail_q <= u_cache.u_dcache.ms_tail;
+    end
     task automatic d_push(input string name, input logic [3:0] cmd,
                           input logic [PADDR_WIDTH-1:0] addr, input logic [1:0] size,
                           input logic [63:0] wdata);
@@ -743,6 +771,10 @@ module tb_CACHE;
         //-------------------------------------------------------------
         // queue the expectation and drive the request
         //-------------------------------------------------------------
+        // (the expectations of requests still waiting in rq count as well:
+        // without this a long run with no drain overwrote the oldest ones)
+        while (((dq_wr + 1) % QDEPTH) == dq_rd) @(posedge clk);
+        if (oplog) $display("[%0t] PUSH %s cmd=%0d wdata=%016h exp=%016h", $time, name, cmd, wdata, exp);
         dq_data[dq_wr]  = exp;
         dq_err[dq_wr]   = err;
         dq_check[dq_wr] = ~adaptive;

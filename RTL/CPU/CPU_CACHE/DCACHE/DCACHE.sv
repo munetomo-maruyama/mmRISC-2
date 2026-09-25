@@ -986,9 +986,22 @@ module DCACHE
             end
 
             // the array outputs stop belonging to stage 1 when an engine
-            // used the read port, or when the line arrived from memory
+            // used the read port, or when the line arrived from memory.
+            // The flush walk counts all the time it runs, not only while it
+            // reads data: it reads the tags of one set after the other, and
+            // a request that came in as the FLUSH left stage 1 then compared
+            // its tag with those of another set; the same tag bits there
+            // made a hit, and the data came from the wrong line.
+            // So does a write to the set of stage 1 while it waits: the tag
+            // and data forwarding (tfwd_*, fwd_*) only carry the write of
+            // the cycle before, so from the next cycle on the lookup would
+            // miss it. A store hit that made a line dirty in the cycle a
+            // later miss read the tags was then gone one cycle later, and
+            // the miss evicted the line as clean (the store was lost).
             if (s1_valid && !s1_can_retire) begin
-                if (array_rd_busy || (fill_beat_now && m_axi4_rlast))
+                if (array_rd_busy || fl_busy || (fill_beat_now && m_axi4_rlast) ||
+                    (tfwd_en   && (tfwd_index == addr_index(s1_addr))) ||
+                    (fwd_valid && (fwd_addr[DADDR_BITS-1 -: IDX_BITS] == addr_index(s1_addr))))
                     s1_data_ok <= 1'b0;
             end
             // re-read the arrays for the request kept in stage 1
