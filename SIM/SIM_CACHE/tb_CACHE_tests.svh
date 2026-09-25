@@ -795,6 +795,30 @@
                 dbg_load("(d) debug read of the line in the write-back queue", lx, 2'd3);
             join
 
+            // (e) fills finish while a write through waits for its answer:
+            //     the write through is not one of the requests a fill answers
+            d_flush("(e) flush");
+            d_drain();
+            u_mem.aw_hold = 1'b1;
+            fork
+                aw_release(400);
+                begin
+                    dbg_store("(e) debug write through, held on the bus", lx, 2'd3,
+                              64'hE160_0000_0000_0000);
+                    // its answer means the word is in memory
+                    check_mem_word("(e) write through answered only once written", lx);
+                end
+                begin
+                    repeat (10) @(posedge clk);
+                    for (int i = 0; i < 8; i++)
+                        d_load($sformatf("(e) CPU miss %0d while the write through waits", i),
+                               a_mem(set_word(i, 3)), 2'd3);
+                    d_drain();
+                end
+            join
+            d_load("(e) CPU load of the written word", lx, 2'd3);
+            d_drain();
+
             d_flush("flush after the write-back queue tests");
             d_drain();
             check_memory("memory image after the write-back queue tests");

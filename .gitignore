@@ -47,3 +47,8 @@ SIM/SIM_BIOS/fw_jump_initrd.hex
 SIM/SIM_BIOS/initrd.hex
 SIM/SIM_BIOS/sim_initrd.dts
 SIM/SIM_BIOS/initrd_fw/
+SIM/SIM_BIOS/sdcard.img
+SIM/SIM_BIOS/sdcard_run.img
+SIM/SIM_BIOS/sd_work/
+SIM/SIM_BIOS/obj_dbg/
+SIM/SIM_BIOS/obj_dbg.log
