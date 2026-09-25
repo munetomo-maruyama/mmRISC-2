@@ -50,8 +50,10 @@ Ethernet 無しの最後のビットストリームは `build/known_good_noeth/`
 
 ### Linux で IP をもらう
 
-BusyBox の `udhcpc` は、もらったアドレスを自分では設定せず、
-`/usr/share/udhcpc/default.script` に任せる。そのスクリプト
+BusyBox の `udhcpc` は、インタフェースを起こすこともアドレスを設定することも自分では
+せず、スクリプトに任せる。しかもこの BusyBox は既定のスクリプトの場所が空
+(`CONFIG_UDHCPC_DEFAULT_SCRIPT=""`)なので、**`-s` でスクリプトを指定しないと何も
+実行されない**(インタフェースは DOWN のままで `Network is down` になる)。そのスクリプト
 (`software/rootfs/usr/share/udhcpc/default.script`)を SD カードの第 2
 パーティションに一度だけ入れる(PC 側で):
 
@@ -65,17 +67,21 @@ sync
 ボードで:
 
 ```sh
-udhcpc -i eth0          # "Setting IP address ..." が出れば取得できた
+udhcpc -i eth0 -s /usr/share/udhcpc/default.script
+                        # "Setting IP address ..." と "Adding router ..." が出れば設定済み
 ifconfig eth0
-ping -c 3 <ルータの IP>
+ping <ルータの IP>      # "... is alive!" (この BusyBox の ping は簡易版で -c などは無い)
 ```
 
 起動時に自動で取るなら `/etc/inittab` の `--install -s` の行より後に次を足す
 (`-b`: 取れなければ裏で待ち続ける):
 
 ```
-::sysinit:/bin/busybox udhcpc -i eth0 -b
+::sysinit:/bin/busybox udhcpc -i eth0 -b -s /usr/share/udhcpc/default.script
 ```
+
+2026-09-26 に実機で確認: `udhcpc` で 192.168.0.11 を取得し、ルータと LAN 上の PC に
+`ping` が通った。
 
 MAC アドレスは BIOS と同じ `10:e2:d5:00:00:00`(デバイスツリーの
 `local-mac-address`)なので、BIOS と Linux は DHCP で同じ IP をもらう。
