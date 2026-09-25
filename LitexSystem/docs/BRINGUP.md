@@ -17,7 +17,7 @@
 | **LiteX BIOS そのもの(割り込み込み)** | **確認済**。`SIM/SIM_BIOS`(2026-09-24、実機で止まったのを受けて追加) |
 | ビットストリーム | **通る**。50MHz でタイミング収束(`TIMING.md`) |
 | 実機で BIOS が出るか | **確認済**(2026-09-24) |
-| 実機で Linux が起動するか | カーネルは起動し ext4 をマウント。SD カードからの起動はシミュレーションでプロンプトまで確認(5 回目)、実機は再合成待ち |
+| 実機で Linux が起動するか | **確認済**(2026-09-25、WNS 0.013ns)。SD カードの ext4 から BusyBox のプロンプトまで。`cat /proc/cpuinfo`、`uname -a` が動く。未解決: 起動中に 1 度 `kernel/bpf/memalloc.c:186` の WARNING(下記) |
 
 ## キャッシュ外フェッチを先に潰した理由
 
@@ -278,6 +278,21 @@ SD カードの割り込みが頻繁になるユーザー空間の起動で「�
 `make linux-sd` で、SD カードから ext4 をマウントし、`/sbin/init` → BusyBox の
 `# ` プロンプトまで進む。回帰(SIM_CORE、SIM_SYS、SIM_CPU、riscv-tests 132 本、
 SIM_CACHE と掃引 18 構成)はすべて PASS。
+
+## 6 回目: 実機で Linux のプロンプトが出た(2026-09-25)
+
+5 回目の 2 つの修正を入れたビットストリーム(WNS 0.013ns)で、実機が SD カードの
+ext4 から `/sbin/init` → BusyBox の `# ` まで進み、`cat /proc/cpuinfo`
+(`rv64imafdc_...`、`mmu: sv39`)と `uname -a` が動いた。
+
+- `mount: mounting devtmpfs on /dev failed: Device or resource busy` は無害。
+  カーネルが `/dev` を既にマウントしていて、inittab がもう一度マウントしようと
+  しているだけ。
+- **未解決**: パーティション表を読んだ直後に 1 度、`kernel/bpf/memalloc.c:186`
+  (`WARN_ON_ONCE(local_inc_return(&c->active) != 1)`)が出た。0 のはずの per-CPU
+  カウンタを原子的に 1 足した結果が 1 でなかった、ということで、AMO かメモリの
+  一貫性を疑う。シミュレーションでは一度も出ていない。頻度を実機で確かめつつ、
+  DMA ポートと CPU の AMO・ミスを混ぜたランダム試験を SIM_CACHE に足して探す。
 
 ## 手順
 
