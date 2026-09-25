@@ -14,6 +14,7 @@
 //                  uart    0x1200_3800  rxtx, txfull, rxempty, ev_status,
 //                                       ev_pending, ev_enable, txempty,
 //                                       rxfull
+//                sdcard  0x1200_2000  passed on to SD_MODEL (sd_*)
 //                every other CSR reads as zero and ignores writes
 //
 // The UART follows litex/soc/cores/uart.py: a TX FIFO of 16, the TX event
@@ -57,7 +58,16 @@ module LITEX_PERIPH
         input  logic                    rready,
 
         output logic                    uart_irq,
-        output logic                    timer_irq
+        output logic                    timer_irq,
+
+        // the CSRs of the SD card (SD_MODEL): 64 words at 0x1200_2000
+        output logic                    sd_wr0_en,
+        output logic [5:0]              sd_wr0_idx,
+        output logic [31:0]             sd_wr0_dat,
+        output logic                    sd_wr1_en,
+        output logic [5:0]              sd_wr1_idx,
+        output logic [31:0]             sd_wr1_dat,
+        input  logic [64*32-1:0]        sd_regs
     );
 
     localparam logic [39:0] ROM_BASE  = 40'h00_1000_0000;
@@ -111,6 +121,8 @@ module LITEX_PERIPH
     logic [31:0] ctrl_scratch;
 
     function automatic logic [31:0] csr_read(input logic [15:0] off);
+        if ((off >= 16'h2000) && (off < 16'h2100))
+            return sd_regs[32 * int'(off[7:2]) +: 32];
         case (off)
             16'h0004: return ctrl_scratch;
             16'h3000: return t_load;
@@ -159,9 +171,12 @@ module LITEX_PERIPH
             t_load <= 0; t_reload <= 0; t_value <= 0; t_latched <= 0;
             t_en <= 1'b0; t_zero_pend <= 1'b0; t_ev_enable <= 1'b0;
             ctrl_scratch <= 32'h1234_5678;
+            sd_wr0_en <= 1'b0; sd_wr1_en <= 1'b0;
         end else begin
             tx_push = 1'b0;
             tx_char = 8'd0;
+            sd_wr0_en <= 1'b0;
+            sd_wr1_en <= 1'b0;
 
             // --- write
             if (awvalid && awready) begin aw_got <= 1'b1; aw_q <= awaddr; end
@@ -180,6 +195,13 @@ module LITEX_PERIPH
                             logic [31:0] v;
                             off = 16'(((aw_q - CSR_BASE) & ~40'd7) + 40'(4 * h));
                             v   = w_q[32*h +: 32];
+                            if ((off >= 16'h2000) && (off < 16'h2100)) begin
+                                if (h == 0) begin
+                                    sd_wr0_en <= 1'b1; sd_wr0_idx <= off[7:2]; sd_wr0_dat <= v;
+                                end else begin
+                                    sd_wr1_en <= 1'b1; sd_wr1_idx <= off[7:2]; sd_wr1_dat <= v;
+                                end
+                            end
                             case (off)
                                 16'h0004: ctrl_scratch   <= v;
                                 16'h3000: t_load         <= v;
@@ -196,6 +218,7 @@ module LITEX_PERIPH
                     end
                 end else if (!in_rom(aw_q)) begin
                     bresp <= 2'b11;
+                    $display("LITEX_PERIPH: write to an unmapped address %010h", aw_q);
                 end
             end
             if (bvalid && bready) bvalid <= 1'b0;
@@ -215,6 +238,7 @@ module LITEX_PERIPH
                 end else begin
                     rdata <= 64'd0;
                     rresp <= 2'b11;
+                    $display("LITEX_PERIPH: read of an unmapped address %010h", araddr);
                 end
             end
             if (rvalid && rready) rvalid <= 1'b0;

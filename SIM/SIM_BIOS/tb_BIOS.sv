@@ -28,6 +28,7 @@
 //   +fw=<file>        fw_jump.bin as hex, at 0x8000_0000
 //   +image=<file>     the kernel Image as hex, at 0x8020_0000
 //   +initrd=<file>    an initramfs as hex, at 0x8200_0000 (make linux-initrd)
+//   +sdimg=<file>     an SD card with that image (SD_MODEL, make linux-sd)
 //   +pcmon=<n>        print the PC of the last retired instruction every
 //                     n cycles, to follow the boot where it prints nothing
 //   +utrace=<n>       from the first instruction retired in user mode on,
@@ -100,6 +101,20 @@ module tb_BIOS
 
     logic                           ndmreset;
     logic [31:0]                    ext_irq;
+
+    // the SD card (SD_MODEL) on the DMA port
+    logic [31:0] sd_awaddr, sd_araddr;
+    logic        sd_awvalid, sd_awready, sd_wvalid, sd_wready, sd_bvalid, sd_bready;
+    logic        sd_arvalid, sd_arready, sd_rvalid, sd_rready;
+    logic [63:0] sd_wdata, sd_rdata;
+    logic [7:0]  sd_wstrb;
+    logic [1:0]  sd_bresp, sd_rresp;
+    logic              sd_irq;
+    logic              sd_wr0_en, sd_wr1_en;
+    logic [5:0]        sd_wr0_idx, sd_wr1_idx;
+    logic [31:0]       sd_wr0_dat, sd_wr1_dat;
+    logic [64*32-1:0]  sd_regs;
+
 
     //=================================================================
     // the CPU
@@ -179,23 +194,23 @@ module tb_BIOS
             .m_axil_rvalid  (axil_rvalid),
             .m_axil_rready  (axil_rready),
             // the DMA port : not used here
-            .s_dma_awaddr   ('0),
-            .s_dma_awvalid  (1'b0),
-            .s_dma_awready  (),
-            .s_dma_wdata    (64'd0),
-            .s_dma_wstrb    (8'd0),
-            .s_dma_wvalid   (1'b0),
-            .s_dma_wready   (),
-            .s_dma_bresp    (),
-            .s_dma_bvalid   (),
-            .s_dma_bready   (1'b1),
-            .s_dma_araddr   ('0),
-            .s_dma_arvalid  (1'b0),
-            .s_dma_arready  (),
-            .s_dma_rdata    (),
-            .s_dma_rresp    (),
-            .s_dma_rvalid   (),
-            .s_dma_rready   (1'b1),
+            .s_dma_awaddr   ({8'd0, sd_awaddr}),
+            .s_dma_awvalid  (sd_awvalid),
+            .s_dma_awready  (sd_awready),
+            .s_dma_wdata    (sd_wdata),
+            .s_dma_wstrb    (sd_wstrb),
+            .s_dma_wvalid   (sd_wvalid),
+            .s_dma_wready   (sd_wready),
+            .s_dma_bresp    (sd_bresp),
+            .s_dma_bvalid   (sd_bvalid),
+            .s_dma_bready   (sd_bready),
+            .s_dma_araddr   ({8'd0, sd_araddr}),
+            .s_dma_arvalid  (sd_arvalid),
+            .s_dma_arready  (sd_arready),
+            .s_dma_rdata    (sd_rdata),
+            .s_dma_rresp    (sd_rresp),
+            .s_dma_rvalid   (sd_rvalid),
+            .s_dma_rready   (sd_rready),
             .ext_irq        (ext_irq),
             .jtag_tck       (1'b0),
             .jtag_tms_i     (1'b0),
@@ -263,11 +278,29 @@ module tb_BIOS
             .rdata (axil_rdata), .rresp (axil_rresp),
             .rvalid (axil_rvalid), .rready (axil_rready),
             .uart_irq (uart_irq),
-            .timer_irq (timer_irq)
+            .timer_irq (timer_irq),
+            .sd_wr0_en (sd_wr0_en), .sd_wr0_idx (sd_wr0_idx), .sd_wr0_dat (sd_wr0_dat),
+            .sd_wr1_en (sd_wr1_en), .sd_wr1_idx (sd_wr1_idx), .sd_wr1_dat (sd_wr1_dat),
+            .sd_regs (sd_regs)
         );
 
-    // LiteX interrupt i is PLIC source i+1 (LitexSystem/cpu/mmrisc/core.py)
-    assign ext_irq = {28'd0, 1'b0, timer_irq, uart_irq, 1'b0};
+    SD_MODEL u_sd
+        (
+            .clk (clk), .rst_n (rst_n),
+            .wr0_en (sd_wr0_en), .wr0_idx (sd_wr0_idx), .wr0_dat (sd_wr0_dat),
+            .wr1_en (sd_wr1_en), .wr1_idx (sd_wr1_idx), .wr1_dat (sd_wr1_dat),
+            .regs (sd_regs),
+            .irq (sd_irq),
+            .m_awaddr (sd_awaddr), .m_awvalid (sd_awvalid), .m_awready (sd_awready),
+            .m_wdata (sd_wdata), .m_wstrb (sd_wstrb), .m_wvalid (sd_wvalid), .m_wready (sd_wready),
+            .m_bresp (sd_bresp), .m_bvalid (sd_bvalid), .m_bready (sd_bready),
+            .m_araddr (sd_araddr), .m_arvalid (sd_arvalid), .m_arready (sd_arready),
+            .m_rdata (sd_rdata), .m_rresp (sd_rresp), .m_rvalid (sd_rvalid), .m_rready (sd_rready)
+        );
+
+    // LiteX interrupt i is PLIC source i+1 (LitexSystem/cpu/mmrisc/core.py):
+    // uart 0, timer0 1, sdcard 2
+    assign ext_irq = {28'd0, sd_irq, timer_irq, uart_irq, 1'b0};
 
     //=================================================================
     // what happens
@@ -280,11 +313,33 @@ module tb_BIOS
     int    utrace, n_user;
     bit    in_user;
 
+    // claims per PLIC source
+    `define PLIC u_cpu_top.u_mmio.u_plic
+    int n_claim [0:31];
+    initial for (int i = 0; i < 32; i++) n_claim[i] = 0;
+    always @(posedge clk)
+        if (rst_n && `PLIC.claim_now)
+            n_claim[`PLIC.best_id[`PLIC.ctx_ctl]] <= n_claim[`PLIC.best_id[`PLIC.ctx_ctl]] + 1;
+
     always @(posedge clk) begin
         if (rst_n) begin
             cycle_count <= cycle_count + 1;
             if ((pcmon > 0) && (cycle_count % pcmon == 0))
+            begin
                 $display("\n@@PC %0d %016h retired %0d", cycle_count, `CORE.trace_pc, n_retired);
+                // who is asking for interrupts, and how the SD card stands
+                $display("@@IRQ ext=%b plic_irq=%b pend=%b gw_ready=%b claims u/t/sd=%0d/%0d/%0d mip=%h",
+                         ext_irq[3:1], `PLIC.irq,
+                         {`PLIC.pending[3], `PLIC.pending[2], `PLIC.pending[1]},
+                         {`PLIC.gw_ready[3], `PLIC.gw_ready[2], `PLIC.gw_ready[1]},
+                         n_claim[1], n_claim[2], n_claim[3], `CORE.u_csr.mip_val);
+                $display("@@SD card=%0d cmd_done=%b data_done=%b ev_en=%b rf=%0d b2m %0d/%0d en=%b m2b %0d/%0d en=%b dma=%0d uart_en=%b",
+                         u_sd.c_state, u_sd.cmd_done, u_sd.data_done, u_sd.ev_enable,
+                         u_sd.rf_cnt, u_sd.b2m_offset, u_sd.b2m_length, u_sd.b2m_enable,
+                         u_sd.m2b_offset, u_sd.m2b_length, u_sd.m2b_enable,
+                         u_cpu_top.u_dma.state, u_per.uart_ev_enable);
+                $fflush;
+            end
             if (`CORE.trace_valid) begin
                 n_retired <= n_retired + 1;
                 if ($test$plusargs("trace"))
@@ -308,6 +363,25 @@ module tb_BIOS
             end
         end
     end
+
+    // +dmalog : every request of the DMA port into the data cache, with the
+    // address stage 1 of the cache works with, and every answer
+    `define DC u_cpu_top.u_cpu_cache.u_dcache
+    always @(posedge clk) begin
+        if (rst_n && dmalog) begin
+            if (u_cpu_top.u_dma.dc_req_valid && u_cpu_top.u_dma.dc_req_ready)
+                $display("[%0d] DMA req  cmd=%0d addr=%010h size=%0d wdata=%016h",
+                         cycle_count, u_cpu_top.u_dma.dc_req_cmd, u_cpu_top.u_dma.dc_req_addr,
+                         u_cpu_top.u_dma.dc_req_size, u_cpu_top.u_dma.dc_req_wdata);
+            if (u_cpu_top.u_dma.dc_resp_valid)
+                $display("[%0d] DMA resp err=%b data=%016h",
+                         cycle_count, u_cpu_top.u_dma.dc_resp_error, u_cpu_top.u_dma.dc_resp_data);
+            if (`DC.d_req_valid && `DC.d_req_ready && (u_cpu_top.u_dma.state != 0))
+                $display("[%0d] D$  req  cmd=%0d addr=%010h", cycle_count, `DC.d_req_cmd, `DC.d_req_addr);
+        end
+    end
+    bit dmalog;
+    initial dmalog = $test$plusargs("dmalog");
 
     initial begin
         #1;
@@ -350,7 +424,7 @@ module tb_BIOS
         if (linux_mode) begin
             while ((cycle_count < max_cycles) &&
                    (u_per.tx_tail[8*12-1:0] != "Kernel panic") &&
-                   (u_per.tx_tail[8*23-1:0] != "Waiting for root device") &&
+                   (u_sd.present || (u_per.tx_tail[8*23-1:0] != "Waiting for root device")) &&
                    (u_per.tx_tail[8*20-1:0] != "VFS: Unable to mount") &&
                    (u_per.tx_tail[8*3-1:0]  != "\n# "))
                 @(posedge clk);

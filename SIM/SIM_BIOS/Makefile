@@ -8,6 +8,8 @@
 #   make trace   the same as run with a retirement trace
 #   make linux   OpenSBI and the kernel, loaded straight into memory
 #   make linux-initrd  the same with the BusyBox initramfs, into user space
+#   make linux-sd      the board's own boot: the root from the SD card model
+#                      (SD_MODEL.sv) with sdcard.img, made here like the card
 #                (LINUX_ARGS adds plusargs, e.g. +pcmon=5000000)
 #---------------------------------------------------------------------------
 TOP      := tb_BIOS
@@ -54,7 +56,7 @@ RTL_SRCS := \
 	$(RTL_DIR)/CPU/CPU_BFM/CPU_BFM.sv \
 	$(RTL_DIR)/CPU/CPU_TOP/CPU_TOP.sv
 
-SIM_SRCS := ../SIM_SYS/AXI4_SLAVE_MEM.sv LITEX_PERIPH.sv $(TOP).sv
+SIM_SRCS := ../SIM_SYS/AXI4_SLAVE_MEM.sv LITEX_PERIPH.sv SD_MODEL.sv $(TOP).sv
 SRCS     := $(RTL_SRCS) $(SIM_SRCS)
 
 VERILATOR       := verilator
@@ -65,7 +67,7 @@ VERILATOR_FLAGS := --binary --timing -j 0 --top-module $(TOP) \
 
 PLUSARGS ?=
 
-.PHONY: all run check trace linux linux-initrd clean FORCE
+.PHONY: all run check trace linux linux-initrd linux-sd clean FORCE
 
 FW_BIN    := ../../LitexSystem/software/boot/fw_jump.bin
 IMAGE_BIN := ../../LitexRocket/software/boot/Image
@@ -132,5 +134,29 @@ linux-initrd: obj_dir/V$(TOP) fw_jump_initrd.hex Image.hex initrd.hex
 	./obj_dir/V$(TOP) +linux +fw=fw_jump_initrd.hex +image=Image.hex \
 	    +initrd=initrd.hex $(LINUX_ARGS)
 
+# The disk image of the SD card, laid out like the one of the board
+# (LitexRocket/docs/BUILD_STATUS.md): an MBR, a small first partition and an
+# ext4 second partition with the BusyBox tree and sbin/init -> ../bin/busybox.
+# 18 MiB, so the card reports a C_SIZE of 35.
+ROOTFS_SRC := /home/taka/mmlitex_build/initramfs
+
+sdcard.img: $(INITRD_BIN)
+	rm -rf sd_work; mkdir -p sd_work
+	cp -a $(ROOTFS_SRC) sd_work/rootfs
+	ln -sf ../bin/busybox sd_work/rootfs/sbin/init
+	dd if=/dev/zero of=sd_work/p2.img bs=1M count=16 status=none
+	/usr/sbin/mke2fs -q -t ext4 -L rootfs -d sd_work/rootfs sd_work/p2.img
+	dd if=/dev/zero of=$@ bs=1M count=18 status=none
+	printf 'label: dos\nstart=2048, size=2048, type=c\nstart=4096, type=83\n' | \
+	    /usr/sbin/sfdisk -q $@
+	dd if=sd_work/p2.img of=$@ bs=512 seek=4096 conv=notrunc status=none
+	rm -rf sd_work
+
+linux-sd: obj_dir/V$(TOP) fw_jump.hex Image.hex sdcard.img
+	cp sdcard.img sdcard_run.img
+	./obj_dir/V$(TOP) +linux +fw=fw_jump.hex +image=Image.hex \
+	    +sdimg=sdcard_run.img $(LINUX_ARGS)
+
 clean:
-	rm -rf obj_dir bios.hex fw_jump.hex Image.hex fw_jump_initrd.hex initrd.hex sim_initrd.dts initrd_fw
+	rm -rf obj_dir bios.hex fw_jump.hex Image.hex fw_jump_initrd.hex initrd.hex sim_initrd.dts initrd_fw \
+	       sdcard.img sdcard_run.img sd_work

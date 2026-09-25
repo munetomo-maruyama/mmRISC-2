@@ -1053,7 +1053,13 @@ module DCACHE
                     sw_data <= align_wdata(s1_addr[2:0], s1_wdata);
                     sw_strb <= size_strb(s1_addr[2:0], s1_size);
                     sw_rob  <= s1_rob;
-                    rob_wait[s1_rob] <= 1'b1;
+                    // answered by the write engine (W_RESP), not by a fill:
+                    // rob_wait is what the fill engine looks for, together
+                    // with rob_mshr, which a write through leaves as the
+                    // previous user of the entry had it. With rob_wait set,
+                    // a fill of that MSHR answered the write through before
+                    // it had reached memory, and its late answer then went
+                    // to whatever request had the entry by then.
                     if (res_valid && (res_line == s1_line)) res_valid <= 1'b0;
                 end
                 else if (hit) begin
@@ -1283,7 +1289,6 @@ module DCACHE
                     if (m_axi4_bvalid) begin
                         if (w_single) begin
                             rob_err[sw_rob]  <= (m_axi4_bresp != 2'b00);
-                            rob_wait[sw_rob] <= 1'b0;
                             rob_done[sw_rob] <= 1'b1;
                             w_single         <= 1'b0;
                         end else begin
