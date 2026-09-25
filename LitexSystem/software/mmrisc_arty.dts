@@ -7,6 +7,11 @@
  *
  * timebase-frequency must match CLINT_TICK_DIV of the hardware: mtime
  * counts one step every 100 cycles of the 50 MHz clock.
+ *
+ * With Ethernet (scripts/build_soc.sh --with-ethernet) LiteX puts ethmac and
+ * ethphy first among the CSRs, so every block after them moved up by 0x1000,
+ * and the interrupts are uart 0, timer0 1, ethmac 2, sdcard 3 in LiteX
+ * numbers, PLIC sources 1..4 (LitexSystem/build/csr.csv).
  */
 /dts-v1/;
 
@@ -16,7 +21,7 @@
 	compatible = "mmrisc,mmrisc-2-dev";
 	model = "mmRISC-2 on Digilent Arty A7-100T";
 	chosen {
-		bootargs = "console=liteuart earlycon=liteuart,0x12003800 swiotlb=noforce rootwait root=/dev/mmcblk0p2 rootfstype=ext4 rw";
+		bootargs = "console=liteuart earlycon=liteuart,0x12004800 swiotlb=noforce rootwait root=/dev/mmcblk0p2 rootfstype=ext4 rw";
 	};
 	L13: cpus {
 		#address-cells = <1>;
@@ -82,7 +87,7 @@
 		};
 		L7: external-interrupts {
 			interrupt-parent = <&L1>;
-			interrupts = <1 2 3>;
+			interrupts = <1 2 3 4>;
 		};
 		L1: interrupt-controller@c000000 {
 			#interrupt-cells = <1>;
@@ -92,7 +97,7 @@
 			reg = <0xc000000 0x4000000>;
 			reg-names = "control";
 			riscv,max-priority = <7>;
-			riscv,ndev = <3>;
+			riscv,ndev = <4>;
 		};
 		L10: rom@10000000 {
 			compatible = "sifive,rom0";
@@ -103,28 +108,46 @@
 			compatible = "litex,soc-controller";
 			reg = <0x12000000 0xc>;
 		};
-		liteuart0: serial@12003800 {
+		liteuart0: serial@12004800 {
 			compatible = "litex,liteuart";
-			reg = <0x12003800 0x100>;
+			reg = <0x12004800 0x100>;
 			interrupt-parent = <&L1>;
 			interrupts = <1>;
 		};
-		mmc0: mmc@12002000 {
+		mmc0: mmc@12003000 {
 			compatible = "litex,mmc";
-			reg = <0x12002000 0x1c>,
-				<0x1200201c 0x2c>,
-				<0x12002048 0x20>,
-				<0x12002068 0x20>,
-				<0x12002088 0x100>;
+			reg = <0x12003000 0x1c>,
+				<0x1200301c 0x2c>,
+				<0x12003048 0x20>,
+				<0x12003068 0x20>,
+				<0x12003088 0x100>;
 			reg-names = "phy", "core", "reader", "writer", "irq";
 			clocks = <&sys_clk>;
 			vmmc-supply = <&vreg_mmc>;
 			interrupt-parent = <&L1>;
+			interrupts = <4>;
+		};
+		/* LiteEth: the MAC CSRs, the PHY CSRs (MDIO, which the driver
+		 * does not use: it takes the link as up) and the packet buffers,
+		 * 2 RX slots then 2 TX slots of 2 KiB, below MEM_BASE so the
+		 * CPU does not cache them. The MAC address is the one the BIOS
+		 * uses, so DHCP gives both the same IP. */
+		mac0: ethernet@12001000 {
+			compatible = "litex,liteeth";
+			reg = <0x12001000 0x100>,
+				<0x12001800 0x100>,
+				<0x30000000 0x2000>;
+			reg-names = "mac", "mdio", "buffer";
+			litex,rx-slots = <2>;
+			litex,tx-slots = <2>;
+			litex,slot-size = <0x800>;
+			local-mac-address = [10 e2 d5 00 00 00];
+			interrupt-parent = <&L1>;
 			interrupts = <3>;
 		};
-		timer@12003000 {
+		timer@12004000 {
 			compatible = "litex,timer";
-			reg = <0x12003000 0x20>;
+			reg = <0x12004000 0x20>;
 			clocks = <&sys_clk>;
 			interrupt-parent = <&L1>;
 			interrupts = <2>;

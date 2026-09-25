@@ -30,3 +30,87 @@ sdcardboot
 
 LiteX BIOS → OpenSBI → Linux → BusyBox と進めば成功。
 詰まったときの見どころは `docs/BRINGUP.md`。
+
+## Ethernet(2026-09-26 から)
+
+SoC は `--with-ethernet --eth-dhcp` で作っている(`scripts/build_soc.sh`)。
+Ethernet を入れると CSR の配置と割り込み番号が変わるので、**ビットストリームと
+`fw_jump.bin` は必ず組で使う**。Ethernet 入りのビットストリームに古い
+`fw_jump.bin` を組み合わせると(逆も)、UART の場所が違うので何も表示されない。
+Ethernet 無しの最後のビットストリームは `build/known_good_noeth/` に取ってある。
+
+| | Ethernet 無し | Ethernet 入り |
+|---|---|---|
+| ethmac / ethphy の CSR | ― | 0x1200_1000 / 0x1200_1800 |
+| SD カード | 0x1200_2000、PLIC 3 | 0x1200_3000、PLIC 4 |
+| timer0 | 0x1200_3000 | 0x1200_4000 |
+| UART | 0x1200_3800 | 0x1200_4800 |
+| パケットバッファ | ― | 0x3000_0000(8 KiB、キャッシュしない) |
+| Ethernet の割り込み | ― | PLIC 3 |
+
+### Linux で IP をもらう
+
+BusyBox の `udhcpc` は、もらったアドレスを自分では設定せず、
+`/usr/share/udhcpc/default.script` に任せる。そのスクリプト
+(`software/rootfs/usr/share/udhcpc/default.script`)を SD カードの第 2
+パーティションに一度だけ入れる(PC 側で):
+
+```bash
+sudo mkdir -p /media/taka/rootfs/usr/share/udhcpc
+sudo cp software/rootfs/usr/share/udhcpc/default.script /media/taka/rootfs/usr/share/udhcpc/
+sudo chmod +x /media/taka/rootfs/usr/share/udhcpc/default.script
+sync
+```
+
+ボードで:
+
+```sh
+udhcpc -i eth0          # "Setting IP address ..." が出れば取得できた
+ifconfig eth0
+ping -c 3 <ルータの IP>
+```
+
+起動時に自動で取るなら `/etc/inittab` の `--install -s` の行より後に次を足す
+(`-b`: 取れなければ裏で待ち続ける):
+
+```
+::sysinit:/bin/busybox udhcpc -i eth0 -b
+```
+
+MAC アドレスは BIOS と同じ `10:e2:d5:00:00:00`(デバイスツリーの
+`local-mac-address`)なので、BIOS と Linux は DHCP で同じ IP をもらう。
+
+### LiteX BIOS の TFTP ネットブート
+
+カーネルと OpenSBI を SD カードではなく PC の TFTP サーバから読み込む。SD カードの
+入れ替え無しでカーネルや `fw_jump.bin` を試せる。ルートファイルシステムは今まで
+どおり SD カード(`root=/dev/mmcblk0p2`)。自動の起動順は シリアル → SD カード →
+ネットワーク なので、ネットブートは `litex>` プロンプトから手で行う。
+
+**1. TFTP サーバ(PC 側、一度だけ)**。ボードと同じネットワークにいること。VM で
+立てるなら、VM のネットワークはブリッジ接続にする(NAT だとボードから届かない)。
+
+```bash
+sudo apt install tftpd-hpa          # 公開ディレクトリは /srv/tftp
+sudo cp <Image> /srv/tftp/Image
+sudo cp LitexSystem/software/boot/fw_jump.bin /srv/tftp/fw_jump.bin
+sudo cp <boot.json> /srv/tftp/boot.json   # SD カードの第 1 パーティションと同じもの
+ip -4 addr                                # サーバの IP を控える
+```
+
+**2. ボード**。電源を入れて `Press Q or ESC to abort boot completely.` の間に
+`Q` を押すと `litex>` になる。
+
+```
+litex> eth_dhcp                       <- "Local IP: 192.168.x.y" が出れば DHCP 成功
+litex> ping <サーバの IP>              <- 応答が返れば経路は通っている
+litex> eth_remote_ip <サーバの IP>     <- TFTP サーバ(既定は 192.168.1.100)
+litex> netboot                        <- boot.json を読み、Image と fw_jump.bin を取って起動
+```
+
+`Copying Image to 0x80200000 ...` の後、SD カードからの起動と同じように OpenSBI と
+Linux が出れば成功。`Network boot failed.` なら、TFTP サーバの IP、ファイル名、
+ファイアウォール(UDP 69 番)を確かめる。
+
+TFTP サーバの既定値を変えてビットストリームごと作り直すなら
+`REMOTE_IP=192.168.x.y ./scripts/build_soc.sh`。

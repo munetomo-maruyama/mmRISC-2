@@ -8,13 +8,16 @@
 //   0x1100_0000  SRAM    8 KiB, stack and data of the BIOS
 //   0x1200_0000  CSRs, 32 bit wide at a stride of four bytes:
 //                  ctrl    0x1200_0000  reset, scratch, bus_errors
-//                  timer0  0x1200_3000  load, reload, en, update_value,
+//                  timer0  0x1200_4000  load, reload, en, update_value,
 //                                       value, ev_status, ev_pending,
 //                                       ev_enable
-//                  uart    0x1200_3800  rxtx, txfull, rxempty, ev_status,
+//                  uart    0x1200_4800  rxtx, txfull, rxempty, ev_status,
 //                                       ev_pending, ev_enable, txempty,
 //                                       rxfull
-//                sdcard  0x1200_2000  passed on to SD_MODEL (sd_*)
+//                sdcard  0x1200_3000  passed on to SD_MODEL (sd_*)
+//                (the map of the build with Ethernet: ethmac 0x1000 and
+//                ethphy 0x1800 come first and read as zero here; the
+//                offsets are the localparams below, from build/csr.csv)
 //                every other CSR reads as zero and ignores writes
 //
 // The UART follows litex/soc/cores/uart.py: a TX FIFO of 16, the TX event
@@ -60,7 +63,7 @@ module LITEX_PERIPH
         output logic                    uart_irq,
         output logic                    timer_irq,
 
-        // the CSRs of the SD card (SD_MODEL): 64 words at 0x1200_2000
+        // the CSRs of the SD card (SD_MODEL): 64 words at 0x1200_3000
         output logic                    sd_wr0_en,
         output logic [5:0]              sd_wr0_idx,
         output logic [31:0]             sd_wr0_dat,
@@ -73,6 +76,11 @@ module LITEX_PERIPH
     localparam logic [39:0] ROM_BASE  = 40'h00_1000_0000;
     localparam logic [39:0] SRAM_BASE = 40'h00_1100_0000;
     localparam logic [39:0] CSR_BASE  = 40'h00_1200_0000;
+    // offsets of the CSR blocks in the window (LitexSystem/build/csr.csv)
+    localparam logic [15:0] IDENT  = 16'h2000;
+    localparam logic [15:0] SDCARD = 16'h3000;
+    localparam logic [15:0] TIMER  = 16'h4000;
+    localparam logic [15:0] UART   = 16'h4800;
     localparam int ROM_WORDS  = 128 * 1024 / 8;
     localparam int SRAM_WORDS =   8 * 1024 / 8;
 
@@ -121,26 +129,26 @@ module LITEX_PERIPH
     logic [31:0] ctrl_scratch;
 
     function automatic logic [31:0] csr_read(input logic [15:0] off);
-        if ((off >= 16'h2000) && (off < 16'h2100))
+        if ((off >= SDCARD) && (off < SDCARD + 16'h100))
             return sd_regs[32 * int'(off[7:2]) +: 32];
         case (off)
             16'h0004: return ctrl_scratch;
-            16'h3000: return t_load;
-            16'h3004: return t_reload;
-            16'h3008: return {31'd0, t_en};
-            16'h3010: return t_latched;
-            16'h3014: return {31'd0, t_zero_pend};
-            16'h3018: return {31'd0, t_zero_pend};
-            16'h301c: return {31'd0, t_ev_enable};
-            16'h3800: return 32'd0;                     // rxtx : RX is empty
-            16'h3804: return {31'd0, tx_full};
-            16'h3808: return 32'd1;                     // rxempty
-            16'h380c: return {30'd0, uart_ev_status};
-            16'h3810: return {30'd0, uart_ev_status};   // level : pending = status
-            16'h3814: return {30'd0, uart_ev_enable};
-            16'h3818: return {31'd0, tx_empty};
-            16'h381c: return 32'd0;                     // rxfull
-            16'h1004: return 32'h0000_1111;             // id word, arbitrary
+            TIMER + 16'h00: return t_load;
+            TIMER + 16'h04: return t_reload;
+            TIMER + 16'h08: return {31'd0, t_en};
+            TIMER + 16'h10: return t_latched;
+            TIMER + 16'h14: return {31'd0, t_zero_pend};
+            TIMER + 16'h18: return {31'd0, t_zero_pend};
+            TIMER + 16'h1C: return {31'd0, t_ev_enable};
+            UART  + 16'h00: return 32'd0;                     // rxtx : RX is empty
+            UART  + 16'h04: return {31'd0, tx_full};
+            UART  + 16'h08: return 32'd1;                     // rxempty
+            UART  + 16'h0C: return {30'd0, uart_ev_status};
+            UART  + 16'h10: return {30'd0, uart_ev_status};   // level : pending = status
+            UART  + 16'h14: return {30'd0, uart_ev_enable};
+            UART  + 16'h18: return {31'd0, tx_empty};
+            UART  + 16'h1C: return 32'd0;                     // rxfull
+            IDENT + 16'h04: return 32'h0000_1111;       // id word, arbitrary
             default:  return 32'd0;
         endcase
     endfunction
@@ -195,7 +203,7 @@ module LITEX_PERIPH
                             logic [31:0] v;
                             off = 16'(((aw_q - CSR_BASE) & ~40'd7) + 40'(4 * h));
                             v   = w_q[32*h +: 32];
-                            if ((off >= 16'h2000) && (off < 16'h2100)) begin
+                            if ((off >= SDCARD) && (off < SDCARD + 16'h100)) begin
                                 if (h == 0) begin
                                     sd_wr0_en <= 1'b1; sd_wr0_idx <= off[7:2]; sd_wr0_dat <= v;
                                 end else begin
@@ -204,14 +212,14 @@ module LITEX_PERIPH
                             end
                             case (off)
                                 16'h0004: ctrl_scratch   <= v;
-                                16'h3000: t_load         <= v;
-                                16'h3004: t_reload       <= v;
-                                16'h3008: begin t_en <= v[0]; if (v[0]) t_value <= t_load; end
-                                16'h300c: t_latched      <= t_value;
-                                16'h3018: if (v[0]) t_zero_pend <= 1'b0;
-                                16'h301c: t_ev_enable    <= v[0];
-                                16'h3800: begin tx_push = 1'b1; tx_char = v[7:0]; end
-                                16'h3814: uart_ev_enable <= v[1:0];
+                                TIMER + 16'h00: t_load         <= v;
+                                TIMER + 16'h04: t_reload       <= v;
+                                TIMER + 16'h08: begin t_en <= v[0]; if (v[0]) t_value <= t_load; end
+                                TIMER + 16'h0C: t_latched      <= t_value;
+                                TIMER + 16'h18: if (v[0]) t_zero_pend <= 1'b0;
+                                TIMER + 16'h1C: t_ev_enable    <= v[0];
+                                UART  + 16'h00: begin tx_push = 1'b1; tx_char = v[7:0]; end
+                                UART  + 16'h14: uart_ev_enable <= v[1:0];
                                 default: ;
                             endcase
                         end

@@ -299,8 +299,8 @@ module tb_BIOS
         );
 
     // LiteX interrupt i is PLIC source i+1 (LitexSystem/cpu/mmrisc/core.py):
-    // uart 0, timer0 1, sdcard 2
-    assign ext_irq = {28'd0, sd_irq, timer_irq, uart_irq, 1'b0};
+    // uart 0, timer0 1, ethmac 2 (not modelled), sdcard 3
+    assign ext_irq = {27'd0, sd_irq, 1'b0, timer_irq, uart_irq, 1'b0};
 
     //=================================================================
     // what happens
@@ -328,11 +328,11 @@ module tb_BIOS
             begin
                 $display("\n@@PC %0d %016h retired %0d", cycle_count, `CORE.trace_pc, n_retired);
                 // who is asking for interrupts, and how the SD card stands
-                $display("@@IRQ ext=%b plic_irq=%b pend=%b gw_ready=%b claims u/t/sd=%0d/%0d/%0d mip=%h",
-                         ext_irq[3:1], `PLIC.irq,
-                         {`PLIC.pending[3], `PLIC.pending[2], `PLIC.pending[1]},
-                         {`PLIC.gw_ready[3], `PLIC.gw_ready[2], `PLIC.gw_ready[1]},
-                         n_claim[1], n_claim[2], n_claim[3], `CORE.u_csr.mip_val);
+                $display("@@IRQ ext=%b plic_irq=%b pend=%b gw_ready=%b claims u/t/eth/sd=%0d/%0d/%0d/%0d mip=%h",
+                         ext_irq[4:1], `PLIC.irq,
+                         {`PLIC.pending[4], `PLIC.pending[3], `PLIC.pending[2], `PLIC.pending[1]},
+                         {`PLIC.gw_ready[4], `PLIC.gw_ready[3], `PLIC.gw_ready[2], `PLIC.gw_ready[1]},
+                         n_claim[1], n_claim[2], n_claim[3], n_claim[4], `CORE.u_csr.mip_val);
                 $display("@@SD card=%0d cmd_done=%b data_done=%b ev_en=%b rf=%0d b2m %0d/%0d en=%b m2b %0d/%0d en=%b dma=%0d uart_en=%b",
                          u_sd.c_state, u_sd.cmd_done, u_sd.data_done, u_sd.ev_enable,
                          u_sd.rf_cnt, u_sd.b2m_offset, u_sd.b2m_length, u_sd.b2m_enable,
