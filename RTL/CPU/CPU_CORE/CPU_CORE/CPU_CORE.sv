@@ -630,7 +630,7 @@ module CPU_CORE
     //=================================================================
     // CSR file
     //=================================================================
-    logic [63:0] csr_rdata;
+    logic [63:0] csr_rdata, csr_rmw;
     logic        csr_exists, csr_readonly, csr_denied;
     logic        csr_wr_en;
     logic        trap_en, trap_int_c;
@@ -662,6 +662,7 @@ module CPU_CORE
             .rst_n       (rst_n),
             .rd_addr     (ex_csr_addr),
             .rd_data     (csr_rdata),
+            .rmw_data    (csr_rmw),
             .rd_exists   (csr_exists),
             .rd_readonly (csr_readonly),
             .rd_denied   (csr_denied),
@@ -712,8 +713,8 @@ module CPU_CORE
 
     always @(*) begin
         case (ex_csr_op)
-            2'd2:    csr_wval = csr_rdata |  csr_src;     // set
-            2'd3:    csr_wval = csr_rdata & ~csr_src;     // clear
+            2'd2:    csr_wval = csr_rmw |  csr_src;       // set
+            2'd3:    csr_wval = csr_rmw & ~csr_src;       // clear
             default: csr_wval = csr_src;                  // write
         endcase
     end

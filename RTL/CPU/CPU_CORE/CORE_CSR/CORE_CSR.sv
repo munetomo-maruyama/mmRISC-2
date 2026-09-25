@@ -41,6 +41,7 @@ module CORE_CSR
         // read port (EX)
         input  logic [11:0] rd_addr,
         output logic [63:0] rd_data,
+        output logic [63:0] rmw_data,      // what csrrs / csrrc start from
         output logic        rd_exists,     // the CSR is implemented
         output logic        rd_readonly,   // writing it is an illegal instruction
         output logic        rd_denied,     // not allowed at the current level
@@ -288,6 +289,18 @@ module CORE_CSR
 
     assign sie_val    = mie_val & mideleg;
     assign sip_val    = mip_val & mideleg;
+
+    // A csrrs / csrrc of mip modifies the bits software can write, and for
+    // SEIP that is the software bit alone, not its OR with the PLIC line
+    // that a read returns (privileged spec, mip). Taking the read value
+    // copied a pending supervisor interrupt of the PLIC into the software
+    // bit, which then held SEIP up for good: OpenSBI clears STIP with csrc
+    // on every machine timer interrupt, and Linux on the Arty ended in an
+    // endless supervisor external interrupt with nothing to claim.
+    always @(*) begin
+        rmw_data = rd_data;
+        if (rd_addr == CSR_MIP) rmw_data[IRQ_S_EXT] = mip_seip;
+    end
     assign mcause_val = {mcause_int, 58'd0, mcause_code};
     assign scause_val = {scause_int, 58'd0, scause_code};
 
