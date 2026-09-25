@@ -45,6 +45,8 @@ MUTATIONS=(
 "24#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/(sw_busy \& (sw_line == ms_line\[ms_head\]));/1'b0;/#16#16#D\$: a fill does not wait for the write through of its line"
 "25#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/if (sw_pend \&\& !sw_wait_wb) begin/if (sw_pend) begin/#16#16#D\$: a write through overtakes the writeback of its line"
 "26#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                    sw_rob  <= s1_rob;/                    sw_rob  <= s1_rob; rob_wait[s1_rob] <= 1'b1;/#16#16#D\$: a fill answers a write through that is still on the bus"
+"27#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/if (array_rd_busy || fl_busy || (fill_beat_now/if (array_rd_busy || (fill_beat_now/#17#17#D\$: a request held during the flush walk looks at the tags of other sets"
+"28#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/(tfwd_en   \&\& (tfwd_index == addr_index(s1_addr))) ||/1'b0 ||/; s/(fwd_valid \&\& (fwd_addr\[DADDR_BITS-1 -: IDX_BITS\] == addr_index(s1_addr))))/1'b0)/#17#18#D\$: a held request forgets the writes forwarded to it (a store hit writes tag and data together, so the two conditions are one)"
 )
 
 run_one() {

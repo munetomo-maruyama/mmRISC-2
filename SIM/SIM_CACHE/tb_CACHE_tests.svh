@@ -19,6 +19,15 @@
 //   16. The write-back queue against a fill and a write through of the same
 //       line (the memory model holds AWREADY low to keep the write-back
 //       waiting)
+//   17. Random CPU traffic (loads, stores, AMO, LR/SC, fence, flush) and
+//       random DMA traffic on the second port (write throughs, reads) at
+//       the same time, on the same lines, with the memory stalling
+//
+//   18. A request held in stage 1 after a write to its set was forwarded
+//       to it: data (store then AMO during a fill) and tag (a store hit
+//       then a miss of the same set waiting for an MSHR)
+//
+//   Plusargs: +mops=<n> number of CPU operations of section 17
 //
 //   Plusargs: +from=<n> +to=<n> run only sections n..m
 //             +perf[=<n>]        run the throughput patterns afterwards
@@ -823,6 +832,190 @@
             d_drain();
             check_memory("memory image after the write-back queue tests");
             if (n_error == e0) ok("write-back queue: fills and write throughs wait for it");
+        end
+
+        //=============================================================
+        section("17. CPU and DMA port at random on the same lines");
+        //=============================================================
+        //   What the SD card does to Linux: the DMA writes and reads lines
+        //   the CPU has in its cache, dirty or being filled or being written
+        //   back, while the CPU goes on with its own loads, stores and
+        //   atomics. The words of each line are shared out, even words to the
+        //   CPU and odd words to the DMA, so that the two never race on one
+        //   word and the reference model stays exact, while they meet on
+        //   every line. A few sets with three times as many lines as ways
+        //   keep evictions, fills and write-backs going all the time; the
+        //   memory drops its ready lines at random and holds the write
+        //   address channel for a while now and then, so write-backs queue
+        //   up behind each other.
+        if (from_sec <= 17 && 17 <= to_sec) begin
+            int  n_mops, wpl, nt, n_lines;
+            int  line_word [0:255];
+            bit  done17;
+            int  n_dma_w, n_dma_r;
+            e0 = n_error;
+            if (!$value$plusargs("mops=%d", n_mops)) n_mops = 20000;
+            wpl = DC_BLOCK / 8;
+            nt  = 3 * DC_WAYS;
+            n_lines = 0;
+            for (int k = 0; k < 4; k++)
+                for (int n = 1; n <= nt; n++)
+                    if ((set_word((k + 1) % DC_SETS, n) + wpl <= MEM_WORDS) && (n_lines < 256)) begin
+                        line_word[n_lines] = set_word((k + 1) % DC_SETS, n);
+                        n_lines++;
+                    end
+            $display("[%0t] %0d lines, %0d words each, %0d CPU operations", $time, n_lines, wpl, n_mops);
+
+            d_flush("flush before the mixed traffic");
+            d_drain();
+            done17  = 1'b0;
+            n_dma_w = 0;
+            n_dma_r = 0;
+            u_mem.stall_en = !$test$plusargs("s17_nostall");
+            fork
+                // the CPU
+                begin
+                    for (int i = 0; i < n_mops; i++) begin
+                        int r, sz, w;
+                        logic [PADDR_WIDTH-1:0] a;
+                        r  = $urandom_range(0, 99);
+                        sz = $urandom_range(0, 3);
+                        w  = line_word[$urandom_range(0, n_lines - 1)] +
+                             2 * $urandom_range(0, (wpl - 1) / 2);         // an even word
+                        if ($test$plusargs("s17_noamo") && (r >= 70) && (r < 94)) r = 0;
+                        if ($test$plusargs("s17_noflush") && (r >= 98)) r = 0;
+                        a  = a_mem(w) + PADDR_WIDTH'($urandom_range(0, 7) & ~((1 << sz) - 1));
+                        if (r < 35) begin
+                            d_load($sformatf("mixed CPU load @%010h sz%0d", a, sz), a, 2'(sz));
+                        end else if (r < 70) begin
+                            d_store($sformatf("mixed CPU store @%010h sz%0d", a, sz), a, 2'(sz),
+                                    {$urandom, $urandom});
+                        end else if (r < 82) begin
+                            d_push($sformatf("mixed CPU AMO @%010h", a_mem(w)), 4'($urandom_range(4, 12)),
+                                   a_mem(w), 2'($urandom_range(2, 3)), {$urandom, $urandom});
+                        end else if (r < 88) begin
+                            d_push($sformatf("mixed CPU LR @%010h", a_mem(w)), CMD_LR, a_mem(w), 2'd3, 64'd0);
+                        end else if (r < 94) begin
+                            d_push($sformatf("mixed CPU SC @%010h", a_mem(w)), CMD_SC, a_mem(w), 2'd3,
+                                   {$urandom, $urandom});
+                        end else if (r < 98) begin
+                            d_fence("mixed CPU fence");
+                        end else begin
+                            d_flush("mixed CPU flush");
+                        end
+                    end
+                    d_drain();
+                    done17 = 1'b1;
+                end
+                // the DMA, one access at a time like DMA_CACHE
+                begin
+                    while (!done17 && !$test$plusargs("s17_nodma")) begin
+                        int r, sz, w;
+                        logic [PADDR_WIDTH-1:0] a;
+                        r  = $urandom_range(0, 99);
+                        sz = $urandom_range(0, 3);
+                        w  = line_word[$urandom_range(0, n_lines - 1)] +
+                             ((wpl > 1) ? 2 * $urandom_range(0, wpl / 2 - 1) + 1 : 0);   // an odd word
+                        if (wpl == 1) begin
+                            // one word per line: the DMA gets every other line
+                            w = line_word[2 * $urandom_range(0, n_lines / 2 - 1) + 1];
+                        end
+                        a  = a_mem(w) + PADDR_WIDTH'($urandom_range(0, 7) & ~((1 << sz) - 1));
+                        if (r < 60) begin
+                            dbg_store($sformatf("mixed DMA write @%010h sz%0d", a, sz), a, 2'(sz),
+                                      {$urandom, $urandom});
+                            n_dma_w++;
+                        end else begin
+                            dbg_load($sformatf("mixed DMA read @%010h sz%0d", a, sz), a, 2'(sz));
+                            n_dma_r++;
+                        end
+                        repeat ($urandom_range(0, 24)) @(posedge clk);
+                    end
+                end
+                // now and then the memory holds the write addresses
+                begin
+                    while (!done17 && !$test$plusargs("s17_nohold")) begin
+                        repeat ($urandom_range(20, 300)) @(posedge clk);
+                        u_mem.aw_hold = 1'b1;
+                        repeat ($urandom_range(1, 120)) @(posedge clk);
+                        u_mem.aw_hold = 1'b0;
+                    end
+                end
+            join
+            u_mem.aw_hold  = 1'b0;
+            u_mem.stall_en = 1'b0;
+            d_flush("flush after the mixed traffic");
+            d_drain();
+            check_memory("memory image after the mixed traffic");
+            if (n_error == e0)
+                ok($sformatf("%0d CPU operations with %0d DMA writes and %0d DMA reads",
+                             n_mops, n_dma_w, n_dma_r));
+        end
+
+        //=============================================================
+        section("18. Held in stage 1 after a forwarded write");
+        //=============================================================
+        //   The tag and data forwarding only carry the write of the cycle
+        //   before. A request that read the arrays in the cycle of a write
+        //   to its set and then has to wait must read them again.
+        //   (a) data: a store and an AMO to one word back to back, while a
+        //       fill of another line streams in and holds the AMO back;
+        //       the gap to the fill is swept so that every timing comes up
+        //   (b) tag: a store hit makes line A dirty, and a miss of the same
+        //       set follows at once but waits for a free MSHR; when it gets
+        //       one it must see A as dirty if it picks A's way
+        if (from_sec <= 18 && 18 <= to_sec) begin
+            int wa, wy, sa;
+            e0 = n_error;
+            d_flush("flush before the forwarding tests");
+            d_drain();
+            // the memory stalls: only a pause between the beats of a fill lets
+            // a held AMO go before the last beat, which reads again anyway
+            u_mem.stall_en = 1'b1;
+            // (a)
+            wa = set_word(6 % DC_SETS, 1);
+            for (int gap = 0; gap < 100; gap++) begin
+                d_load("(a) bring the AMO word in", a_mem(wa), 2'd3);
+                d_fence("(a) wait for it");
+                d_drain();
+                wy = set_word((7 + gap) % DC_SETS, 2 + (gap % 4));
+                // gap % 25 cycles of hits between the fill and the store
+                if (wy + DC_BLOCK / 8 > MEM_WORDS) wy = set_word((7 + gap) % DC_SETS, 1);
+                d_load($sformatf("(a) gap %0d : start a fill", gap), a_mem(wy), 2'd3);
+                for (int k = 0; k < gap % 25; k++)
+                    d_load("(a) spacer", a_mem(wa) + 40'd8, 2'd3);
+                d_store($sformatf("(a) gap %0d : store", gap), a_mem(wa), 2'd3,
+                        64'h1800_0000_0000_0000 + 64'(gap));
+                d_push($sformatf("(a) gap %0d : AMOADD right behind it", gap), CMD_AMOADD,
+                       a_mem(wa), 2'd3, 64'd1);
+                d_drain();
+                d_flush("(a) flush");
+                d_drain();
+            end
+            // (b)
+            for (int it = 0; it < 32; it++) begin
+                sa = (8 + it) % DC_SETS;
+                // the set full of clean lines, A among them
+                for (int n = 1; n <= DC_WAYS; n++)
+                    d_load("(b) fill the set", a_mem(set_word(sa, n)), 2'd3);
+                d_fence("(b) wait for the set");
+                d_drain();
+                // the MSHRs busy with misses of other sets
+                for (int m = 0; m < NUM_MSHR; m++)
+                    d_load("(b) occupy an MSHR",
+                           a_mem(set_word((sa + 1 + m) % DC_SETS, 8 + (it % 4))), 2'd3);
+                d_store($sformatf("(b) %0d : store hit, A dirty", it),
+                        a_mem(set_word(sa, 1 + (it % DC_WAYS))), 2'd3,
+                        64'h1B00_0000_0000_0000 + 64'(it));
+                d_load($sformatf("(b) %0d : miss of the same set", it),
+                       a_mem(set_word(sa, DC_WAYS + 1 + (it % 3))), 2'd3);
+                d_drain();
+                d_flush("(b) flush");
+                d_drain();
+            end
+            u_mem.stall_en = 1'b0;
+            check_memory("memory image after the forwarding tests");
+            if (n_error == e0) ok("held requests read the arrays again after a forwarded write");
         end
 
         //=============================================================
