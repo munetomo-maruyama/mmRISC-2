@@ -24,6 +24,11 @@ set -e
 # kernel, OpenSBI) could stay in it, and the BIOS's flush_l2_cache() cannot
 # get it out: it reads main memory through the CPU, which bypasses the L2.
 # See docs/BRINGUP.md.
+#
+# --with-ethernet --eth-dhcp : LiteEth on the PHY of the Arty (MII). The BIOS
+# takes its IP from DHCP and can boot over TFTP (netboot); the TFTP server
+# is REMOTE_IP (default 192.168.1.100), and can be changed at the litex>
+# prompt with eth_remote_ip. Linux finds the MAC through the device tree.
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 LITEX_SYSTEM=$(dirname "$HERE")
@@ -49,6 +54,8 @@ python3 "$LITEX_WS/litex-boards/litex_boards/targets/digilent_arty.py" \
     --cpu-type mmrisc \
     --sys-clk-freq 50e6 \
     --with-sdcard \
+    --with-ethernet --eth-dhcp \
+    --remote-ip "${REMOTE_IP:-192.168.1.100}" \
     --l2-size 0 \
     --output-dir "$BUILD" \
     "$@"

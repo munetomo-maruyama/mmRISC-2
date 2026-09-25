@@ -315,6 +315,28 @@ WARNING の説明として十分あり得る。直したビットストリーム
 テストベンチ側にも不具合があった(期待値のキューが満杯でも書いていた)。直して
 から、セクション 17 を 24 シード × 50000 操作で PASS。
 
+## 8 回目: Ethernet を入れる(2026-09-26)
+
+7 回目の修正(WNS 0.046ns)で、再起動を何度繰り返しても WARNING は出なくなり、
+SD カードへの書き込みも残った。Ethernet が使えなかったのは別の理由で、SoC に
+Ethernet が入っていなかった(Rocket 構成から引き継いだ `build_soc.sh` に
+`--with-ethernet` が無い)。カーネルの LiteEth ドライバと BusyBox の `udhcpc` は
+元から入っている。
+
+- `build_soc.sh` に `--with-ethernet --eth-dhcp --remote-ip` を足した。BIOS は DHCP
+  で IP を取り、TFTP でネットブートできる(`eth_dhcp`、`eth_remote_ip`、`netboot`)。
+- `core.py` の `mem_map` に `ethmac` = 0x3000_0000(Rocket と同じ)。パケット
+  バッファは MEM_BASE より下なので D$ はキャッシュしない。
+- ethmac / ethphy が CSR の先頭に入ったので、SD カード・timer0・UART の CSR が
+  0x1000 ずつ後ろへずれ、割り込みは ethmac が 2、SD カードが 3(PLIC 3 と 4)に
+  なった。デバイスツリーを合わせ(`earlycon`、`riscv,ndev = 4`、Ethernet のノード)、
+  `fw_jump.bin` を作り直した。**ビットストリームと `fw_jump.bin` は組で使う**。
+- SIM_BIOS の LITEX_PERIPH は CSR のオフセットを名前付きの定数にして新しい配置へ。
+  BIOS は起動時に PHY をリセットして 2 × 200 ms 待つので、`make check` の上限を
+  6000 万サイクルにした。Ethernet 自体のモデルは無い(CSR は 0 を返す)。
+- 手順と確認方法は `software/boot/README.md` の「Ethernet」。Linux で `udhcpc` が
+  アドレスを設定するためのスクリプトを `software/rootfs/` に置いた。
+
 ## 手順
 
 ### 1. SoC を生成(Linux VM)

@@ -7,7 +7,7 @@
 // It is what the Linux driver litex_mmc talks to, so that the kernel can
 // mount its root from the "SD card" as it does on the board.
 //
-//   CSRs at 0x1200_2000 (LitexSystem/build/csr.csv), 32 bit, big ordering
+//   CSRs at 0x1200_3000 (LitexSystem/build/csr.csv), 32 bit, big ordering
 //   (the high word of a wide CSR first). The register port comes from
 //   LITEX_PERIPH: writes one cycle late, reads combinational from `regs`.
 //

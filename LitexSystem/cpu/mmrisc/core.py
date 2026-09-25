@@ -125,6 +125,7 @@ class MMRISC(CPU):
             "rom"      : 0x1000_0000,
             "sram"     : 0x1100_0000,
             "csr"      : 0x1200_0000,
+            "ethmac"   : 0x3000_0000,     # packet buffers, as in the Rocket build
             "main_ram" : 0x8000_0000,
         }
 

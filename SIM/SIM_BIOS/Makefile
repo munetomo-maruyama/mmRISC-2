@@ -90,8 +90,10 @@ bios.hex: $(BIOS_BIN)
 run: obj_dir/V$(TOP) bios.hex
 	./obj_dir/V$(TOP) +bios=bios.hex $(PLUSARGS)
 
+# 60M cycles: with Ethernet the BIOS first resets the PHY and waits 2 x
+# 200 ms (eth_init), which alone is 20M cycles at 50 MHz
 check: obj_dir/V$(TOP) bios.hex
-	./obj_dir/V$(TOP) +bios=bios.hex +uart_cycles=2000 +maxcycles=20000000 $(PLUSARGS) | grep -A4 "^====="
+	./obj_dir/V$(TOP) +bios=bios.hex +uart_cycles=2000 +maxcycles=60000000 $(PLUSARGS) | grep -A4 "^====="
 
 trace: obj_dir/V$(TOP) bios.hex
 	./obj_dir/V$(TOP) +bios=bios.hex +trace $(PLUSARGS)
@@ -117,7 +119,7 @@ INITRD_ADDR := 0x82000000
 sim_initrd.dts: ../../LitexSystem/software/mmrisc_arty.dts $(INITRD_BIN)
 	sz=`stat -c %s $(INITRD_BIN)`; \
 	end=`printf '0x%x' $$(( $(INITRD_ADDR) + $$sz ))`; \
-	sed -e 's|bootargs = ".*";|bootargs = "console=liteuart earlycon=liteuart,0x12003800 rdinit=/init";\
+	sed -e 's|bootargs = ".*";|bootargs = "console=liteuart earlycon=liteuart,0x12004800 rdinit=/init";\
 		linux,initrd-start = <$(INITRD_ADDR)>;\
 		linux,initrd-end = <'$$end'>;|' $< > $@
 
