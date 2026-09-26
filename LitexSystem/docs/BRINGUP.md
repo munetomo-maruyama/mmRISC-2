@@ -17,7 +17,7 @@
 | **LiteX BIOS そのもの(割り込み込み)** | **確認済**。`SIM/SIM_BIOS`(2026-09-24、実機で止まったのを受けて追加) |
 | ビットストリーム | **通る**。50MHz でタイミング収束(`TIMING.md`) |
 | 実機で BIOS が出るか | **確認済**(2026-09-24) |
-| 実機で Linux が起動するか | **確認済**(2026-09-25、WNS 0.013ns。Ethernet 入りは 2026-09-26、WNS 0.131ns、DHCP と ping まで)。SD カードの ext4 から BusyBox のプロンプトまで。`cat /proc/cpuinfo`、`uname -a` が動く。未解決: 起動中に 1 度 `kernel/bpf/memalloc.c:186` の WARNING(下記) |
+| 実機で Linux が起動するか | **確認済**(2026-09-25、WNS 0.013ns。Ethernet 入りは 2026-09-26、WNS 0.131ns、DHCP・ping・TFTP ネットブートまで)。SD カードの ext4 から BusyBox のプロンプトまで。`cat /proc/cpuinfo`、`uname -a` が動く。未解決: 起動中に 1 度 `kernel/bpf/memalloc.c:186` の WARNING(下記) |
 
 ## キャッシュ外フェッチを先に潰した理由
 
@@ -339,6 +339,9 @@ Ethernet が入っていなかった(Rocket 構成から引き継いだ `build_s
 - 実機(WNS 0.131ns): `eth0` が見え、`udhcpc` で DHCP のアドレスを取得、ルータと
   LAN の PC に `ping` が通った。この BusyBox は `udhcpc` の既定スクリプトが空なので
   `-s /usr/share/udhcpc/default.script` が要る。`ping` は簡易版(オプション無し)。
+- BIOS の TFTP ネットブートも実機で確認(`eth_dhcp` → `eth_remote_ip` → `netboot` で
+  Image と fw_jump.bin を取得し、OpenSBI → Linux → DHCP まで)。最初に失敗したのは
+  TFTP サーバ側のファイアウォールで UDP 69 番が閉じていたため。
 
 ## 手順
 
