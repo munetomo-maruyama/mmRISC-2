@@ -95,6 +95,9 @@ MAC アドレスは BIOS と同じ `10:e2:d5:00:00:00`(デバイスツリーの
 
 **1. TFTP サーバ(PC 側、一度だけ)**。ボードと同じネットワークにいること。VM で
 立てるなら、VM のネットワークはブリッジ接続にする(NAT だとボードから届かない)。
+Mac の Parallels Desktop 上の Ubuntu に立てる場合の詳しい手順(ブリッジ設定、
+`tftpd-hpa` の設定、ufw で UDP 69 を開ける、tcpdump での切り分け)は
+`docs/TFTP_SERVER.md`。
 
 ```bash
 sudo apt install tftpd-hpa          # 公開ディレクトリは /srv/tftp
