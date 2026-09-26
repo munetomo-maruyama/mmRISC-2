@@ -115,8 +115,29 @@ litex> netboot                        <- boot.json を読み、Image と fw_jump
 ```
 
 `Copying Image to 0x80200000 ...` の後、SD カードからの起動と同じように OpenSBI と
-Linux が出れば成功。`Network boot failed.` なら、TFTP サーバの IP、ファイル名、
-ファイアウォール(UDP 69 番)を確かめる。
+Linux が出れば成功(2026-09-26 に実機で確認)。
+
+`Booting from boot.json...` の直後に `Booting from boot.bin...` へ進んで
+`Network boot failed.` になるのは、`boot.json` すら取れていないとき。TFTP サーバが
+動いているか、ファイルが `TFTP_DIRECTORY` にあるか、**サーバ側のファイアウォールが
+UDP 69 番を通しているか**(実機ではこれだった)を確かめる。
+
+ダウンロードは終わるのに `Liftoff!` の後に何も出ないときは、読み込んだ中身を確かめる。
+`fw_jump.bin` はどの版も 279048 バイトで大きさでは区別できないので、まずサーバで
+`strings fw_jump.bin | grep serial@` が `serial@12004800` を示すか見る。それでも出ない
+なら、BIOS が再起動しても壊さない番地へ読み込んで BIOS に戻る JSON をサーバに置き、
+
+```json
+{
+    "fw_jump.bin": "0x81000000",
+    "Image":       "0x81200000",
+    "bootargs":    {"addr": "0x10000000"}
+}
+```
+
+`netboot check.json` → `Q` → `crc 0x81000000 <大きさ>` と `crc 0x81200000 <大きさ>` を、
+PC で計算した CRC32(`python3 -c "import zlib,sys;print(hex(zlib.crc32(open(sys.argv[1],'rb').read())))" fw_jump.bin`)
+と比べる。
 
 TFTP サーバの既定値を変えてビットストリームごと作り直すなら
 `REMOTE_IP=192.168.x.y ./scripts/build_soc.sh`。
