@@ -126,6 +126,24 @@ worker_mem() {
 }
 
 #---------------------------------------------------------------------------
+# /dev/urandom before the kernel's random generator is seeded prints
+# "random: dd: uninitialized urandom read" for every read. It is harmless for
+# the test (only write = read back is checked), but it floods the console.
+# The board has no hardware RNG and seeds it from interrupt timing, which
+# takes a while after boot: wait for it, at most 10 minutes.
+crng_ready() {
+	[ "$(cat /proc/sys/kernel/random/entropy_avail 2> /dev/null)" = "256" ] ||
+		dmesg 2> /dev/null | grep -q 'crng init done'
+}
+if ! crng_ready; then
+	echo "stress: waiting for the random generator to be seeded (crng init done)"
+	w=0
+	while ! crng_ready && [ $w -lt 600 ]; do
+		sleep 10; w=$((w + 10))
+	done
+fi
+END=$(( $(date +%s) + MINUTES * 60 ))
+
 rm -f "$WORK_RAM"/result.*
 echo "stress: $MINUTES minutes, log in $LOG (tail -f $LOG to watch)"
 log "start, $MINUTES minutes, server $SERVER"
