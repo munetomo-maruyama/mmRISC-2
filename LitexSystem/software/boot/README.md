@@ -144,3 +144,37 @@ PC で計算した CRC32(`python3 -c "import zlib,sys;print(hex(zlib.crc32(open(
 
 TFTP サーバの既定値を変えてビットストリームごと作り直すなら
 `REMOTE_IP=192.168.x.y ./scripts/build_soc.sh`。
+
+## 長時間の負荷試験(`software/rootfs/root/stress.sh`)
+
+Linux 上で 3 つの作業を同時に何時間も回し、どれも自分のデータを md5 で照合する。
+
+| 作業 | 内容 | 主に試すもの |
+|---|---|---|
+| net | TFTP サーバから `Image`(15 MB)を 1024 バイトのブロックで取得 | Ethernet の大きなフレームの受信、割り込み |
+| sd | 2 MB の乱数を SD カードの ext4 に書き、ページキャッシュを捨てて読み戻す | SD カードの DMA(読み書き両方) |
+| mem | 64 MB の 0 を `/tmp`(RAM)に書く | データキャッシュと DRAM |
+
+**準備**。TFTP サーバの公開ディレクトリに `stress.sh` を置き(`Image` はネットブート用に
+置いたものをそのまま使う)、ボードで取ってくる:
+
+```sh
+udhcpc -i eth0 -s /usr/share/udhcpc/default.script     # 起動時に取っていれば不要
+tftp -g -r stress.sh -l /root/stress.sh <サーバの IP>
+chmod +x /root/stress.sh
+```
+
+**実行**(分を省くと 120 分):
+
+```sh
+/root/stress.sh <サーバの IP> 240
+```
+
+10 分ごとに `stress: 時刻 n OK, m NG, uptime ...` が 1 行出る。これが止まったら、その
+時点でボードが止まっている。途中経過は別の端末が無いので、止めずに見るなら
+`/root/stress.log` を後で見る(1 回ごとに 1 行)。終わると作業ごとの回数と、実行中に
+増えたカーネルの警告(`warning` / `oops` / `error` など)を出し、最後に `=== PASS ===`
+か `=== FAILED ===` を出す。照合に失敗したファイルは `/tmp/stress.d/net.bad`、
+`/root/stress.d/sd.bad.<n>`、`/tmp/stress.d/mem.bad` に残る。
+
+ネットワークを外して試すなら、サーバの代わりに `-` を渡す(`/root/stress.sh - 240`)。
