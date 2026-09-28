@@ -89,8 +89,10 @@ worker_sd() {
 		dd if=/dev/urandom of="$f" bs=64k count=32 2> /dev/null
 		m1=$(md5 "$f")
 		sync
-		# read it back from the card, not from the page cache
-		{ echo 3 > /proc/sys/vm/drop_caches; } 2> /dev/null
+		# read it back from the card, not from the page cache. 7 = 3
+		# (page cache, dentries and inodes) + 4, which stops the kernel
+		# from printing "drop_caches: 3" on the console every time
+		{ echo 7 > /proc/sys/vm/drop_caches; } 2> /dev/null
 		m2=$(md5 "$f")
 		if [ "$m1" = "$m2" ]; then
 			ok=$((ok + 1)); log "sd  $i OK"
