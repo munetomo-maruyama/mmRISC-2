@@ -52,3 +52,4 @@ SIM/SIM_BIOS/sdcard_run.img
 SIM/SIM_BIOS/sd_work/
 SIM/SIM_BIOS/obj_dbg/
 SIM/SIM_BIOS/obj_dbg.log
+LitexSystem/software/boot/Image

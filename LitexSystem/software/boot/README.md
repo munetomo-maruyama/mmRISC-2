@@ -1,26 +1,134 @@
-# SD カードに置くもの
+# SD カード
 
-FAT16 の第 1 パーティションのルートに 3 つ。
+## 置くもの
 
-| ファイル | 出どころ | ロード先 |
-|---|---|---|
-| `fw_jump.bin` | `scripts/build_opensbi.sh` が**ここに**作る | 0x8000_0000 |
-| `Image` | Linux カーネル。Rocket 構成のものをそのまま使う | 0x8020_0000 |
-| `boot.json` | 同上 | ― |
+カードは 2 つのパーティションに分ける。
 
-`Image` と `boot.json` は CPU に依存しないので、Rocket 構成で作ったもの
-(`LitexRocket/software/boot/`)をそのままコピーすればよい。
+| パーティション | 形式 | ラベル | 中身 |
+|---|---|---|---|
+| 1 | FAT16、512 MB | `LITEXBOOT` | 下の 3 つのファイル(ルートに置く) |
+| 2 | ext4、残り全部 | `rootfs` | ルートファイルシステム |
 
-ルートファイルシステムは第 2 パーティション(ext4、ラベル `rootfs`)。中身は
-Rocket 構成の BusyBox 一式に、このリポジトリの `software/rootfs/`(inittab、
-`sbin/init`、udhcpc のスクリプト、負荷試験)を重ねたもの。PC にカードを挿して
-マウントされた場所を渡す:
+第 1 パーティションに置く 3 つは、すべてこのディレクトリ(`software/boot/`)にある。
+
+| ファイル | 出どころ | ロード先 | md5(2026-09-30) |
+|---|---|---|---|
+| `fw_jump.bin` | `scripts/build_opensbi.sh` がここに作る(デバイスツリー入り) | 0x8000_0000 | `ede1b7b02b2a1328759b10efd184ea27` |
+| `Image` | Linux カーネル。Rocket 構成で作ったもの(`LitexRocket/software/boot/Image`)の写し。CPU に依存しない | 0x8020_0000 | `1d0caecd9f373a9fb203dc9c28c2cd34` |
+| `boot.json` | BIOS が読む配置表。Rocket 構成と同じ | ― | `a1c356008baa859fa615b879d0fa18f3` |
+
+`fw_jump.bin` と `Image` は生成物なので git には入れていない(`Image` は 15 MB あり、
+`~/mmlitex_build/linux` から作る)。リポジトリだけからカードを作り直すときは、
+`scripts/build_opensbi.sh` で `fw_jump.bin` を作り、`Image` を Rocket 構成から
+コピーする。
+
+第 2 パーティションは Rocket 構成の BusyBox 一式(`~/mmlitex_build/initramfs`)に、
+このリポジトリの `software/rootfs/`(inittab、`sbin/init`、udhcpc のスクリプト、
+負荷試験 `stress.sh`)を重ねたもの。`scripts/sd_rootfs.sh` が書く。
+
+## 書き込み手順(Parallels Desktop 上の Ubuntu)
+
+Parallels Desktop 上の Ubuntu では、カードを挿したときに自動でマウントされることも
+されないこともある。また USB のカードリーダが途中で切れて付き直すことがあり、書き込み中に
+切れるとファイルシステムが壊れる(`docs/BRINGUP.md` の 10 回目)。そこで、毎回
+**全部アンマウント → マウント → 書き込み → sync → アンマウント → 切り離し**
+の順で、すべて `udisksctl` で行う。`udisksctl` はデスクトップの自動マウントと同じ仕組みで、
+マウント先のディレクトリ(`/media/<user>/<ラベル>`)も作り、消してくれる。
+
+以下、リポジトリの一番上で実行する。
+
+**0. カードのデバイス名を確かめる。** カードリーダが VM につながっていなければ、
+Parallels のメニュー(デバイス → USB)で Ubuntu に接続する。
 
 ```bash
-sudo ./scripts/sd_rootfs.sh /media/<user>/rootfs     # 差分だけ書く(既存のファイルは残る)
-sudo ./scripts/sd_rootfs.sh --full /media/<user>/rootfs   # 空のパーティションなら一式も
-sudo umount /media/<user>/rootfs
+lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT
 ```
+
+28.8G などカードの大きさで、`LITEXBOOT` と `rootfs` のパーティションを持つものが
+カード。以下は `/dev/sdb` として書く(**違っていたら読み替える**。付き直すと名前が
+変わることがある)。
+
+**1. 全部アンマウントする。** マウントされていなければ `is not mounted` と出るだけで
+害は無い。`lsblk` の `MOUNTPOINT` が空になったのを確かめる。
+
+```bash
+udisksctl unmount -b /dev/sdb1
+udisksctl unmount -b /dev/sdb2
+lsblk -o NAME,MOUNTPOINT /dev/sdb
+```
+
+**2. マウントする。** `Mounted /dev/sdb1 at /media/<user>/LITEXBOOT` のように、
+マウント先が表示される。
+
+```bash
+udisksctl mount -b /dev/sdb1
+udisksctl mount -b /dev/sdb2
+```
+
+**3. 書く。** 第 1 パーティションは自分の持ち物としてマウントされるので `sudo` は
+要らない。第 2 パーティションは root の持ち物にするため `sudo` で書く。
+
+```bash
+cp LitexSystem/software/boot/fw_jump.bin LitexSystem/software/boot/Image \
+   LitexSystem/software/boot/boot.json /media/$USER/LITEXBOOT/
+sudo LitexSystem/scripts/sd_rootfs.sh /media/$USER/rootfs
+```
+
+`sd_rootfs.sh` は、カードに BusyBox がまだ無ければ一式を、あれば差分だけを書く
+(カードの上で作ったファイルは残る)。一式を書き直すなら `--full` を付ける。
+
+**4. 書き出す。**
+
+```bash
+sync
+```
+
+**5. アンマウントして切り離す。** `power-off` は書き込みをすべて確定させてから
+カードを切り離す。これが終わってからカードを抜く(または Parallels で USB を外す)。
+
+```bash
+udisksctl unmount -b /dev/sdb1
+udisksctl unmount -b /dev/sdb2
+udisksctl power-off -b /dev/sdb
+```
+
+## 新しいカードを作る
+
+**カードの中身はすべて消える。** デバイス名(ここでは `/dev/sdb`)を `lsblk` で
+必ず確かめ、PC のディスク(`sda`)を指定しないこと。
+
+手順 0 と 1(全部アンマウント)のあとで:
+
+```bash
+printf 'label: dos\nstart=2048, size=512MiB, type=6\ntype=83\n' | sudo sfdisk /dev/sdb
+lsblk -o NAME,SIZE /dev/sdb                  # sdb1 が 512M、sdb2 が残り
+udisksctl unmount -b /dev/sdb1               # 作り直した直後に自動でマウントされていたら外す
+udisksctl unmount -b /dev/sdb2
+sudo mkfs.vfat -F 16 -n LITEXBOOT /dev/sdb1
+sudo mkfs.ext4 -L rootfs /dev/sdb2
+```
+
+あとは上の手順 2〜5 と同じ(`sd_rootfs.sh` は空のパーティションに一式を書く)。
+
+## うまくいかないとき
+
+- `mount point does not exist`: `sudo mount` を使ったとき、マウント先のディレクトリが
+  無い(アンマウントで消えている)。`udisksctl mount` を使う。
+- `Input/output error`、またはカーネルのログ(`sudo dmesg | tail -30`)に
+  `Synchronize Cache(10) failed` や `I/O error`: カードリーダが切れた。つなぎ直して
+  手順 0 からやり直し、書く前にファイルシステムを検査する(手順 1 でアンマウントした
+  状態で):
+  ```bash
+  sudo fsck.vfat -a /dev/sdb1
+  sudo e2fsck -f /dev/sdb2
+  ```
+- カードに本当に書けたか確かめる(PC のキャッシュを通さず、カードから読む):
+  ```bash
+  dd if=/media/$USER/LITEXBOOT/fw_jump.bin iflag=direct bs=4096 status=none | md5sum
+  ```
+- ボード側で `Liftoff!` の後に何も出ない: 第 1 パーティションのファイルが壊れているか
+  古い。`fw_jump.bin` はどの版も 279048 バイトで大きさでは区別できないので、md5 を
+  上の表と比べる。
 
 ## 電源を切る前に
 
@@ -81,17 +189,9 @@ BusyBox の `udhcpc` は、インタフェースを起こすこともアドレ�
 せず、スクリプトに任せる。しかもこの BusyBox は既定のスクリプトの場所が空
 (`CONFIG_UDHCPC_DEFAULT_SCRIPT=""`)なので、**`-s` でスクリプトを指定しないと何も
 実行されない**(インタフェースは DOWN のままで `Network is down` になる)。そのスクリプト
-(`software/rootfs/usr/share/udhcpc/default.script`)を SD カードの第 2
-パーティションに一度だけ入れる(PC 側で):
-
-```bash
-sudo mkdir -p /media/taka/rootfs/usr/share/udhcpc
-sudo cp software/rootfs/usr/share/udhcpc/default.script /media/taka/rootfs/usr/share/udhcpc/
-sudo chmod +x /media/taka/rootfs/usr/share/udhcpc/default.script
-sync
-```
-
-ボードで:
+(`software/rootfs/usr/share/udhcpc/default.script`)は、上の書き込み手順の
+`sd_rootfs.sh` がカードに入れる。inittab も起動時に `udhcpc` を実行するので、普段は
+何もしなくてよい。手で取り直すなら、ボードで:
 
 ```sh
 udhcpc -i eth0 -s /usr/share/udhcpc/default.script
@@ -128,9 +228,8 @@ Mac の Parallels Desktop 上の Ubuntu に立てる場合の詳しい手順(ブ
 
 ```bash
 sudo apt install tftpd-hpa          # 公開ディレクトリは /srv/tftp
-sudo cp <Image> /srv/tftp/Image
-sudo cp LitexSystem/software/boot/fw_jump.bin /srv/tftp/fw_jump.bin
-sudo cp <boot.json> /srv/tftp/boot.json   # SD カードの第 1 パーティションと同じもの
+sudo cp LitexSystem/software/boot/Image LitexSystem/software/boot/fw_jump.bin \
+        LitexSystem/software/boot/boot.json /srv/tftp/   # SD カードの第 1 パーティションと同じもの
 ip -4 addr                                # サーバの IP を控える
 ```
 
