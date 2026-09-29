@@ -358,6 +358,24 @@ Ethernet が入っていなかった(Rocket 構成から引き継いだ `build_s
 実行中のカーネルの警告なし、10 分ごとの表示も途切れず。3 つを並行させた状態の TFTP は
 約 70 KB/s(15 MB に約 3.5 分)。数時間の試験はまだ。
 
+## 10 回目: SD カードの中身をリポジトリへ、正しい停止(2026-09-29)
+
+- SD カードのルートに足していたもの(inittab、`sbin/init`、udhcpc のスクリプト、
+  `stress.sh`)を `software/rootfs/` に置き、`scripts/sd_rootfs.sh` で書き込むように
+  した。
+- `poweroff` が効かなかった。BusyBox の init は `sysinit` の行を順に終わるまで待ち、
+  poweroff / reboot(シグナル)はその後でしか扱わないが、シェルを `sysinit` の行で
+  起動していた(Rocket 構成の initramfs のまま)。シェルを `respawn` にし、停止時の
+  `sync` と `umount -a -r` を足した。実機で `poweroff` と `reboot` が効き、次の起動で
+  ext4 の `recovery complete` が出なくなった。
+- 起動ログの `Malformed early option 'console'`(`console=liteuart` が起動初期の
+  コンソール設定にも一致していた)と `Falling back to deprecated "riscv,isa"` を消した。
+  ISA は実装しているものだけ(Zicntr あり、Zihpm なし)をデバイスツリーに書いた。
+- 途中で SD カードの ext4 が壊れた(ブロックビットマップのチェックサム不一致など)。
+  PC 側のログで、Parallels 経由の USB カードリーダが書き込み中に切断されていた
+  (`Synchronize Cache(10) failed`、SCSI の番号が変わって再接続)。`e2fsck` と
+  `fsck.vfat` で修復。カードを外す前は `udisksctl unmount` と `udisksctl power-off`。
+
 ## 手順
 
 ### 1. SoC を生成(Linux VM)
