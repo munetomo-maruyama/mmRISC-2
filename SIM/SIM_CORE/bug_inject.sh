@@ -230,7 +230,7 @@ MUTATIONS=(
 "189#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%else                 nx_ma_wr = ma_valid \& ma_we_rd;%else                 nx_ma_wr = 1'b0;%#core: the forwarding select forgets a load that waits in MA"
 "190#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%nx_ma_wr = nx_ma_wr \& (nx_ma_rd != 5'd0);%nx_ma_wr = nx_ma_wr;%#core: a result written to x0 is forwarded from MA"
 "192#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%else if (ex_advance) nx_mr_wr = ex_valid \& ex_we_rd \& ~ex_exc \& ~ex_mem;%else if (ex_advance) nx_mr_wr = ex_we_rd \& ~ex_exc \& ~ex_mem;%#core: the forwarding select from MR does not check that the instruction is there"
-"193#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%                mr_refetch    <= ex_pred_taken \& ~ex_is_ctrl;%                mr_refetch    <= 1'b0;%#core: a non branch predicted taken is not refetched"
+"193#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%                mr_refetch    <= (ex_pred_taken \& ~ex_is_ctrl) | ex_csr_fetch;%                mr_refetch    <= ex_csr_fetch;%#core: a non branch predicted taken is not refetched"
 "194#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%else if (fencei_taken || sfence_taken || refetch_taken)%else if (fencei_taken || sfence_taken)%#core: the refetch goes to where EX says, not behind the instruction"
 "195#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign refetch_taken = ma_valid \& ma_refetch \& ~stall_ma \& ~trap_taken;%assign refetch_taken = ma_valid \& ma_refetch \& ~trap_taken;%#core: the refetch does not wait for the load it belongs to"
 "196#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign lu_hazard = ex_valid \& (lu_int | lu_fp) \& ~flush;%assign lu_hazard = ex_valid \& lu_fp \& ~flush;%#core: no load-use interlock on an integer register"
