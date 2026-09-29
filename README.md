@@ -4,35 +4,49 @@
 SystemVerilog で自作し、Digilent Arty A7-100T 上で Linux を動かすプロジェクト。
 周辺回路と Linux は LiteX から持ってくる。
 
+**現状(2026-09)**: Arty A7-100T の実機(50 MHz)で、LiteX BIOS → OpenSBI → Linux が
+SD カードの ext4 から BusyBox のシェルまで起動し、Ethernet(DHCP、ping、BIOS の TFTP
+ネットブート)も動く。30 分の負荷試験(ネットワーク・SD カード・メモリの同時照合)は
+PASS。立ち上げの経緯は [`LitexSystem/docs/BRINGUP.md`](LitexSystem/docs/BRINGUP.md)。
+
 ## ディレクトリ構成
 
 ```
 RTL/
-├── TOP/            FPGA トップ(CPU_TOP + テスト用 RAM)
+├── TOP/            FPGA 単体のトップ(CPU_TOP + テスト用 RAM。デバッグ論理の実機確認用)
 ├── CPU/
-│   ├── CPU_TOP/        CPU ブロックのトップ。デバッグ論理・キャッシュ・バス調停をまとめる
-│   ├── CPU_CACHE/      L1 命令/データキャッシュ  → CPU_CACHE_SPEC.md
-│   │   ├── CPU_CACHE/      I$ + D$ + BUS_ARB
-│   │   ├── ICACHE/         命令キャッシュ
-│   │   ├── DCACHE/         データキャッシュ(MSHR、書き戻し、AMO/LR-SC)
-│   │   ├── CACHE_PORT_ARB/ D$ ポートの調停(CPU 優先、デバッガと共有)
-│   │   ├── CACHE_TAG_ARRAY/    タグ + 有効 + ダーティ
-│   │   └── CACHE_DATA_ARRAY/   データ配列
+│   ├── CPU_TOP/        CPU ブロックのトップ。コア・キャッシュ・MMIO・デバッグ・DMA ポートをまとめる
 │   ├── CPU_CORE/       CPU コア  → CPU_CORE_SPEC.md
-│   │   ├── CPU_CORE/       コアのトップ(IF1/IF2/ID/EX/MA/WB、フォワーディング)
+│   │   ├── CPU_CORE/       コアのトップ(IF1/IF2/FQ/ID/EX/MR/MA/WB の 8 段、フォワーディング、トラップ)
 │   │   ├── CORE_IFU/       命令フェッチ(PC、未処理要求 FIFO、フェッチキュー)
+│   │   ├── CORE_BTB/       分岐予測(BTB)
 │   │   ├── CORE_DEC/       命令デコーダ
 │   │   ├── CORE_DECOMP/    圧縮命令(C)を 32bit 命令に伸張
-│   │   ├── CORE_CSR/       CSR ファイルとトラップ状態(M-mode)
+│   │   ├── CORE_CSR/       CSR ファイルとトラップ状態(M / S / U)
 │   │   ├── CORE_MDU/       乗除算器(M)
 │   │   ├── CORE_FRF/       浮動小数点レジスタファイル(32×64、3R1W)
 │   │   ├── CORE_RF/        整数レジスタファイル(32×64bit、2R1W)
 │   │   ├── CORE_EXU/       ALU、分岐条件、アドレス生成
 │   │   └── CORE_LSU/       ロード/ストアユニット(データキャッシュポート)
+│   ├── CPU_MMU/        Sv39 MMU と PMP
+│   │   ├── CORE_MMU/       ITLB / DTLB / ウォーカ / PMP のまとめ
+│   │   ├── MMU_TLB/        TLB
+│   │   ├── MMU_PTW/        ページテーブルウォーカ
+│   │   └── MMU_PMP/        PMP(8 エントリ)
 │   ├── CPU_FPU/        浮動小数点ユニット(F/D)
 │   │   ├── CORE_FPU/       全演算(積和 1 本、反復除算/平方根)
-│   │   └── FPU_ROUND/      正規化・丸め・詰め込み(丸めるものは全部ここ)
+│   │   └── FPU_ROUND/      正規化・丸め・詰め込み(2 サイクル)
+│   ├── CPU_CACHE/      L1 命令/データキャッシュ  → CPU_CACHE_SPEC.md
+│   │   ├── CPU_CACHE/      I$ + D$ + BUS_ARB
+│   │   ├── ICACHE/         命令キャッシュ
+│   │   ├── DCACHE/         データキャッシュ(MSHR、書き戻し、AMO/LR-SC、ライトスルー)
+│   │   ├── CACHE_PORT_ARB/ D$ ポートの調停(CPU と第 2 ポート)
+│   │   ├── CACHE_TAG_ARRAY/    タグ + 有効 + ダーティ
+│   │   └── CACHE_DATA_ARRAY/   データ配列
+│   ├── CPU_DMA/        DMA ポート(SoC の DMA をデータキャッシュ経由でメモリへ。一貫性をハードで保つ)
+│   ├── CPU_MMIO/       内蔵の CLINT / PLIC への振り分け
 │   ├── CPU_CLINT/      CLINT(msip / mtime / mtimecmp)
+│   ├── CPU_PLIC/       PLIC(M / S の 2 コンテキスト)
 │   ├── CPU_DBG/        デバッグ論理  → CPU_DBG_SPEC.md
 │   │   ├── CPU_DBG/        デバッグ論理のトップ
 │   │   ├── DBG_DTM/        JTAG DTM(Debug Spec 1.0)
@@ -41,7 +55,7 @@ RTL/
 │   │   ├── DBG_DM/         デバッグモジュール(abstract command、SBA、認証)
 │   │   ├── DBG_BUSMST/     デバッグ用バスマスタ(周辺バス)
 │   │   ├── DBG_CACHE/      デバッグアクセスをデータキャッシュへ
-│   │   └── DBG_HART_STUB/  CPU コア実装までのハート代用
+│   │   └── DBG_HART_STUB/  ハートの代用(コアとはまだつないでいない。halt / resume は未対応)
 │   └── CPU_BFM/        CPU コア代用の BFM(シミュレーション用)
 └── BUS/
     ├── BUS_ARB/            AXI4 マスタ調停
@@ -51,16 +65,20 @@ RTL/
     └── AXIL_RAM/           シミュレーション/FPGA 用 RAM(周辺バス)
 
 SIM/
-├── SIM_CORE/       CPU コアの検証(アセンブラ試験、背圧注入、バグ注入)
-├── SIM_FPU/        FPU の検証(Berkeley SoftFloat と突き合わせ)
-├── SIM_CACHE/      L1 キャッシュの検証(参照モデル、パラメータ掃引、バグ注入)
-├── SIM_DBG/        デバッグ論理の検証(JTAG / cJTAG)
+├── SIM_CORE/       CPU コア(自作試験、riscv-tests、背圧注入、バグ注入)
+├── SIM_MMU/        PMP の単体検証(参照モデル、バグ注入)
+├── SIM_FPU/        FPU(Berkeley SoftFloat と突き合わせ)
+├── SIM_CACHE/      L1 キャッシュ(参照モデル、CPU と DMA の同時ランダム、パラメータ掃引、バグ注入)
 ├── SIM_CPU/        CPU_TOP のバス検証
+├── SIM_SYS/        コア + 本物のキャッシュ + AXI + DMA ポート(バグ注入)
+├── SIM_BIOS/       LiteX BIOS と Linux(OpenSBI → Linux → BusyBox、SD カードのモデル)
+├── SIM_DBG/        デバッグ論理(JTAG / cJTAG)
 └── SIM_OCD/        OpenOCD との協調シミュレーション(remote_bitbang)
 
-FPGA/ARTY_A7_100T/  Vivado ビルドスクリプト、制約、OpenOCD 設定、レポート
+LitexSystem/        LiteX の SoC に mmRISC-2 を載せ、Arty で Linux を動かす一式  → LitexSystem/README.md
+FPGA/ARTY_A7_100T/  LiteX なしの単体ビルド(デバッグ論理の確認用)、制約、OpenOCD 設定
 Spec/               RISC-V 公式仕様書(PDF)
-LitexRocket/        参考用(リポジトリには含めない)
+LitexRocket/        Rocket 構成の LiteX 一式(ワークスペース、カーネル、BusyBox。リポジトリには含めない)
 ```
 
 仕様書は各ブロックのディレクトリ直下に置く。
@@ -70,6 +88,9 @@ LitexRocket/        参考用(リポジトリには含めない)
 | [`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`](RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md) | L1 キャッシュ(パラメータ、インタフェース、動作、検証結果) |
 | [`RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`](RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md) | デバッグ論理(JTAG/cJTAG DTM、DM、認証、FPGA 確認結果) |
 | [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md) | CPU コア(命令セット、パイプライン、MMU、CSR、実装順序) |
+| [`LitexSystem/docs/BRINGUP.md`](LitexSystem/docs/BRINGUP.md) | 実機の立ち上げ記録(止まった場所、原因、修正)と手順 |
+| [`LitexSystem/docs/TIMING.md`](LitexSystem/docs/TIMING.md) | 50 MHz のタイミング収束の記録 |
+| [`LitexSystem/software/boot/README.md`](LitexSystem/software/boot/README.md) | SD カードの作り方、Ethernet、TFTP ネットブート、負荷試験 |
 
 ## シミュレーション
 
@@ -113,7 +134,19 @@ git clone --recursive https://github.com/riscv-software-src/riscv-tests ~/RISCV/
 `SIM/SIM_FPU` は Berkeley SoftFloat を参照モデルにする。用意の仕方は
 [`SIM/SIM_FPU/README.md`](SIM/SIM_FPU/README.md)。
 
-## FPGA
+## Arty で Linux を動かす(LiteX)
+
+```
+LitexSystem/scripts/build_soc.sh        # SoC と BIOS を生成(Linux 側)
+# Vivado(Windows 側)で LitexSystem/build/gateware のビットストリームを作る
+LitexSystem/scripts/build_opensbi.sh    # デバイスツリー入りの fw_jump.bin
+sudo LitexSystem/scripts/sd_rootfs.sh /media/<user>/rootfs   # SD カードのルート
+```
+
+詳細は [`LitexSystem/README.md`](LitexSystem/README.md) と
+[`LitexSystem/software/boot/README.md`](LitexSystem/software/boot/README.md)。
+
+## FPGA(LiteX なし、デバッグ論理の確認用)
 
 ```
 cd FPGA/ARTY_A7_100T
@@ -128,8 +161,9 @@ vivado -mode batch -source build.tcl
 | フェーズ | 状態 |
 |---|---|
 | JTAG / cJTAG デバッグ論理 | 完了(シミュレーション、FPGA 実機とも確認済み) |
-| L1 命令/データキャッシュ | 完了(掃引・バグ注入まで) |
-| CPU_TOP への組み込み | 完了(BFM がキャッシュを駆動、デバッガも D$ 経由)。FPGA 実機で OpenOCD から D$ 経由のアクセスを確認済み |
-| CPU コア(パイプライン) | 仕様 Rev-1 策定済み、これから実装 |
-| MMU (Sv39) | コアが M-mode で動いたあと(CPU_CORE_SPEC.md M5) |
-| L2 キャッシュ | CPU ブロック完成後に検討 |
+| L1 命令/データキャッシュ | 完了(掃引・バグ注入、CPU と DMA の同時ランダム試験まで)。DMA ポート付き |
+| CPU コア | RV64GC、M / S / U、8 段パイプライン。riscv-tests 132 本 PASS |
+| MMU (Sv39) と PMP | 完了 |
+| LiteX SoC 上の Linux | 実機(Arty A7-100T、50 MHz)で SD カードの ext4 から BusyBox まで。Ethernet(DHCP、TFTP ネットブート)。負荷試験 30 分 PASS |
+| JTAG でコアをデバッグ | 未(Arty の USB からの JTAG 配線、デバッグモジュールとコアの接続) |
+| L2 キャッシュ | 未(今の構成は L2 なし) |

@@ -11,8 +11,29 @@ FAT16 の第 1 パーティションのルートに 3 つ。
 `Image` と `boot.json` は CPU に依存しないので、Rocket 構成で作ったもの
 (`LitexRocket/software/boot/`)をそのままコピーすればよい。
 
-ルートファイルシステムは第 2 パーティション(ext4、ラベル `rootfs`)。
-これも作り直す必要は無い。
+ルートファイルシステムは第 2 パーティション(ext4、ラベル `rootfs`)。中身は
+Rocket 構成の BusyBox 一式に、このリポジトリの `software/rootfs/`(inittab、
+`sbin/init`、udhcpc のスクリプト、負荷試験)を重ねたもの。PC にカードを挿して
+マウントされた場所を渡す:
+
+```bash
+sudo ./scripts/sd_rootfs.sh /media/<user>/rootfs     # 差分だけ書く(既存のファイルは残る)
+sudo ./scripts/sd_rootfs.sh --full /media/<user>/rootfs   # 空のパーティションなら一式も
+sudo umount /media/<user>/rootfs
+```
+
+## 電源を切る前に
+
+いきなり電源を切ると、次の起動で ext4 がジャーナルを再生する
+(`EXT4-fs (mmcblk0p2): recovery complete`)。壊れはしないが、書いた直後のデータは
+失われうる。切る前にボードで
+
+```sh
+poweroff
+```
+
+を実行し、`reboot: Power down` などが出てから電源を切る(`reboot` なら再起動する)。
+inittab の `::shutdown:` の行が、書き出しと読み出し専用への再マウントを行う。
 
 ## デバイスツリーは別ファイルではない
 
