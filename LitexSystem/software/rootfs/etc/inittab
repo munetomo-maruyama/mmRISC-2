@@ -1,0 +1,21 @@
+# /etc/inittab of the SD card root (BusyBox init), mmRISC-2 on the Arty.
+# Kept in LitexSystem/software/rootfs/ and written by scripts/sd_rootfs.sh.
+#
+# /proc first: --install -s needs it to find busybox, and it makes /bin/sh,
+# grep, mount ... that the lines after it use. The kernel mounts /dev itself
+# when the root is a disk (CONFIG_DEVTMPFS_MOUNT), but not for an initramfs,
+# so /dev is mounted only when it is not mounted yet. init runs a line with
+# shell characters as "sh -c exec <line>", so the || needs its own sh -c.
+::sysinit:/bin/busybox mount -t proc proc /proc
+::sysinit:/bin/busybox --install -s
+::sysinit:/bin/sh -c "grep -q ' /dev ' /proc/mounts || mount -t devtmpfs devtmpfs /dev"
+::sysinit:/bin/busybox mount -t tmpfs tmpfs /tmp
+::sysinit:/bin/busybox mount -t sysfs sysfs /sys
+# DHCP on eth0; -b goes to the background if there is no answer (no cable).
+# This BusyBox has no default script, hence -s.
+::sysinit:/bin/busybox udhcpc -i eth0 -b -s /usr/share/udhcpc/default.script
+/dev/console::sysinit:-/bin/ash
+# reboot / poweroff: write everything out and leave the ext4 clean, so the
+# next boot does not have to replay the journal ("recovery complete")
+::shutdown:/bin/busybox sync
+::shutdown:/bin/busybox umount -a -r

@@ -8,6 +8,11 @@
  * timebase-frequency must match CLINT_TICK_DIV of the hardware: mtime
  * counts one step every 100 cycles of the 50 MHz clock.
  *
+ * console=liteuart0, not console=liteuart: the kernel also hands the
+ * console= value to the early console setup, and a bare "liteuart" matches
+ * the LiteUART early console, which then started at address 0 ("Malformed
+ * early option 'console'"). The index keeps it from matching.
+ *
  * With Ethernet (scripts/build_soc.sh --with-ethernet) LiteX puts ethmac and
  * ethphy first among the CSRs, so every block after them moved up by 0x1000,
  * and the interrupts are uart 0, timer0 1, ethmac 2, sdcard 3 in LiteX
@@ -21,7 +26,7 @@
 	compatible = "mmrisc,mmrisc-2-dev";
 	model = "mmRISC-2 on Digilent Arty A7-100T";
 	chosen {
-		bootargs = "console=liteuart earlycon=liteuart,0x12004800 swiotlb=noforce rootwait root=/dev/mmcblk0p2 rootfstype=ext4 rw";
+		bootargs = "console=liteuart0 earlycon=liteuart,0x12004800 swiotlb=noforce rootwait root=/dev/mmcblk0p2 rootfstype=ext4 rw";
 	};
 	L13: cpus {
 		#address-cells = <1>;
@@ -44,7 +49,15 @@
 			mmu-type = "riscv,sv39";
 			next-level-cache = <&L8>;
 			reg = <0x0>;
-			riscv,isa = "rv64imafdc_zicsr_zifencei";
+			/* The extensions one by one, as Linux wants them now (without
+			 * them it falls back to riscv,isa and warns). Only what the
+			 * core has: the counters are cycle, time and instret (Zicntr),
+			 * there are no hpmcounters (no Zihpm). riscv,isa stays for
+			 * OpenSBI and older software. */
+			riscv,isa = "rv64imafdc_zicntr_zicsr_zifencei";
+			riscv,isa-base = "rv64i";
+			riscv,isa-extensions = "i", "m", "a", "f", "d", "c",
+				"zicntr", "zicsr", "zifencei";
 			riscv,pmpgranularity = <4>;
 			riscv,pmpregions = <8>;
 			status = "okay";

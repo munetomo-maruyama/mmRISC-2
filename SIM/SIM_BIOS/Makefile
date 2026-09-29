@@ -119,7 +119,7 @@ INITRD_ADDR := 0x82000000
 sim_initrd.dts: ../../LitexSystem/software/mmrisc_arty.dts $(INITRD_BIN)
 	sz=`stat -c %s $(INITRD_BIN)`; \
 	end=`printf '0x%x' $$(( $(INITRD_ADDR) + $$sz ))`; \
-	sed -e 's|bootargs = ".*";|bootargs = "console=liteuart earlycon=liteuart,0x12004800 rdinit=/init";\
+	sed -e 's|bootargs = ".*";|bootargs = "console=liteuart0 earlycon=liteuart,0x12004800 rdinit=/init";\
 		linux,initrd-start = <$(INITRD_ADDR)>;\
 		linux,initrd-end = <'$$end'>;|' $< > $@
 
@@ -136,16 +136,21 @@ linux-initrd: obj_dir/V$(TOP) fw_jump_initrd.hex Image.hex initrd.hex
 	./obj_dir/V$(TOP) +linux +fw=fw_jump_initrd.hex +image=Image.hex \
 	    +initrd=initrd.hex $(LINUX_ARGS)
 
-# The disk image of the SD card, laid out like the one of the board
-# (LitexRocket/docs/BUILD_STATUS.md): an MBR, a small first partition and an
-# ext4 second partition with the BusyBox tree and sbin/init -> ../bin/busybox.
+# The disk image of the SD card, laid out like the one of the board: an MBR,
+# a small first partition and an ext4 second partition with the BusyBox tree
+# and what LitexSystem/software/rootfs adds (inittab, sbin/init, ...), as
+# LitexSystem/scripts/sd_rootfs.sh writes it to the card. Only the DHCP line
+# of the inittab goes: there is no Ethernet model, and udhcpc would wait
+# several seconds of simulated time before going to the background.
 # 18 MiB, so the card reports a C_SIZE of 35.
 ROOTFS_SRC := /home/taka/mmlitex_build/initramfs
+OVERLAY    := ../../LitexSystem/software/rootfs
 
-sdcard.img: $(INITRD_BIN)
+sdcard.img: $(INITRD_BIN) $(shell find $(OVERLAY) -type f)
 	rm -rf sd_work; mkdir -p sd_work
 	cp -a $(ROOTFS_SRC) sd_work/rootfs
-	ln -sf ../bin/busybox sd_work/rootfs/sbin/init
+	cp -a $(OVERLAY)/. sd_work/rootfs/
+	sed -i '/udhcpc/d' sd_work/rootfs/etc/inittab
 	dd if=/dev/zero of=sd_work/p2.img bs=1M count=16 status=none
 	/usr/sbin/mke2fs -q -t ext4 -L rootfs -d sd_work/rootfs sd_work/p2.img
 	dd if=/dev/zero of=$@ bs=1M count=18 status=none
