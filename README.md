@@ -80,18 +80,24 @@ LitexRocket/        参考用(リポジトリには含めない)
 | `cd SIM/SIM_CORE && make` | CPU コアの命令試験(RV64IMAFDC + Zicsr + トラップ + CLINT) | 全 PASS |
 | `cd SIM/SIM_CORE && make stress` | 両キャッシュポートに背圧を入れて同じ試験 | 全 PASS |
 | `cd SIM/SIM_CORE && make clint` | CLINT のマルチハート・レジスタマップ(4 ハート) | PASS 32 チェック |
-| `cd SIM/SIM_CORE && make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / mi) | 124 PASS、既知の不合格 6(未実装機能を要求する試験) |
+| `cd SIM/SIM_CORE && make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / mi) | 132 PASS、既知の不合格 5(未実装機能を要求する試験) |
 | `cd SIM/SIM_FPU && make` | FPU を Berkeley SoftFloat と比較 | PASS 45 万チェック |
 | `cd SIM/SIM_FPU && make long` | 同上、ランダムベクタを増やす | PASS 約 494 万チェック |
-| `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 90 種 | 全て検出 |
-| `cd SIM/SIM_CACHE && make` | L1 キャッシュ全試験 | PASS 8817 チェック |
+| `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 171 種 | 170 検出。M175 は BTB の性能だけに効く変異で、機能試験では見えない(理由はスクリプト冒頭) |
+| `cd SIM/SIM_CACHE && make` | L1 キャッシュ全試験(18 セクション。17 は CPU と DMA ポートを同じラインで同時にランダムに) | PASS 60263 チェック |
 | `cd SIM/SIM_CACHE && make perf` | ヒット連続 / ミス連続のスループット | ヒット 1.0、ミス 12〜13、追い出し 22 サイクル/アクセス |
 | `cd SIM/SIM_CACHE && make wave-perf` | 同上の波形(VCD + GTKWave 用 .gtkw) | 4 パターン |
 | `cd SIM/SIM_CACHE && ./sweep.sh` | パラメータ掃引 18 構成 | 全 PASS |
-| `cd SIM/SIM_CACHE && ./bug_inject.sh` | バグ注入 20 種 | 全て検出 |
+| `cd SIM/SIM_CACHE && ./bug_inject.sh` | バグ注入 28 種 | 全て検出 |
 | `cd SIM/SIM_DBG && make` | デバッグ論理 | PASS 3010 チェック |
 | `cd SIM/SIM_DBG && ./bug_inject.sh` | バグ注入 15 種 | 全て検出 |
 | `cd SIM/SIM_CPU && make` | CPU_TOP のバスと L1 キャッシュ経路 | PASS |
+| `cd SIM/SIM_SYS && make` | コア + 本物のキャッシュ + AXI + DMA ポート(自作試験と riscv-tests) | 全 PASS |
+| `cd SIM/SIM_SYS && ./bug_inject.sh` | バグ注入 9 種 | 全て検出 |
+| `cd SIM/SIM_MMU && ./bug_inject.sh` | PMP のバグ注入 21 種 | 全て検出 |
+| `cd SIM/SIM_FPU && ./bug_inject.sh` | FPU のバグ注入 25 種 | 全て検出 |
+| `cd SIM/SIM_BIOS && make check` | LiteX BIOS をそのまま実行(割り込み込み) | PASS |
+| `cd SIM/SIM_BIOS && make linux-sd` | SD カードのモデルから Linux を起動(実機と同じ fw_jump.bin) | BusyBox のプロンプトまで |
 | `cd SIM/SIM_OCD && make` | OpenOCD 協調シミュレーション | PASS |
 
 必要なツール: Verilator 5.x、Icarus Verilog 12、GTKWave、riscv-openocd、
