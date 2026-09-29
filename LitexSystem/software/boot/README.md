@@ -17,14 +17,26 @@
 | `Image` | Linux カーネル。Rocket 構成で作ったもの(`LitexRocket/software/boot/Image`)の写し。CPU に依存しない | 0x8020_0000 | `1d0caecd9f373a9fb203dc9c28c2cd34` |
 | `boot.json` | BIOS が読む配置表。Rocket 構成と同じ | ― | `a1c356008baa859fa615b879d0fa18f3` |
 
-`fw_jump.bin` と `Image` は生成物なので git には入れていない(`Image` は 15 MB あり、
-`~/mmlitex_build/linux` から作る)。リポジトリだけからカードを作り直すときは、
-`scripts/build_opensbi.sh` で `fw_jump.bin` を作り、`Image` を Rocket 構成から
-コピーする。
+3 つとも git で管理しているので、リポジトリを取ってくればそのままカードを作れる
+(出どころとライセンスは下の「配布しているバイナリ」)。デバイスツリーを変えて
+`scripts/build_opensbi.sh` を実行し直したら、新しい `fw_jump.bin` もコミットする
+(ビットストリームと組で使うものなので、ずれると何も表示されない)。
 
 第 2 パーティションは Rocket 構成の BusyBox 一式(`~/mmlitex_build/initramfs`)に、
 このリポジトリの `software/rootfs/`(inittab、`sbin/init`、udhcpc のスクリプト、
 負荷試験 `stress.sh`)を重ねたもの。`scripts/sd_rootfs.sh` が書く。
+
+## 配布しているバイナリ
+
+| ファイル | ソース | 作り方 | ライセンス |
+|---|---|---|---|
+| `Image` | Linux、[litex-hub/linux](https://github.com/litex-hub/linux) の commit `4929f78c004ecab9b68bb41018a3d11749dcea62`(7.2.0-rc2 ベース)。手は入れていない | この `Image` を作ったときの `.config` が同じディレクトリの `linux.config`。それを `.config` に置いて `make ARCH=riscv CROSS_COMPILE=riscv64-unknown-linux-gnu- Image`。コンパイラは riscv64-unknown-linux-gnu-gcc 13.2.0 | GPL-2.0(ソースは上の URL と commit から入手できる) |
+| `fw_jump.bin` | OpenSBI、[riscv-software-src/opensbi](https://github.com/riscv-software-src/opensbi) の commit `3593a5facc4c6938b90429a6973ba9ee21fc5899`(v1.9 系)。手は入れていない | `scripts/build_opensbi.sh`(`PLATFORM=generic`、デバイスツリー `../mmrisc_arty.dts` を `FW_FDT_PATH` で埋め込む) | BSD-2-Clause(`COPYING.OpenSBI.BSD`) |
+| `boot.json` | このリポジトリ | ― | このリポジトリと同じ |
+
+カーネルのバージョン文字列に付いている `-dirty` は、作業ツリーに大文字小文字だけが違う
+名前のファイル(netfilter の `xt_*.h` など 13 個)が無いためで、コードの変更ではない
+(大文字小文字を区別しない場所を経由してコピーしたときに起きる)。
 
 ## 書き込み手順(Parallels Desktop 上の Ubuntu)
 

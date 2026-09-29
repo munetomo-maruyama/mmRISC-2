@@ -3,7 +3,6 @@ LitexRocket/
 
 # LiteX SoC build output (regenerate with LitexSystem/scripts/build_soc.sh)
 LitexSystem/build/
-LitexSystem/software/boot/*.bin
 LitexSystem/software/*.dtb
 __pycache__/
 
@@ -52,4 +51,3 @@ SIM/SIM_BIOS/sdcard_run.img
 SIM/SIM_BIOS/sd_work/
 SIM/SIM_BIOS/obj_dbg/
 SIM/SIM_BIOS/obj_dbg.log
-LitexSystem/software/boot/Image
