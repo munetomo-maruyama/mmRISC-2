@@ -14,7 +14,10 @@
 # DHCP on eth0; -b goes to the background if there is no answer (no cable).
 # This BusyBox has no default script, hence -s.
 ::sysinit:/bin/busybox udhcpc -i eth0 -b -s /usr/share/udhcpc/default.script
-/dev/console::sysinit:-/bin/ash
+# The shell is a respawn entry, not sysinit: init waits for each sysinit
+# line to end, and only looks at poweroff / reboot (signals) after the last
+# one, so a shell run as sysinit made them do nothing.
+::respawn:-/bin/ash
 # reboot / poweroff: write everything out and leave the ext4 clean, so the
 # next boot does not have to replay the journal ("recovery complete")
 ::shutdown:/bin/busybox sync
