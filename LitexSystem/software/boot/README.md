@@ -32,8 +32,14 @@ sudo umount /media/<user>/rootfs
 poweroff
 ```
 
-を実行し、`reboot: Power down` などが出てから電源を切る(`reboot` なら再起動する)。
-inittab の `::shutdown:` の行が、書き出しと読み出し専用への再マウントを行う。
+を実行し、`reboot: Power down` が出てから電源を切る(`reboot` なら LiteX のリセットで
+再起動する)。inittab の `::shutdown:` の行が、書き出しと読み出し専用への再マウントを
+行うので、次の起動で `recovery complete` は出ない(2026-09-29 に実機で確認)。
+
+`poweroff` の最後の `sbi_srst_reset: type=0x0 reason=0x0 failed` は、このボードに電源を
+切る仕組みが無い(OpenSBI の `Platform Shutdown Device: ---`)ため。書き出しは済んで
+いるので、そのまま電源を切るか RESET を押してよい。`umount: devtmpfs busy -
+remounted read-only` も無害(`/dev` はメモリ上のもので、使用中なので外せないだけ)。
 
 ## デバイスツリーは別ファイルではない
 
