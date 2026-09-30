@@ -17,6 +17,13 @@
 #---------------------------------------------------------------------------
 set -e
 
+# --vivado-post-*-phys-opt-directive AggressiveExplore : physical
+# optimization (replication, retiming of drivers, rewiring) after placement
+# and again after routing. The design sits within a few tens of ps of 20 ns
+# on several unrelated paths (docs/TIMING.md), so the WNS of a run with the
+# default flow moves across zero with every change of placement; this buys
+# back more than that for a few minutes of run time.
+#
 # --l2-size 0 : no L2 cache between the SoC bus and LiteDRAM. mmRISC-2 has
 # a memory bus of its own straight to LiteDRAM and no DMA port, so LiteX
 # hangs the SoC bus -- and with it the DMA of the SD card -- on LiteDRAM
@@ -57,6 +64,8 @@ python3 "$LITEX_WS/litex-boards/litex_boards/targets/digilent_arty.py" \
     --with-ethernet --eth-dhcp \
     --remote-ip "${REMOTE_IP:-192.168.1.100}" \
     --l2-size 0 \
+    --vivado-post-place-phys-opt-directive AggressiveExplore \
+    --vivado-post-route-phys-opt-directive AggressiveExplore \
     --output-dir "$BUILD" \
     "$@"
 
