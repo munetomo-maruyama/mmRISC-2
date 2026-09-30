@@ -1,6 +1,8 @@
 # mmRISC-2 debug logic bring-up on Arty A7-100T
 
-Design: `RTL/TOP/TOP.sv`. It contains CPU_TOP (debug logic + pseudo hart + L1 caches), a 64KiB RAM on the memory bus at 0x8000_0000 and a 4KiB RAM on the peripheral bus at 0x1200_0000.
+Design: `RTL/TOP/TOP.sv`. It contains CPU_TOP (debug logic + L1 caches + the CPU core), a 64KiB RAM on the memory bus at 0x8000_0000 and a 4KiB RAM on the peripheral bus at 0x1200_0000.
+
+Since 2026-09-30 the hart behind the debug module is the real CPU core, no longer the pseudo hart (`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md` 11). After configuration it runs whatever the RAM holds (nothing: it traps around), so `step` now executes an instruction: put one in the RAM first (see `SIM/SIM_OCD/test_ocd.tcl`, which does this in simulation). The LiteX SoC uses the same pins, switches and OpenOCD configurations (`LitexSystem/docs/JTAG.md`).
 
 Since the L1 caches were added, **memory bus accesses of the debugger go through the data cache** (`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md` 4.7): a read allocates the line (the next read of that line hits), a write goes through to memory without allocating, and the instruction cache is invalidated after a debug write. Accesses to the peripheral bus still go straight to the bus master.
 

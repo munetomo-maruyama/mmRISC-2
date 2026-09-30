@@ -33,11 +33,32 @@ read_verilog -sv [list \
     $rtl/CPU/CPU_CACHE/DCACHE/DCACHE.sv \
     $rtl/CPU/CPU_CACHE/CACHE_PORT_ARB/CACHE_PORT_ARB.sv \
     $rtl/CPU/CPU_CACHE/CPU_CACHE/CPU_CACHE.sv \
+    $rtl/CPU/CPU_MMU/MMU_PMP/MMU_PMP.sv \
+    $rtl/CPU/CPU_MMU/MMU_TLB/MMU_TLB.sv \
+    $rtl/CPU/CPU_MMU/MMU_PTW/MMU_PTW.sv \
+    $rtl/CPU/CPU_MMU/CORE_MMU/CORE_MMU.sv \
+    $rtl/CPU/CPU_CORE/CORE_DEC/CORE_DEC.sv \
+    $rtl/CPU/CPU_CORE/CORE_DECOMP/CORE_DECOMP.sv \
+    $rtl/CPU/CPU_CORE/CORE_CSR/CORE_CSR.sv \
+    $rtl/CPU/CPU_CORE/CORE_MDU/CORE_MDU.sv \
+    $rtl/CPU/CPU_CORE/CORE_FRF/CORE_FRF.sv \
+    $rtl/CPU/CPU_FPU/FPU_ROUND/FPU_ROUND.sv \
+    $rtl/CPU/CPU_FPU/CORE_FPU/CORE_FPU.sv \
+    $rtl/CPU/CPU_CORE/CORE_RF/CORE_RF.sv \
+    $rtl/CPU/CPU_CORE/CORE_BTB/CORE_BTB.sv \
+    $rtl/CPU/CPU_CORE/CORE_IFU/CORE_IFU.sv \
+    $rtl/CPU/CPU_CORE/CORE_EXU/CORE_EXU.sv \
+    $rtl/CPU/CPU_CORE/CORE_LSU/CORE_LSU.sv \
+    $rtl/CPU/CPU_CORE/CPU_CORE/CPU_CORE.sv \
+    $rtl/CPU/CPU_CLINT/CPU_CLINT.sv \
+    $rtl/CPU/CPU_PLIC/CPU_PLIC.sv \
+    $rtl/CPU/CPU_MMIO/CPU_MMIO.sv \
     $rtl/BUS/BUS_ARB/BUS_ARB.sv \
     $rtl/BUS/AXI4_ADDR_NARROW/AXI4_ADDR_NARROW.sv \
     $rtl/BUS/AXIL_ADDR_NARROW/AXIL_ADDR_NARROW.sv \
     $rtl/BUS/AXI4_RAM/AXI4_RAM.sv \
     $rtl/BUS/AXIL_RAM/AXIL_RAM.sv \
+    $rtl/CPU/CPU_DMA/DMA_CACHE.sv \
     $rtl/CPU/CPU_BFM/CPU_BFM.sv \
     $rtl/CPU/CPU_TOP/CPU_TOP.sv \
     $rtl/TOP/TOP.sv \

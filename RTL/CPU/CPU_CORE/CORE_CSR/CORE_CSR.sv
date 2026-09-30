@@ -101,7 +101,22 @@ module CORE_CSR
         input  logic [4:0]  fflags_set,
         input  logic        fs_dirty,      // an FP register or fcsr was written
         output logic [2:0]  frm_out,       // the dynamic rounding mode
-        output logic [1:0]  fs_out         // mstatus.FS
+        output logic [1:0]  fs_out,        // mstatus.FS
+
+        // debug (RISC-V Debug Spec 1.0, 4.9). dcsr, dpc and dscratch0/1
+        // exist only for accesses of the debugger (dbg_access), which the
+        // core makes while the hart is halted; an instruction sees them as
+        // not implemented.
+        input  logic        dbg_access,    // rd / wr come from the debugger
+        input  logic        dbg_enter,     // the hart enters debug mode
+        input  logic [2:0]  dbg_cause,     //   why (dcsr.cause)
+        input  logic [63:0] dbg_pc,        //   the instruction not executed
+        input  logic        dbg_resume,    // it leaves debug mode
+        output logic        dcsr_step,
+        output logic        dcsr_ebreakm,
+        output logic        dcsr_ebreaks,
+        output logic        dcsr_ebreaku,
+        output logic [63:0] dpc_out
     );
 
     //-----------------------------------------------------------------
@@ -152,6 +167,11 @@ module CORE_CSR
     localparam logic [11:0] CSR_MARCHID   = 12'hF12;
     localparam logic [11:0] CSR_MIMPID    = 12'hF13;
     localparam logic [11:0] CSR_MHARTID   = 12'hF14;
+    // debug mode only
+    localparam logic [11:0] CSR_DCSR      = 12'h7B0;
+    localparam logic [11:0] CSR_DPC       = 12'h7B1;
+    localparam logic [11:0] CSR_DSCRATCH0 = 12'h7B2;
+    localparam logic [11:0] CSR_DSCRATCH1 = 12'h7B3;
 
     // interrupt numbers
     localparam int IRQ_S_SOFT  = 1;
@@ -170,6 +190,13 @@ module CORE_CSR
     // state
     //-----------------------------------------------------------------
     logic [1:0]  priv_r;
+    // dcsr : ebreakm/s/u, step, prv and cause are kept; stepie, stopcount
+    // and stoptime are 0 (interrupts are off while stepping, the counters
+    // and mtime run on in debug mode), xdebugver is 4
+    logic        dcsr_ebreakm_r, dcsr_ebreaks_r, dcsr_ebreaku_r, dcsr_step_r;
+    logic [1:0]  dcsr_prv;
+    logic [2:0]  dcsr_cause;
+    logic [63:0] dpc, dscratch0, dscratch1;
     logic        mstatus_mie, mstatus_mpie, mstatus_sie, mstatus_spie;
     logic [1:0]  mstatus_mpp;
     logic        mstatus_spp;
@@ -193,6 +220,11 @@ module CORE_CSR
     assign frm_out = frm;
     assign fs_out  = mstatus_fs;
     assign priv    = priv_r;
+    assign dcsr_step    = dcsr_step_r;
+    assign dcsr_ebreakm = dcsr_ebreakm_r;
+    assign dcsr_ebreaks = dcsr_ebreaks_r;
+    assign dcsr_ebreaku = dcsr_ebreaku_r;
+    assign dpc_out      = dpc;
     assign satp_out = satp;
     assign mstatus_sum_out  = mstatus_sum;
     assign mstatus_mxr_out  = mstatus_mxr;
@@ -397,6 +429,15 @@ module CORE_CSR
             CSR_MARCHID   : rd_data = 64'd0;
             CSR_MIMPID    : rd_data = 64'd0;
             CSR_MHARTID   : rd_data = HART_ID;
+            CSR_DCSR      : begin
+                rd_data   = {32'd0, 4'd4, 12'd0, dcsr_ebreakm_r, 1'b0,
+                             dcsr_ebreaks_r, dcsr_ebreaku_r, 3'b000, dcsr_cause,
+                             3'b000, dcsr_step_r, dcsr_prv};
+                rd_exists = dbg_access;
+            end
+            CSR_DPC       : begin rd_data = dpc;       rd_exists = dbg_access; end
+            CSR_DSCRATCH0 : begin rd_data = dscratch0; rd_exists = dbg_access; end
+            CSR_DSCRATCH1 : begin rd_data = dscratch1; rd_exists = dbg_access; end
             default       : begin
                 rd_data   = pmp_rdata;
                 rd_exists = pmp_hit;
@@ -473,6 +514,15 @@ module CORE_CSR
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             priv_r       <= PRIV_M;
+            dcsr_ebreakm_r <= 1'b0;
+            dcsr_ebreaks_r <= 1'b0;
+            dcsr_ebreaku_r <= 1'b0;
+            dcsr_step_r    <= 1'b0;
+            dcsr_prv       <= PRIV_M;
+            dcsr_cause     <= 3'd0;
+            dpc            <= 64'd0;
+            dscratch0      <= 64'd0;
+            dscratch1      <= 64'd0;
             mstatus_mie  <= 1'b0;
             mstatus_mpie <= 1'b0;
             mstatus_sie  <= 1'b0;
@@ -529,7 +579,18 @@ module CORE_CSR
             if (fflags_we) fflags <= fflags | fflags_set;
             if (fs_dirty)  mstatus_fs <= 2'b11;
 
-            if (trap_en) begin
+            if (dbg_enter) begin
+                // nothing else changes: debug mode runs at M privilege, but
+                // no instruction runs in it here (no program buffer)
+                dpc        <= {dbg_pc[63:1], 1'b0};
+                dcsr_cause <= dbg_cause;
+                dcsr_prv   <= priv_r;
+            end else if (dbg_resume) begin
+                // dret: back to the level in dcsr.prv; below M that clears
+                // MPRV, as an MRET to that level does
+                priv_r <= dcsr_prv;
+                if (dcsr_prv != PRIV_M) mstatus_mprv <= 1'b0;
+            end else if (trap_en) begin
                 if (trap_to_s) begin
                     sepc         <= {trap_epc[63:1], 1'b0};
                     scause_int   <= trap_int;
@@ -680,6 +741,17 @@ module CORE_CSR
                                         (wr_data[63:60] == 4'd8))
                                         satp <= {wr_data[63:60], wr_data[59:44],
                                                  wr_data[43:0]};
+                    CSR_DCSR      : if (dbg_access) begin
+                        dcsr_ebreakm_r <= wr_data[15];
+                        dcsr_ebreaks_r <= wr_data[13];
+                        dcsr_ebreaku_r <= wr_data[12];
+                        dcsr_step_r    <= wr_data[2];
+                        // prv is WARL: 2 (hypervisor) does not exist
+                        if (wr_data[1:0] != 2'b10) dcsr_prv <= wr_data[1:0];
+                    end
+                    CSR_DPC       : if (dbg_access) dpc       <= {wr_data[63:1], 1'b0};
+                    CSR_DSCRATCH0 : if (dbg_access) dscratch0 <= wr_data;
+                    CSR_DSCRATCH1 : if (dbg_access) dscratch1 <= wr_data;
                     CSR_MCYCLE    : mcycle     <= wr_data;
                     CSR_MINSTRET  : minstret   <= wr_data;
                     default       : ;            // misa and the read only ones

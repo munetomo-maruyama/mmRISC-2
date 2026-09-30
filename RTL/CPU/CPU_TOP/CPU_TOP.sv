@@ -506,6 +506,15 @@ module CPU_TOP
     logic [63:0]                dbg_dc_resp_data;
     logic                       dbg_dc_wrote;
 
+    // the hart side of the debug module, to the core (USE_BFM=0)
+    logic        hart_haltreq, hart_resumereq, hart_resethaltreq;
+    logic        hart_halted, hart_running, hart_resumed;
+    logic        hart_reg_req, hart_reg_wr, hart_reg_size64;
+    logic [15:0] hart_reg_regno;
+    logic [63:0] hart_reg_wdata;
+    logic        hart_reg_ack, hart_reg_err;
+    logic [63:0] hart_reg_rdata;
+
     // the peripheral bus between the arbiter and CPU_MMIO
     logic [AXIL_ADDR_WIDTH-1:0]   pb_awaddr, pb_araddr;
     logic [2:0]                   pb_awprot, pb_arprot;
@@ -539,7 +548,8 @@ module CPU_TOP
             .MEM_BASE      (MEM_BASE),
             .DBG_AXI4_ID   (DBG_AXI4_ID),
             .SBA_TIMEOUT   (SBA_TIMEOUT),
-            .DBG_VIA_CACHE (DBG_VIA_CACHE)
+            .DBG_VIA_CACHE (DBG_VIA_CACHE),
+            .HART_STUB     (USE_BFM)
         )
     u_cpu_dbg
         (
@@ -631,7 +641,21 @@ module CPU_TOP
             .dc_resp_valid   (dbg_dc_resp_valid),
             .dc_resp_data    (dbg_dc_resp_data),
             .dc_resp_error   (dbg_dc_resp_error),
-            .dc_wrote        (dbg_dc_wrote)
+            .dc_wrote        (dbg_dc_wrote),
+            .hart_haltreq      (hart_haltreq),
+            .hart_resumereq    (hart_resumereq),
+            .hart_resethaltreq (hart_resethaltreq),
+            .hart_halted       (hart_halted),
+            .hart_running      (hart_running),
+            .hart_resumed      (hart_resumed),
+            .hart_reg_req      (hart_reg_req),
+            .hart_reg_wr       (hart_reg_wr),
+            .hart_reg_regno    (hart_reg_regno),
+            .hart_reg_size64   (hart_reg_size64),
+            .hart_reg_wdata    (hart_reg_wdata),
+            .hart_reg_ack      (hart_reg_ack),
+            .hart_reg_rdata    (hart_reg_rdata),
+            .hart_reg_err      (hart_reg_err)
         );
 
     //=================================================================
@@ -1316,6 +1340,14 @@ module CPU_TOP
     //=================================================================
     generate
         if (USE_BFM != 0) begin : g_bfm
+            // the pseudo hart inside CPU_DBG answers the debug module
+            assign hart_halted    = 1'b0;
+            assign hart_running   = 1'b0;
+            assign hart_resumed   = 1'b0;
+            assign hart_reg_ack   = 1'b0;
+            assign hart_reg_rdata = 64'd0;
+            assign hart_reg_err   = 1'b0;
+
             CPU_BFM
                 #(
                     .AXI4_ID_WIDTH   (AXI4_ID_WIDTH),
@@ -1472,7 +1504,21 @@ module CPU_TOP
                     .trap_cause    (),
                     .trap_epc      (),
                     .trap_tval     (),
-                    .trap_to_s     ()
+                    .trap_to_s     (),
+                    .dbg_haltreq      (hart_haltreq),
+                    .dbg_resumereq    (hart_resumereq),
+                    .dbg_resethaltreq (hart_resethaltreq),
+                    .dbg_halted       (hart_halted),
+                    .dbg_running      (hart_running),
+                    .dbg_resumed      (hart_resumed),
+                    .dbg_reg_req      (hart_reg_req),
+                    .dbg_reg_wr       (hart_reg_wr),
+                    .dbg_reg_regno    (hart_reg_regno),
+                    .dbg_reg_size64   (hart_reg_size64),
+                    .dbg_reg_wdata    (hart_reg_wdata),
+                    .dbg_reg_ack      (hart_reg_ack),
+                    .dbg_reg_rdata    (hart_reg_rdata),
+                    .dbg_reg_err      (hart_reg_err)
                 );
 
             assign bfm_axi4_awid     = '0;

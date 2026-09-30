@@ -1,6 +1,9 @@
 #---------------------------------------------------------------------------
 # Makefile : OpenOCD co-simulation (Verilator + remote_bitbang)
 #
+# RTL/TOP/TOP.sv with the CPU core as the hart (USE_BFM=0): OpenOCD halts
+# it, steps a small program, sets a software breakpoint, etc. (test_ocd.tcl)
+#
 #   make            : build and run the JTAG test (authentication off)
 #   make auth       : run with authentication on (SW2 up)
 #   make build      : build the Verilator model only
@@ -32,6 +35,26 @@ RTL_SRCS := \
 	$(RTL_DIR)/CPU/CPU_CACHE/DCACHE/DCACHE.sv \
 	$(RTL_DIR)/CPU/CPU_CACHE/CACHE_PORT_ARB/CACHE_PORT_ARB.sv \
 	$(RTL_DIR)/CPU/CPU_CACHE/CPU_CACHE/CPU_CACHE.sv \
+	$(RTL_DIR)/CPU/CPU_MMU/MMU_PMP/MMU_PMP.sv \
+	$(RTL_DIR)/CPU/CPU_MMU/MMU_TLB/MMU_TLB.sv \
+	$(RTL_DIR)/CPU/CPU_MMU/MMU_PTW/MMU_PTW.sv \
+	$(RTL_DIR)/CPU/CPU_MMU/CORE_MMU/CORE_MMU.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CORE_DEC/CORE_DEC.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CORE_DECOMP/CORE_DECOMP.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CORE_CSR/CORE_CSR.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CORE_MDU/CORE_MDU.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CORE_FRF/CORE_FRF.sv \
+	$(RTL_DIR)/CPU/CPU_FPU/FPU_ROUND/FPU_ROUND.sv \
+	$(RTL_DIR)/CPU/CPU_FPU/CORE_FPU/CORE_FPU.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CORE_RF/CORE_RF.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CORE_BTB/CORE_BTB.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CORE_IFU/CORE_IFU.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CORE_EXU/CORE_EXU.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CORE_LSU/CORE_LSU.sv \
+	$(RTL_DIR)/CPU/CPU_CORE/CPU_CORE/CPU_CORE.sv \
+	$(RTL_DIR)/CPU/CPU_CLINT/CPU_CLINT.sv \
+	$(RTL_DIR)/CPU/CPU_PLIC/CPU_PLIC.sv \
+	$(RTL_DIR)/CPU/CPU_MMIO/CPU_MMIO.sv \
 	$(RTL_DIR)/BUS/BUS_ARB/BUS_ARB.sv \
 	$(RTL_DIR)/BUS/AXI4_ADDR_NARROW/AXI4_ADDR_NARROW.sv \
 	$(RTL_DIR)/BUS/AXIL_ADDR_NARROW/AXIL_ADDR_NARROW.sv \
@@ -51,7 +74,18 @@ VERILATOR_FLAGS := --binary --timing -j 0 --top-module $(TOP) \
 
 all: run
 
-obj_dir/V$(TOP): $(RTL_SRCS) $(TOP).sv jtag_rbb.cpp
+# The shared folder keeps file times to the second, so a time stamp cannot
+# tell whether a source changed since the last build: the build depends on a
+# hash of the sources instead (as in SIM_CORE).
+SRCS := $(RTL_SRCS) $(TOP).sv jtag_rbb.cpp
+.PHONY: FORCE
+obj_dir/.srchash: FORCE
+	@mkdir -p obj_dir
+	@h=`cat $(SRCS) | md5sum | cut -d' ' -f1`; \
+	 if [ "`cat $@ 2>/dev/null`" != "$$h" ]; then \
+	     rm -f obj_dir/V$(TOP); echo "$$h" > $@; fi
+
+obj_dir/V$(TOP): obj_dir/.srchash
 	verilator $(VERILATOR_FLAGS) $(RTL_SRCS) $(TOP).sv jtag_rbb.cpp
 
 build: obj_dir/V$(TOP)

@@ -28,7 +28,7 @@
 | `make iverilog` | Icarus Verilog で同じ試験 |
 | `make clint` | `CPU_CLINT` を 4 ハート構成で直接叩く(`tb_CLINT.sv`)。単一コアのプログラムからは届かないレジスタマップの検査 |
 | `make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / mi)。`RVTESTS` でリポジトリの場所を指定 |
-| `make bugs` / `./bug_inject.sh` | バグ注入 90 種(背圧あり/なしの両方で判定) |
+| `make bugs` / `./bug_inject.sh` | バグ注入 191 種(背圧あり/なしの両方で判定。M211 以降はデバッグモード) |
 | `make lint` | Verilator lint |
 
 プラスアーグ:
@@ -73,6 +73,7 @@ x10〜x30 だけを使うこと。`TEST_INIT` が既定のトラップハンド�
 | `t09_muldiv` | 乗除算の符号、ゼロ除算、オーバーフロー、32bit 形 |
 | `t10_atomic` | LR/SC と全 AMO の 32/64bit、不整列 |
 | `t11_fp` | `mstatus.FS`、NaN-boxing、`fcsr`/丸めモード、FP ストアのデータ源、FPU と他ユニットのハザード |
+| `t23_debug` | デバッグモード。テストベンチ内のデバッガ(`tb_CORE.sv` の debugger)が DM の代わりにコアの `dbg_*` を動かし、リセット直後の halt、ループ中の halt と step、EBREAK、GPR/FPR/CSR の読み書き(32bit 書き込み、エラー)、割り込みが保留中の step、ECALL の step、WFI 中の halt、U モードへの resume を検査する。この試験名のときだけデバッガが動く |
 
 ## テストベンチが自動で見ているもの
 

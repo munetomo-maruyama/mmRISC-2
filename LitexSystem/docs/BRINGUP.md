@@ -443,8 +443,6 @@ Rocket 構成のものがそのまま使える。第 1 パーティション(FAT
 
 ## まだ繋いでいないもの
 
-- **JTAG**。デバッグモジュールは RTL に入っているが、Arty のオンボード
-  FTDI から `BSCANE2` 経由で引き出す配線を XDC に足していない。
-  今はタイオフしてある(`core.py` の JTAG の項)。
-- **デバッグモジュールとコアの接続**。`DBG_HART_STUB` のままで、
-  halt / resume / ステップは効かない(`CPU_CORE_SPEC.md` 11 章)。
+- (2026-09-30 に解消)JTAG は PMOD JA に出し、デバッグモジュールはコアに
+  つないだ。halt / resume / step / レジスタ / メモリが使える(`docs/JTAG.md`、
+  `CPU_CORE_SPEC.md` 11 章)。
