@@ -125,4 +125,4 @@ dmstatus=0x3 は version=3(Debug Spec 1.0)で authenticated=0 の値。
 | `SIM/SIM_CORE` `t23_debug` | コア単体。テストベンチのデバッガがコアの `dbg_*` を直接動かす。変異 M211–M231 |
 | `SIM/SIM_OCD` | `RTL/TOP/TOP.sv`(本物のコアがハート)と OpenOCD の協調シミュレーション。halt、GPR/FPR/CSR、メモリ(メモリバス・周辺バス)、load_image、step、ソフトウェアブレークポイント、reset halt。認証ありでも同じ |
 | `SIM/SIM_DBG` | デバッグ論理そのもの(TAP、DTM、DM、cJTAG、SBA)、3026 項目 |
-| 実機 | `scripts/jtag_check.tcl`(上記) |
+| 実機 | `scripts/jtag_check.tcl`(上記)。JTAG / cJTAG × 認証なし / あり の 4 通りで PASS、誤った鍵の拒否も確認(2026-10-01) |
