@@ -376,6 +376,19 @@ Ethernet が入っていなかった(Rocket 構成から引き継いだ `build_s
   (`Synchronize Cache(10) failed`、SCSI の番号が変わって再接続)。`e2fsck` と
   `fsck.vfat` で修復。カードを外す前は `udisksctl unmount` と `udisksctl power-off`。
 
+## 11 回目: JTAG / cJTAG デバッグ(2026-09-30〜10-01)
+
+- デバッグモジュールの先を疑似ハートから本物のコアに替えた(デバッグモード、
+  `CPU_CORE_SPEC.md` 11 章)。JTAG / cJTAG を PMOD JA に出した。ピン配置・スイッチ・
+  OpenOCD の設定は `FPGA/ARTY_A7_100T` と同じ(`docs/JTAG.md`)。
+- 最初の合成は WNS -0.034 ns。負けた 3 本はデバッグ論理を通らない既知の経路で、
+  配置の揺れ。配置後・配線後の物理最適化を入れて +0.040 ns(`docs/TIMING.md` 21 章)。
+- 実機: 4 線 JTAG / 2 線 cJTAG × 認証なし / あり の 4 通りで `scripts/jtag_check.tcl`
+  が PASS。Linux 実行中に halt すると S モードのカーネル内(`satp` 有効)で止まり、
+  step(圧縮命令で pc+2、分岐)、レジスタの読み書き、システムバス経由の CSR 読み出しが
+  効いた。誤った鍵では `examination failed`(dmstatus=0x3)になり、正しい鍵を書くと
+  そのまま examine が通った。
+
 ## 手順
 
 ### 1. SoC を生成(Linux VM)
