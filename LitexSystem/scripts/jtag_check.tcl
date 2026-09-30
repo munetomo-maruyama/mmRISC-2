@@ -40,7 +40,7 @@ chk "dcsr.xdebugver" "4" [expr {($dcsr >> 28) & 15}]
 # The identifier of the SoC, one character per 32 bit word in the CSR space:
 # a read through the system bus and the peripheral bus of the CPU.
 set id ""
-if {[catch {read_memory 0x12002000 32 32} words]} {
+if {[catch {read_memory 0x12002000 32 64} words]} {
     echo "read of the identifier failed: $words"
     set words {}
 }
