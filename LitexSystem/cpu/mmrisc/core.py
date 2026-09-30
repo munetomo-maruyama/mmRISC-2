@@ -11,6 +11,13 @@
 #                             card) reach memory through the data cache,
 #                             coherent with the CPU (CPU_DMA/DMA_CACHE)
 #
+# The JTAG / cJTAG port of the debug module comes out on PMOD JA, with the
+# pins of the debug bring-up design FPGA/ARTY_A7_100T (TOP.xdc), so the same
+# cable and the same OpenOCD configurations work on both (see add_jtag):
+#
+#   JA1 TCK/TCKC  JA2 TDI  JA3 TDO  JA4 TMS/TMSC  JA7 nTRST  JA8 nSRST
+#   SW3 down JTAG / up cJTAG      SW2 down authentication off / up on
+#
 # Everything below MEM_BASE leaves the caches on the peripheral bus, so the
 # LiteX map falls out of a single boundary: the CSRs at 0x1200_0000 are
 # uncached and main memory at 0x8000_0000 is cached.
@@ -31,6 +38,8 @@ from litex.soc.interconnect import axi
 from litex.soc.interconnect import wishbone
 
 from litex.soc.integration.soc import SoCRegion
+
+from litex.build.generic_platform import Subsignal, Pins, IOStandard, Misc
 
 from litex.soc.cores.cpu import CPU, CPU_GCC_TRIPLE_RISCV64
 
@@ -99,6 +108,22 @@ class MMRISC(CPU):
 
     # External interrupt lines of the PLIC.
     num_irq              = 32
+
+    # --cpu-jtag : where the debug port goes. "pmoda" puts it on PMOD JA of
+    # the Arty, "none" ties it off.
+    jtag                 = "pmoda"
+    # the key of the authentication (SW2 up), as in FPGA/ARTY_A7_100T
+    auth_key             = 0xbeefcafe
+
+    @staticmethod
+    def args_fill(parser):
+        cpu_group = parser.add_argument_group(title="CPU options")
+        cpu_group.add_argument("--cpu-jtag", default="pmoda", choices=["pmoda", "none"],
+            help="Debug port of mmRISC-2: PMOD JA (JTAG / cJTAG) or tied off.")
+
+    @staticmethod
+    def args_read(args):
+        MMRISC.jtag = args.cpu_jtag
 
     # mtime counts one step every CLINT_TICK_DIV cycles, so at 50 MHz this
     # gives the 500 kHz timebase the working Rocket build uses. The device
@@ -200,9 +225,12 @@ class MMRISC(CPU):
             p_CLINT_TICK_DIV = self.clint_tick_div,
 
             # Clk / Rst.
+            # rst_n resets the CPU; nSRST of the debugger joins it in
+            # add_jtag. rst_dbg_n keeps the debug module out of a reset of
+            # the CPU alone, so the debugger stays connected over it.
             i_clk       = ClockSignal("sys"),
             i_rst_n     = ~(ResetSignal("sys") | self.reset),
-            i_rst_dbg_n = ~(ResetSignal("sys") | self.reset),
+            i_rst_dbg_n = ~ResetSignal("sys"),
             o_ndmreset  = Open(),
 
             # Interrupts: shifted up by one, PLIC source 0 does not exist.
@@ -295,7 +323,7 @@ class MMRISC(CPU):
             o_s_dma_rvalid   = dma_axil.r.valid,
             i_s_dma_rready   = dma_axil.r.ready,
 
-            # JTAG : not wired to pins yet (see docs/JTAG.md).
+            # JTAG : tied off here, wired to PMOD JA by add_jtag.
             i_jtag_tck     = 0,
             i_jtag_tms_i   = 0,
             o_jtag_tms_o   = Open(),
@@ -313,10 +341,126 @@ class MMRISC(CPU):
             o_dbg_dmactive = Open(),
         )
 
+        if self.jtag == "pmoda":
+            self.add_jtag(platform)
+
         # The peripheral bus reaches the SoC as Wishbone.
         self.submodules += axi.AXILite2Wishbone(mmio_axil, mmio_wb, base_address=0)
 
         self.add_sources(platform)
+
+    # JTAG / cJTAG on PMOD JA, the pins, pulls and clock constraints of
+    # FPGA/ARTY_A7_100T (TOP.xdc, TOP_impl.xdc):
+    #
+    #   JA1 G13 TCK/TCKC   pull-up                a clock on a general pin
+    #   JA2 B11 TDI        pull-up
+    #   JA3 A11 TDO        pull-up                driven only while shifting
+    #   JA4 D12 TMS/TMSC   keeper                 both sides drive it in cJTAG
+    #   JA7 D13 nTRST      pull-up                resets the TAP
+    #   JA8 B18 nSRST      pull-up                resets the CPU (not LiteX)
+    #   SW3 A10            cJTAG enable           SW2 C10  authentication
+    #
+    # The LEDs LD4-LD7 of the bring-up design are the LED chaser of LiteX
+    # here, and its CSR stays where the device tree and fw_jump.bin expect
+    # it, so the status goes to the RGB LEDs instead, dimmed:
+    #
+    #   LD0 red halted, green running   LD1 blue dmactive   LD2 green cJTAG online
+    def add_jtag(self, platform):
+        platform.add_extension([
+            ("mmrisc_jtag", 0,
+                Subsignal("tck",    Pins("pmoda:0"), Misc("PULLUP TRUE")),
+                Subsignal("tdi",    Pins("pmoda:1"), Misc("PULLUP TRUE")),
+                Subsignal("tdo",    Pins("pmoda:2"), Misc("PULLUP TRUE")),
+                Subsignal("tms",    Pins("pmoda:3"), Misc("KEEPER TRUE")),
+                Subsignal("trst_n", Pins("pmoda:4"), Misc("PULLUP TRUE")),
+                Subsignal("srst_n", Pins("pmoda:5"), Misc("PULLUP TRUE")),
+                IOStandard("LVCMOS33"),
+            ),
+        ])
+        pads     = platform.request("mmrisc_jtag")
+        sw_auth  = platform.request("user_sw", 2)
+        sw_cjtag = platform.request("user_sw", 3)
+        led0     = platform.request("rgb_led", 0)
+        led1     = platform.request("rgb_led", 1)
+        led2     = platform.request("rgb_led", 2)
+
+        tck    = Signal()
+        tms_i  = Signal()
+        tms_o  = Signal()
+        tms_oe = Signal()
+        tdo    = Signal()
+        tdo_oe = Signal()
+        halted, running, dmactive, online = Signal(), Signal(), Signal(), Signal()
+
+        # The buffers are instantiated by name, so that the constraints
+        # below find their output nets after synthesis.
+        self.specials += [
+            Instance("IBUF",  name="mmrisc_jtag_tck_ibuf",
+                i_I = pads.tck, o_O = tck),
+            Instance("IOBUF", name="mmrisc_jtag_tms_iobuf",
+                io_IO = pads.tms, o_O = tms_i, i_I = tms_o, i_T = ~tms_oe),
+            Instance("OBUFT", name="mmrisc_jtag_tdo_obuft",
+                o_O = pads.tdo, i_I = tdo, i_T = ~tdo_oe),
+        ]
+
+        self.cpu_params.update(
+            i_rst_n        = ~(ResetSignal("sys") | self.reset) & pads.srst_n,
+            i_jtag_tck     = tck,
+            i_jtag_tms_i   = tms_i,
+            o_jtag_tms_o   = tms_o,
+            o_jtag_tms_oe  = tms_oe,
+            i_jtag_tdi     = pads.tdi,
+            o_jtag_tdo     = tdo,
+            o_jtag_tdo_oe  = tdo_oe,
+            i_jtag_trst_n  = pads.trst_n,
+            i_cjtag_en     = sw_cjtag,
+            o_cjtag_online = online,
+            i_dbg_auth_en  = sw_auth,
+            i_dbg_auth_key = self.auth_key,
+            o_dbg_halted   = halted,
+            o_dbg_running  = running,
+            o_dbg_dmactive = dmactive,
+        )
+
+        # the RGB LEDs are blinding at full current: on one cycle in 16
+        dim = Signal(4)
+        on  = Signal()
+        self.sync += dim.eq(dim + 1)
+        self.comb += [
+            on.eq(dim == 0),
+            led0.r.eq(halted   & on),
+            led0.g.eq(running  & on),
+            led0.b.eq(0),
+            led1.r.eq(0),
+            led1.g.eq(0),
+            led1.b.eq(dmactive & on),
+            led2.r.eq(0),
+            led2.g.eq(online   & on),
+            led2.b.eq(0),
+        ]
+
+        # TCK/TCKC and TMSC (the escape detector of cJTAG) are clocks, on
+        # pins that are not clock capable; both are asynchronous to sys.
+        platform.add_period_constraint(pads.tck, 100.0, name="jtag_tck")
+        platform.add_period_constraint(pads.tms, 100.0, name="jtag_tmsc")
+        # (their clock groups against sys are set in add_soc_components,
+        # where the clock of sys is known)
+        self.jtag_clk_pads = [pads.tck, pads.tms]
+        # slow debug and board I/O, as in TOP.xdc
+        platform.add_platform_command(
+            "set_false_path -from [get_ports {{{trst_n} {srst_n} {sw2} {sw3}}}]",
+            trst_n=pads.trst_n, srst_n=pads.srst_n, sw2=sw_auth, sw3=sw_cjtag)
+        platform.add_platform_command(
+            "set_false_path -from [get_ports {{{tdi} {tms}}}]", tdi=pads.tdi, tms=pads.tms)
+        platform.add_platform_command(
+            "set_false_path -to [get_ports {{{tdo} {tms}}}]", tdo=pads.tdo, tms=pads.tms)
+        # after synthesis, when the nets of the buffers exist
+        platform.toolchain.pre_placement_commands.append(
+            "set_property CLOCK_DEDICATED_ROUTE FALSE "
+            "[get_nets -of_objects [get_pins mmrisc_jtag_tck_ibuf/O]]")
+        platform.toolchain.pre_placement_commands.append(
+            "set_property CLOCK_DEDICATED_ROUTE FALSE "
+            "[get_nets -of_objects [get_pins mmrisc_jtag_tms_iobuf/O]]")
 
     # the reset vector is a parameter, so LiteX may put it where it likes
     def set_reset_address(self, reset_address):
@@ -341,6 +485,11 @@ class MMRISC(CPU):
             origin=soc.mem_map.get("plic"),  size=0x40_0000, cached=True, linker=True))
         soc.bus.add_region("clint", SoCRegion(
             origin=soc.mem_map.get("clint"), size=0x1_0000,  cached=True, linker=True))
+
+        # The clocks of the debug port against sys, and each other. LiteX
+        # writes these after the create_clock commands, as they have to be.
+        if getattr(self, "jtag_clk_pads", None) and hasattr(soc, "crg"):
+            soc.platform.add_false_path_constraints(soc.crg.cd_sys.clk, *self.jtag_clk_pads)
 
         soc.add_config("CPU_COUNT", 1)
         soc.add_config("CPU_ISA",   self.get_arch(self.variant))

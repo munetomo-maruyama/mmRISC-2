@@ -22,18 +22,20 @@ OpenOCDからJTAG経由でアクセスできることをシミュレーション
 | JTAG DTM (6.1) | **本実装**(CDC含む、CPU本体実装後もそのまま使う) |
 | Debug Module レジスタ (3.14) | **本実装** |
 | System Bus Access (3.10) | **本実装**(実際のメモリバス/周辺バスへアクセス) |
-| Abstract Command: Access Register (3.7.1.1) | **暫定**: 疑似ハート内のレジスタ記憶域に対して実行 |
+| Abstract Command: Access Register (3.7.1.1) | **本実装**: CPU_CORE の GPR/FPR/CSR(`CPU_CORE_SPEC.md` 11)。BFM 構成では疑似ハート |
 | Abstract Command: Access Memory (3.7.1.3) | **本実装**(SBAと同じバスマスタを使用) |
-| ハートの halt / resume / step / reset | **暫定**: 疑似ハート(状態機械のみ)で模擬 |
-| コアデバッグCSR (dcsr/dpc/dscratch, 4.9) | **暫定**: 疑似ハートのレジスタ |
+| ハートの halt / resume / step / reset | **本実装**: CPU_CORE のデバッグモード。BFM 構成では疑似ハート |
+| コアデバッグCSR (dcsr/dpc/dscratch, 4.9) | **本実装**: CORE_CSR(デバッガからのみ見える)。BFM 構成では疑似ハート |
 | Program Buffer (3.8) | 実装しない(progbufsize=0) |
 | Trigger Module / Sdtrig (5章) | 実装しない(CPU本体実装後に検討) |
 | Quick Access (3.7.1.2) | 実装しない(cmderr=2) |
 | cJTAG (IEEE 1149.7 OScan1) | **本実装**(JTAGと切り替え、7章・3.6) |
 | 認証 (authdata, 3.12) | **本実装**(有効/無効と鍵をCPU_TOP外部から入力、4.7) |
 
-「暫定」部分は、CPU本体実装時に疑似ハートを本物のハートへのインタフェースに置き換える。
-DTM・DMレジスタ・SBA・Access Memoryは置き換えずに使い続ける前提で作る。
+ハートは CPU 本体(`CPU_CORE`)である。DM とハートの間の信号(`hart_*`、4.8)は
+`CPU_DBG` のポートに出してあり、`CPU_TOP` がコアにつなぐ。疑似ハート `DBG_HART_STUB`
+は、コアの代わりに BFM を置く構成(`USE_BFM=1`、`HART_STUB=1`)でだけ使う。
+DTM・DMレジスタ・SBA・Access Memory は疑似ハートの時期に作ったものをそのまま使っている。
 
 ---
 
@@ -46,14 +48,14 @@ DTM・DMレジスタ・SBA・Access Memoryは置き換えずに使い続ける�
   │  ┌──────────────┐ DMI req/resp  ┌─────────────────────────────────┐ │
   │  │ DBG_DTM      │  (CDC:       │ DBG_DM                          │ │
   │  │  JTAG TAP    │  4-phase     │  DMレジスタ / Abstract Command  │ │
-  │  │  IR/DR       │  handshake)  │  SBA制御 / 疑似ハート接続       │ │
+  │  │  IR/DR       │  handshake)  │  SBA制御 / ハート接続 (hart_*)  │ │
   │  │ [TCK domain] │◀────────────▶│ [system clock domain]           │ │
   │  └──────────────┘              └──────┬───────────────┬──────────┘ │
   │                                        │ halt/resume   │ bus req    │
   │                                ┌───────▼───────┐ ┌─────▼────────┐  │
-  │                                │ DBG_HART_STUB │ │ DBG_BUSMST   │  │
-  │                                │ 疑似ハート    │ │ SBA/AccessMem│  │
-  │                                │ GPR/FPR/CSR   │ │ バスマスタ   │  │
+  │                                │ CPU_CORE      │ │ DBG_BUSMST   │  │
+  │                                │ (BFM 構成では │ │ SBA/AccessMem│  │
+  │                                │ DBG_HART_STUB)│ │ バスマスタ   │  │
   │                                └───────────────┘ └─────┬────────┘  │
   │                                                         │           │
   │  CPU_BFM (シミュレーション用、既存) ──┐                 │           │
@@ -74,7 +76,7 @@ DTM・DMレジスタ・SBA・Access Memoryは置き換えずに使い続ける�
 | `DBG_CDC` | `RTL/CPU/CPU_DBG/DBG_CDC/` | 同期化器、4相ハンドシェイク、リセット同期化器 |
 | `DBG_DM` | `RTL/CPU/CPU_DBG/DBG_DM/` | DMレジスタ、Abstract Command、SBA制御 |
 | `DBG_BUSMST` | `RTL/CPU/CPU_DBG/DBG_BUSMST/` | SBA/Access Memory用バスマスタ(AXI4/AXI4-Lite) |
-| `DBG_HART_STUB` | `RTL/CPU/CPU_DBG/DBG_HART_STUB/` | 疑似ハート(暫定、CPU本体実装時に削除) |
+| `DBG_HART_STUB` | `RTL/CPU/CPU_DBG/DBG_HART_STUB/` | 疑似ハート。BFM 構成(`HART_STUB=1`)でのみ使う |
 | `DBG_CACHE` | `RTL/CPU/CPU_DBG/DBG_CACHE/` | メモリバスアクセスをデータキャッシュ経由にする(`DBG_VIA_CACHE=1`、既定) |
 | `BUS_ARB` | `RTL/BUS/BUS_ARB/` | BFMとデバッグバスマスタの調停、メモリバス/周辺バスの振り分け |
 
@@ -195,7 +197,7 @@ DTM・DMレジスタ・SBA・Access Memoryは置き換えずに使い続ける�
 | haltsum0 | 実装 | |
 | authdata / authenticated | 実装(4.7) | |
 | hasresethaltreq | 1(setresethaltreq/clrresethaltreq実装) | OpenOCD の `reset halt` 用 |
-| hartreset | 実装(疑似ハートのみリセット) | |
+| hartreset | 実装(ndmreset と同じ範囲: コア・キャッシュ・バス側) | ハートは 1 つで、キャッシュとバス側を残してコアだけ戻すと途中の要求が迷子になる |
 | ndmreset | 実装(出力ポートとしてシステムへ出す、6.2) | |
 | keepalive / ackunavail / stickyunavail | 未実装(0) | |
 | relaxedpriv | 0 固定 | |
@@ -206,8 +208,8 @@ DTM・DMレジスタ・SBA・Access Memoryは置き換えずに使い続ける�
   このため CPU_TOP に**デバッグ論理専用の電源投入リセット入力**を追加する(6.2)。
 - ndmreset=1 の間、CPU_TOP は `ndmreset` 出力を立て、FPGAトップは周辺・メモリ・CPU本体(将来)をリセットする。
   `dmstatus.ndmresetpending` を実装する。
-- 疑似ハートは、ndmreset・hartreset・システムリセットでリセットされ、havereset がセットされる(ackhavereset でクリア)。
-  resethaltreq が立っていれば、リセット解除後に halted(cause=5)へ遷移する。
+- ハート(CPU_CORE、BFM 構成では疑似ハート)は、ndmreset・hartreset・システムリセットでリセットされ、havereset がセットされる(ackhavereset でクリア)。
+  resethaltreq が立っていれば、リセット解除後、最初の命令の手前で halted(cause=5)になる。
 
 ### 4.3 Abstract Command
 
@@ -220,7 +222,13 @@ DTM・DMレジスタ・SBA・Access Memoryは置き換えずに使い続ける�
 
 共通規則: busy中の command/abstractcs/abstractauto/data書き込み → cmderr=1(cmderr=0 のときのみ)。cmderr≠0 の間は新しいコマンドを開始しない。
 
-### 4.4 Access Register(暫定)
+### 4.4 Access Register
+
+CPU_CORE がハートのときに読み書きできるのは、GPR(`0x1000`–`0x101f`)、FPR(`0x1020`–`0x103f`)、
+`CORE_CSR` にあるすべての CSR(`0x0000`–`0x0fff`、`dcsr`/`dpc`/`dscratch0/1` を含む)である。
+CSR が存在しない、読み出し専用の CSR に書く、範囲外の regno、はいずれも cmderr=3。
+32bit の書き込みは上位を保持する。ハートが走っているときは DM が cmderr=4 にする(コアもエラーで答える)。
+下の表は疑似ハートのもの。
 
 | 条件 | 結果 |
 |---|---|
@@ -286,6 +294,24 @@ DTM・DMレジスタ・SBA・Access Memoryは置き換えずに使い続ける�
 - dmactive=0 で authenticated は0に戻る(再認証が必要)。authbusy は常に0。
 - authdata の読み出しは 0。
 - OpenOCD からは `riscv authdata_write 0xbeefcafe`(mmRISC-1 と同じ)で認証する。
+
+### 4.8 ハートとの信号(`hart_*`)
+
+`CPU_DBG` のポート。`HART_STUB=0` のとき `CPU_TOP` が `CPU_CORE` の `dbg_*` につなぐ。
+すべてシステムクロック同期。
+
+| 信号 | 向き | 内容 |
+|---|---|---|
+| `hart_haltreq` | DM→ハート | dmcontrol.haltreq(レベル) |
+| `hart_resumereq` | DM→ハート | resumereq(1 サイクルのパルス) |
+| `hart_resethaltreq` | DM→ハート | リセット解除時に halt する(レベル。ハートは解除直後に 1 回だけ見る) |
+| `hart_halted` / `hart_running` | ハート→DM | 状態 |
+| `hart_resumed` | ハート→DM | 再開したサイクルのパルス(resumeack) |
+| `hart_reg_req` | DM→ハート | レジスタアクセス要求(パルス)。`hart_reg_wr` / `regno[15:0]` / `size64` / `wdata[63:0]` を伴う |
+| `hart_reg_ack` | ハート→DM | 応答(パルス)。`hart_reg_rdata[63:0]`、`hart_reg_err`(→ cmderr=3) |
+
+ハートのリセットは `CPU_TOP` の `rst_bus_n`(システムリセット・ndmreset・hartreset)で、
+DM はその同期版を `hart_in_reset` として見る。
 
 ---
 

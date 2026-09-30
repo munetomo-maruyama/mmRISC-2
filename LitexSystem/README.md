@@ -13,6 +13,8 @@ Linux を起動するための一式。
 実機(50 MHz)で LiteX BIOS → OpenSBI → Linux が SD カードの ext4 から BusyBox の
 シェルまで起動し、Ethernet(DHCP、ping、BIOS の TFTP ネットブート)も動く。
 途中で見つかった問題と修正は `docs/BRINGUP.md`、タイミングは `docs/TIMING.md`。
+JTAG / cJTAG のデバッグポートを PMOD JA に出してある(`docs/JTAG.md`。ピン配置は
+`FPGA/ARTY_A7_100T` と同じ)。
 
 ## Rocket 構成との違い
 
@@ -45,7 +47,8 @@ LitexSystem/
 │   ├── build_soc.sh     SoC 生成(Linux 側。Vivado は走らせない)
 │   ├── build_digilent_arty.bat   Vivado 実行(Windows 側)
 │   ├── build_opensbi.sh デバイスツリー入りの fw_jump.bin
-│   └── sd_rootfs.sh     SD カードのルートファイルシステムを書く
+│   ├── sd_rootfs.sh     SD カードのルートファイルシステムを書く
+│   └── jtag_check.tcl   実機の JTAG 確認(OpenOCD)
 ├── software/
 │   ├── mmrisc_arty.dts  デバイスツリー
 │   ├── boot/            SD カードの第 1 パーティションに置くもの(fw_jump.bin)と手順
@@ -54,6 +57,7 @@ LitexSystem/
 ├── docs/
 │   ├── BRINGUP.md       立ち上げ記録と手順
 │   ├── TIMING.md        タイミング収束の記録
+│   ├── JTAG.md          JTAG / cJTAG デバッグ(ピン、スイッチ、OpenOCD)
 │   └── TFTP_SERVER.md   Parallels 上の Ubuntu を TFTP サーバにする手順
 └── build/               生成物(git 管理外)
 ```

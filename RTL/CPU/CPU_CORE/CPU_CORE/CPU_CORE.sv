@@ -96,7 +96,24 @@ module CPU_CORE
         output logic [4:0]              trap_cause,
         output logic [63:0]             trap_epc,
         output logic [63:0]             trap_tval,
-        output logic                    trap_to_s
+        output logic                    trap_to_s,
+
+        // debug : the hart side of the debug module (RISC-V Debug Spec 1.0,
+        // the signals DBG_DM drives; CPU_CORE_SPEC.md 11)
+        input  logic                    dbg_haltreq,
+        input  logic                    dbg_resumereq,    // pulse
+        input  logic                    dbg_resethaltreq,
+        output logic                    dbg_halted,
+        output logic                    dbg_running,
+        output logic                    dbg_resumed,      // pulse
+        input  logic                    dbg_reg_req,      // pulse, while halted
+        input  logic                    dbg_reg_wr,
+        input  logic [15:0]             dbg_reg_regno,
+        input  logic                    dbg_reg_size64,
+        input  logic [63:0]             dbg_reg_wdata,
+        output logic                    dbg_reg_ack,      // pulse
+        output logic [63:0]             dbg_reg_rdata,
+        output logic                    dbg_reg_err
     );
 
     //=================================================================
@@ -306,17 +323,25 @@ module CPU_CORE
     logic [4:0]  wb_rd;
     logic [63:0] wb_data;
 
+    // While the hart is halted the debugger reads through the first read
+    // port and writes through the write port (nothing issues then, and the
+    // pipeline has drained); see "debug" below.
+    logic [4:0]  rf_ra1;
+    logic        dbg_rf_we, dbg_frf_we;
+    logic [4:0]  dbg_rw_idx;
+    logic [63:0] dbg_rw_data;
+
     CORE_RF u_rf
         (
             .clk      (clk),
             .rst_n    (rst_n),
-            .rs1      (dec_rs1),
+            .rs1      (rf_ra1),
             .rs1_data (rf_rs1_data),
             .rs2      (dec_rs2),
             .rs2_data (rf_rs2_data),
-            .we       (wb_valid & wb_we_rd),
-            .rd       (wb_rd),
-            .rd_data  (wb_data)
+            .we       ((wb_valid & wb_we_rd) | dbg_rf_we),
+            .rd       (dbg_rf_we ? dbg_rw_idx  : wb_rd),
+            .rd_data  (dbg_rf_we ? dbg_rw_data : wb_data)
         );
 
     //=================================================================
@@ -331,15 +356,15 @@ module CPU_CORE
         (
             .clk      (clk),
             .rst_n    (rst_n),
-            .rs1      (dec_rs1),
+            .rs1      (rf_ra1),
             .rs1_data (frf_fs1_data),
             .rs2      (dec_rs2),
             .rs2_data (frf_fs2_data),
             .rs3      (fq_insn[31:27]),
             .rs3_data (frf_fs3_data),
-            .we       (wb_valid & wb_fp_we),
-            .rd       (wb_fp_rd),
-            .rd_data  (wb_fp_data)
+            .we       ((wb_valid & wb_fp_we) | dbg_frf_we),
+            .rd       (dbg_frf_we ? dbg_rw_idx  : wb_fp_rd),
+            .rd_data  (dbg_frf_we ? dbg_rw_data : wb_fp_data)
         );
 
     //=================================================================
@@ -641,6 +666,14 @@ module CPU_CORE
     logic        irq_req, irq_any;
     logic [4:0]  irq_cause;
 
+    // debug mode (see "debug" below)
+    logic        dbg_csr_sel, dbg_csr_we, dbg_enter, dbg_resume_now;
+    logic [15:0] dbg_regno_q;
+    logic        dcsr_step, dcsr_ebreakm, dcsr_ebreaks, dcsr_ebreaku;
+    logic [63:0] dpc;
+    logic        dbg_take, step_active, ebreak_dbg;
+    logic [2:0]  dbg_take_cause;
+
     // privilege and translation state, read by the pipeline and the MMU
     logic [1:0]  priv;
     logic [63:0] satp;
@@ -660,15 +693,15 @@ module CPU_CORE
         (
             .clk         (clk),
             .rst_n       (rst_n),
-            .rd_addr     (ex_csr_addr),
+            .rd_addr     (dbg_csr_sel ? dbg_regno_q[11:0] : ex_csr_addr),
             .rd_data     (csr_rdata),
             .rmw_data    (csr_rmw),
             .rd_exists   (csr_exists),
             .rd_readonly (csr_readonly),
             .rd_denied   (csr_denied),
-            .wr_en       (csr_wr_en),
-            .wr_addr     (ma_csr_addr),
-            .wr_data     (ma_csr_wdata),
+            .wr_en       (csr_wr_en | dbg_csr_we),
+            .wr_addr     (dbg_csr_we ? dbg_regno_q[11:0] : ma_csr_addr),
+            .wr_data     (dbg_csr_we ? dbg_rw_data       : ma_csr_wdata),
             .trap_en     (trap_en),
             .trap_int    (trap_int_c),
             .trap_cause  (trap_cause_c),
@@ -702,9 +735,19 @@ module CPU_CORE
             .instret_inc (commit),
             .fflags_we   (commit & ma_fp_arith),
             .fflags_set  (ma_fp_flags),
-            .fs_dirty    (commit & ma_is_fp),
+            .fs_dirty    ((commit & ma_is_fp) | dbg_frf_we),
             .frm_out     (frm_csr),
-            .fs_out      (fs_csr)
+            .fs_out      (fs_csr),
+            .dbg_access  (dbg_csr_sel),
+            .dbg_enter   (dbg_enter),
+            .dbg_cause   (ma_exc_cause[2:0]),
+            .dbg_pc      (ma_pc),
+            .dbg_resume  (dbg_resume_now),
+            .dcsr_step   (dcsr_step),
+            .dcsr_ebreakm(dcsr_ebreakm),
+            .dcsr_ebreaks(dcsr_ebreaks),
+            .dcsr_ebreaku(dcsr_ebreaku),
+            .dpc_out     (dpc)
         );
 
     // the new value of the CSR
@@ -948,6 +991,11 @@ module CPU_CORE
     end
 
     assign trap_taken   = ma_valid & ma_exc     & ~stall_ma;
+    // an instruction marked for debug entry (see "exceptions found in ID")
+    // is not executed and takes no trap: the hart halts in front of it
+    logic ma_is_dbg;
+    assign ma_is_dbg    = ma_exc_int_r & ma_exc_cause_r[4];
+    assign dbg_enter    = trap_taken & ma_is_dbg;
     assign mret_taken   = ma_valid & ma_is_mret & ~stall_ma & ~trap_taken;
     assign sret_taken   = ma_valid & ma_is_sret & ~stall_ma & ~trap_taken;
     // SFENCE.VMA changes the translation the front end has already used, so
@@ -965,7 +1013,7 @@ module CPU_CORE
                           fencei_taken | sfence_taken | refetch_taken;
     assign commit     = ma_valid & ~stall_ma & ~trap_taken;
 
-    assign trap_en      = trap_taken;
+    assign trap_en      = trap_taken & ~ma_is_dbg;
     assign trap_int_c   = ma_exc_int_r;
     assign trap_cause_c = ma_exc_cause;
     assign trap_epc_c   = ma_pc;
@@ -1024,11 +1072,13 @@ module CPU_CORE
     assign pipe_busy   = ex_valid | mr_valid | ma_valid | wb_valid;
     assign serial_busy = (ex_valid & ex_serial) | (mr_valid & mr_serial) |
                          (ma_valid & ma_serial);
-    assign wfi_wait    = fq_valid & dec_is_wfi & ~irq_any;
+    // WFI does not wait while stepping (it then completes as a NOP) or when
+    // the debugger wants the hart to halt
+    assign wfi_wait    = fq_valid & dec_is_wfi & ~irq_any & ~step_active & ~dbg_haltreq;
     assign id_ready    = ~(fq_valid & (dec_is_csr | dec_is_mret | dec_is_sret |
                                        dec_is_sfence | dec_is_fence |
                                        dec_is_fence_i) & pipe_busy)
-                       & ~serial_busy & ~wfi_wait;
+                       & ~serial_busy & ~wfi_wait & ~dbg_halted;
     assign id_advance  = ex_advance & id_ready;
     assign fq_ready    = id_advance;
 
@@ -1098,9 +1148,14 @@ module CPU_CORE
     assign btb_flush      = fencei_taken | sfence_taken;
 
     // a trap and an MRET come from the commit point and win
-    assign redirect_valid = flush | (ex_mispredict & ex_ctrl_go);
+    assign redirect_valid = flush | (ex_mispredict & ex_ctrl_go) | dbg_resume_now;
     always @(*) begin
-        if      (trap_taken)   redirect_pc = trap_vector;
+        // leaving debug mode goes to dpc; entering it fetches from the
+        // instruction it halted in front of, which waits in the fetch queue
+        // (nothing issues while halted) until the resume fetches it again
+        if      (dbg_resume_now) redirect_pc = dpc;
+        else if (dbg_enter)    redirect_pc = ma_pc;
+        else if (trap_taken)   redirect_pc = trap_vector;
         else if (mret_taken)   redirect_pc = mret_target;
         else if (sret_taken)   redirect_pc = sret_target;
         else if (fencei_taken || sfence_taken || refetch_taken)
@@ -1144,11 +1199,25 @@ module CPU_CORE
         id_exc_cause = 5'd0;
         id_exc_tval  = 64'd0;
         if (fq_valid) begin
+            // Debug mode is entered instead of the instruction, before
+            // anything else it could do: the debugger asked for a halt, or
+            // the hart halts after reset, or it has done its single step.
+            // It is carried down the pipeline as an interrupt whose cause
+            // has bit 4 set (16 + dcsr.cause), which no real interrupt of
+            // this core has; the commit point enters debug mode for it
+            // instead of taking a trap. A WFI the halt request finds is
+            // not marked: it completes (wfi_wait lets it go) and the hart
+            // halts behind it, as the specification asks (4.1).
+            if (dbg_take && !(dec_is_wfi && dbg_take_cause == 3'd3)) begin
+                id_exc       = 1'b1;
+                id_exc_int   = 1'b1;
+                id_exc_cause = {2'b10, dbg_take_cause};
             // an interrupt is taken instead of the instruction, so it comes
             // before every exception the instruction itself would raise.
             // WFI is the exception: it completes and the interrupt is taken
             // on the instruction behind it, so that mepc points there.
-            if (irq_req && !dec_is_wfi) begin
+            // While stepping there are no interrupts (dcsr.stepie is 0).
+            end else if (irq_req && !dec_is_wfi && !step_active) begin
                 id_exc       = 1'b1;
                 id_exc_int   = 1'b1;
                 id_exc_cause = irq_cause;
@@ -1169,6 +1238,11 @@ module CPU_CORE
             end else if (dec_is_ecall) begin
                 id_exc       = 1'b1;
                 id_exc_cause = EXC_ECALL_U + {3'd0, priv};
+            end else if (dec_is_ebreak && ebreak_dbg) begin
+                // dcsr.ebreakm/s/u: EBREAK enters debug mode (cause 1)
+                id_exc       = 1'b1;
+                id_exc_int   = 1'b1;
+                id_exc_cause = {2'b10, 3'd1};
             end else if (dec_is_ebreak) begin
                 id_exc       = 1'b1;
                 id_exc_cause = EXC_BREAK;
@@ -1656,6 +1730,156 @@ module CPU_CORE
     end
 
     //=================================================================
+    // debug (RISC-V Debug Spec 1.0; CPU_CORE_SPEC.md 11)
+    //
+    //   Run control. The hart enters debug mode in front of an instruction:
+    //   the instruction in ID is marked (dbg_take, see "exceptions found in
+    //   ID"), and when it reaches the commit point the pipeline is flushed,
+    //   dpc gets its pc, dcsr.cause and dcsr.prv are set (CORE_CSR), and
+    //   nothing issues until the debugger resumes. Resuming refetches from
+    //   dpc at the level in dcsr.prv.
+    //
+    //     haltreq       cause 3, on the next instruction to reach ID (a
+    //                   WFI completes first, so dpc is the one behind it)
+    //     resethaltreq  cause 5, before the first instruction after reset
+    //     step          cause 4: dcsr.step at resume lets one instruction
+    //                   issue and marks the next one. If the stepped one
+    //                   traps, the next is the first of the handler, which
+    //                   is where the specification wants the hart to stop.
+    //                   No interrupts while stepping (stepie is 0), and
+    //                   WFI completes as a NOP.
+    //     ebreak        cause 1, when dcsr.ebreakm/s/u of the level is set
+    //
+    //   Register access. Only while halted, when nothing issues and the
+    //   pipeline is empty: the first read port of the register files and the
+    //   read port of the CSR file are switched to the debugger for one
+    //   cycle, and a write goes through the write ports in the next one. A
+    //   32 bit write keeps the upper half (read, merge, write), as the
+    //   pseudo hart did. regno : 0x0000-0x0fff CSR, 0x1000-0x101f GPR,
+    //   0x1020-0x103f FPR; anything else, a CSR that does not exist, or a
+    //   write to a read only one answers with an error.
+    //=================================================================
+    logic        halted_r, boot_r, reset_halt_pend, step_arm, step_issued;
+    logic        resumed_r;
+    logic        id_issue, id_is_dbg;
+
+    assign id_issue  = id_advance & fq_valid & ~redirect_valid;
+    assign id_is_dbg = id_exc & id_exc_int & id_exc_cause[4];
+
+    assign step_active    = step_arm | step_issued;
+    assign dbg_take       = ~halted_r & (reset_halt_pend | dbg_haltreq | step_issued);
+    assign dbg_take_cause = reset_halt_pend ? 3'd5 : dbg_haltreq ? 3'd3 : 3'd4;
+    assign ebreak_dbg     = ((priv == PRIV_M) & dcsr_ebreakm) |
+                            ((priv == PRIV_S) & dcsr_ebreaks) |
+                            ((priv == PRIV_U) & dcsr_ebreaku);
+
+    logic [1:0]  dra_state;                 // 0 idle, 1 read, 2 write, 3 answer
+    logic        dra_wr, dra_size64, dra_err;
+    logic [63:0] dra_wdata;
+    logic        dra_gpr, dra_fpr, dra_csr;
+
+    assign dbg_resume_now = halted_r & dbg_resumereq & (dra_state == 2'd0);
+
+    assign dra_gpr = (dbg_regno_q[15:5] == 11'h080);          // 0x1000-0x101f
+    assign dra_fpr = (dbg_regno_q[15:5] == 11'h081);          // 0x1020-0x103f
+    assign dra_csr = (dbg_regno_q[15:12] == 4'h0);            // 0x0000-0x0fff
+
+    assign dbg_csr_sel = (dra_state == 2'd1 || dra_state == 2'd2) & dra_csr;
+    assign dbg_csr_we  = (dra_state == 2'd2) & dra_csr;
+    assign dbg_rf_we   = (dra_state == 2'd2) & dra_gpr;
+    assign dbg_frf_we  = (dra_state == 2'd2) & dra_fpr;
+    assign dbg_rw_idx  = dbg_regno_q[4:0];
+    assign rf_ra1      = (dra_state != 2'd0) ? dbg_regno_q[4:0] : dec_rs1;
+
+    // what the addressed register holds, in the read cycle
+    logic [63:0] dra_old;
+    logic        dra_exists, dra_ro;
+    always @(*) begin
+        dra_old    = dra_gpr ? rf_rs1_data : dra_fpr ? frf_fs1_data : csr_rdata;
+        dra_exists = dra_gpr | dra_fpr | (dra_csr & csr_exists);
+        dra_ro     = dra_csr & csr_readonly;
+    end
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            halted_r        <= 1'b0;
+            boot_r          <= 1'b1;
+            reset_halt_pend <= 1'b0;
+            step_arm        <= 1'b0;
+            step_issued     <= 1'b0;
+            resumed_r       <= 1'b0;
+            dra_state       <= 2'd0;
+            dra_wr          <= 1'b0;
+            dra_size64      <= 1'b0;
+            dra_err         <= 1'b0;
+            dra_wdata       <= 64'd0;
+            dbg_regno_q     <= 16'd0;
+            dbg_rw_data     <= 64'd0;
+            dbg_reg_rdata   <= 64'd0;
+        end else begin
+            //---------------------------------------------------------
+            // run control
+            //---------------------------------------------------------
+            resumed_r <= 1'b0;
+            boot_r    <= 1'b0;
+            // resethaltreq is looked at once, as the reset ends
+            if (boot_r) reset_halt_pend <= dbg_resethaltreq;
+            if (dbg_enter) begin
+                halted_r        <= 1'b1;
+                reset_halt_pend <= 1'b0;
+                step_arm        <= 1'b0;
+                step_issued     <= 1'b0;
+            end else if (dbg_resume_now) begin
+                halted_r  <= 1'b0;
+                resumed_r <= 1'b1;
+                step_arm  <= dcsr_step;
+            end else if (step_arm && id_issue && !id_is_dbg) begin
+                // the stepped instruction has gone in; the next one halts
+                step_arm    <= 1'b0;
+                step_issued <= 1'b1;
+            end
+
+            //---------------------------------------------------------
+            // register access
+            //---------------------------------------------------------
+            case (dra_state)
+                2'd0: if (dbg_reg_req) begin
+                    dbg_regno_q <= dbg_reg_regno;
+                    dra_wr      <= dbg_reg_wr;
+                    dra_size64  <= dbg_reg_size64;
+                    dra_wdata   <= dbg_reg_wdata;
+                    dra_err     <= 1'b0;
+                    // the registers are only there for the debugger while
+                    // the hart is halted
+                    if (halted_r) dra_state <= 2'd1;
+                    else begin dra_err <= 1'b1; dra_state <= 2'd3; end
+                end
+                2'd1: begin
+                    if (!dra_exists || (dra_wr && dra_ro)) begin
+                        dra_err   <= 1'b1;
+                        dra_state <= 2'd3;
+                    end else if (!dra_wr) begin
+                        dbg_reg_rdata <= dra_old;
+                        dra_state     <= 2'd3;
+                    end else begin
+                        dbg_rw_data <= dra_size64 ? dra_wdata
+                                                  : {dra_old[63:32], dra_wdata[31:0]};
+                        dra_state   <= 2'd2;
+                    end
+                end
+                2'd2: dra_state <= 2'd3;          // the write happens now
+                default: dra_state <= 2'd0;       // 3 : the answer goes out
+            endcase
+        end
+    end
+
+    assign dbg_halted  = halted_r;
+    assign dbg_running = ~halted_r;
+    assign dbg_resumed = resumed_r;
+    assign dbg_reg_ack = (dra_state == 2'd3);
+    assign dbg_reg_err = dra_err;
+
+    //=================================================================
     // trace
     //=================================================================
     always @(*) begin
@@ -1667,7 +1891,7 @@ module CPU_CORE
         trace_rd_data = wb_data;
         trace_priv    = priv;
 
-        trap_valid    = trap_taken;
+        trap_valid    = trap_taken & ~ma_is_dbg;
         trap_is_int   = ma_exc_int_r;
         trap_cause    = ma_exc_cause;
         trap_epc      = ma_pc;

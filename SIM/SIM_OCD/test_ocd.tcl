@@ -1,6 +1,20 @@
 #---------------------------------------------------------------------------
 # test_ocd.tcl : OpenOCD test sequence for tb_OCD
 #   openocd -f openocd_sim.cfg -f test_ocd.tcl   (AUTH=1: authdata first)
+#
+# The hart is the CPU core (USE_BFM=0). After the power-on reset it runs
+# whatever the RAM holds (nothing: it traps around), so the test halts it,
+# puts a small loop into the RAM and debugs that:
+#
+#   0x80001000  addi a0, a0, 1
+#   0x80001004  addi a1, a1, 2
+#   0x80001008  j    0x80001000
+#
+# The core has no program buffer (progbufsize=0). OpenOCD probes a few CSRs
+# the core does not have (vlenb, mtopi, tselect), and when the abstract
+# command answers "no such register" it tries the program buffer and prints
+# "Unable to insert program into progbuf". That is harmless: it then takes
+# them as absent (no vector unit, no AIA, no triggers).
 #---------------------------------------------------------------------------
 set errors 0
 proc chk {name exp act} {
@@ -32,7 +46,7 @@ chk "reg a0" "0x0123456789abcdef" [lindex [reg a0] 2]
 reg s11 0xfedcba9876543210
 chk "reg s11" "0xfedcba9876543210" [lindex [reg s11] 2]
 chk "misa" "0x800000000014112d" [lindex [reg misa] 2]
-chk "marchid" "0x6d6d3032" [format 0x%x [lindex [reg marchid] 2]]
+chk "mhartid" "0x0" [format 0x%x [lindex [reg mhartid] 2]]
 reg pc 0x80001000
 chk "pc (dpc)" "0x0000000080001000" [lindex [reg pc] 2]
 reg ft0 0x3ff0000000000000
@@ -74,16 +88,56 @@ if {[catch {verify_image image.bin 0x80004000 bin} err]} {
     echo "\[ OK \] load_image / verify_image 4KiB"
 }
 
-# step / resume / reset halt
+# a program: step through it
+mww 0x80001000 0x00150513
+mww 0x80001004 0x00258593
+mww 0x80001008 0xff9ff06f
+reg pc 0x80001000
+reg a0 0
+reg a1 0
 step
-chk "pc after step" "0x0000000080001004" [lindex [reg pc] 2]
+chk "pc after step 1" "0x0000000080001004" [lindex [reg pc] 2]
+chk "a0 after step 1" "0x0000000000000001" [lindex [reg a0] 2]
+step
+chk "pc after step 2" "0x0000000080001008" [lindex [reg pc] 2]
+chk "a1 after step 2" "0x0000000000000002" [lindex [reg a1] 2]
+step
+chk "pc after step 3" "0x0000000080001000" [lindex [reg pc] 2]
+
+# a software breakpoint (EBREAK written through the data cache, which the
+# instruction cache has to see)
+bp 0x80001004 4
+resume
+wait_halt 2000
+chk "state at breakpoint" "halted" [riscv.cpu curstate]
+chk "pc at breakpoint" "0x0000000080001004" [lindex [reg pc] 2]
+chk "a0 at breakpoint" "0x0000000000000002" [lindex [reg a0] 2]
+resume
+wait_halt 2000
+chk "pc at breakpoint again" "0x0000000080001004" [lindex [reg pc] 2]
+chk "a0 at breakpoint again" "0x0000000000000003" [lindex [reg a0] 2]
+chk "a1 at breakpoint again" "0x0000000000000004" [lindex [reg a1] 2]
+rbp 0x80001004
+chk "instruction back after rbp" "0x00258593" [format 0x%08x [read_memory 0x80001004 32 1]]
+
+# free run
 resume
 sleep 100
 chk "state after resume" "running" [riscv.cpu curstate]
+halt
+set a0 [lindex [reg a0] 2]
+if {$a0 > 3} { echo "\[ OK \] the loop ran: a0 = $a0" } else { echo "\[FAIL\] the loop did not run: a0 = $a0"; incr errors }
+chk "dcsr.cause haltreq" "3" [expr {([lindex [reg dcsr] 2] >> 6) & 7}]
+
+# reset halt : the core stops before its first instruction
 reset halt
 chk "state after reset halt" "halted" [riscv.cpu curstate]
 chk "pc after reset" "0x0000000080000000" [lindex [reg pc] 2]
+# OpenOCD holds haltreq over the reset (cause 3); resethaltreq would be 5
+set cause [expr {([lindex [reg dcsr] 2] >> 6) & 7}]
+if {$cause == 3 || $cause == 5} { echo "\[ OK \] dcsr.cause after reset = $cause" } else { echo "\[FAIL\] dcsr.cause after reset = $cause"; incr errors }
 chk "RAM kept over ndmreset" "0xdeadbeef" [format 0x%08x [read_memory 0x80000000 32 1]]
+reg pc 0x80001000
 resume
 
 if {$errors == 0} {

@@ -3,8 +3,9 @@
 //
 // mmRISC-2 debug logic top (RISC-V Debug Spec 1.0, JTAG / cJTAG)
 //
-//   DBG_CJTAG ─ DBG_DTM ─ DBG_CDC ─ DBG_DM ─┬─ DBG_HART_STUB (provisional)
-//   [TCK domain]                [clk domain]  └─ DBG_BUSMST ─ AXI4 / AXI4-Lite
+//   DBG_CJTAG ─ DBG_DTM ─ DBG_CDC ─ DBG_DM ─┬─ hart : CPU_CORE (hart_* ports)
+//   [TCK domain]                [clk domain]  │        or DBG_HART_STUB (HART_STUB=1)
+//                                             └─ DBG_BUSMST ─ AXI4 / AXI4-Lite
 //
 // Reset domains
 //   rst_dbg_n : debug power-on reset. Resets DTM, CDC and DM.
@@ -13,6 +14,9 @@
 //   rst_n     : system reset. Combined with ndmreset it resets the bus side
 //               (rst_bus_n, also used by CPU_TOP for the arbiter / CPU) and
 //               the hart. It never resets the DM.
+//   hartreset : (dmcontrol.hartreset) resets what ndmreset does. There is one
+//               hart, and its caches and bus side cannot be reset apart from
+//               it without losing requests in flight.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -33,7 +37,10 @@ module CPU_DBG
         parameter int          SBA_TIMEOUT    = 1 << 20,
         // 1 : memory bus accesses of the debugger go through the data cache
         //     (CPU_CACHE_SPEC.md 4.7), 0 : straight to the memory bus
-        parameter int          DBG_VIA_CACHE  = 1
+        parameter int          DBG_VIA_CACHE  = 1,
+        // 1 : the pseudo hart DBG_HART_STUB answers the DM (the BFM system),
+        // 0 : the hart_* ports go to the CPU core
+        parameter int          HART_STUB      = 1
     )
     (
         input  logic        clk,
@@ -137,7 +144,25 @@ module CPU_DBG
         input  logic                     dc_resp_valid,
         input  logic [63:0]              dc_resp_data,
         input  logic                     dc_resp_error,
-        output logic                     dc_wrote        // pulse after a write
+        output logic                     dc_wrote,       // pulse after a write
+
+        //-------------------------------------------------------------
+        // hart side of the DM (HART_STUB = 0; unused otherwise)
+        //-------------------------------------------------------------
+        output logic                     hart_haltreq,
+        output logic                     hart_resumereq,     // pulse
+        output logic                     hart_resethaltreq,
+        input  logic                     hart_halted,
+        input  logic                     hart_running,
+        input  logic                     hart_resumed,       // pulse
+        output logic                     hart_reg_req,       // pulse
+        output logic                     hart_reg_wr,
+        output logic [15:0]              hart_reg_regno,
+        output logic                     hart_reg_size64,
+        output logic [63:0]              hart_reg_wdata,
+        input  logic                     hart_reg_ack,       // pulse
+        input  logic [63:0]              hart_reg_rdata,
+        input  logic                     hart_reg_err
     );
 
     //=================================================================
@@ -151,7 +176,7 @@ module CPU_DBG
     DBG_RST_SYNC u_rst_t_por (.clk(jtag_tck), .rst_in_n(rst_dbg_n),               .rst_out_n(t_por_n));
     DBG_RST_SYNC u_rst_tap   (.clk(jtag_tck), .rst_in_n(rst_dbg_n & jtag_trst_n), .rst_out_n(tap_rst_n));
     DBG_RST_SYNC u_rst_s_por (.clk(clk),      .rst_in_n(rst_dbg_n),               .rst_out_n(s_por_n));
-    DBG_RST_SYNC u_rst_bus   (.clk(clk),      .rst_in_n(rst_n & ~ndmreset),       .rst_out_n(rst_bus_n));
+    DBG_RST_SYNC u_rst_bus   (.clk(clk),      .rst_in_n(rst_n & ~ndmreset & ~hartreset), .rst_out_n(rst_bus_n));
 
     // bus reset view for the DM (level, clk domain)
     logic bus_in_reset;
@@ -328,36 +353,56 @@ module CPU_DBG
         );
 
     //=================================================================
-    // Pseudo hart
+    // The hart : the CPU core, or the pseudo hart
     //=================================================================
-    DBG_HART_STUB
-        #(
-            .MISA         (MISA),
-            .MVENDORID    (MVENDORID),
-            .MARCHID      (MARCHID),
-            .MIMPL        (MIMPL),
-            .MHARTID      (MHARTID),
-            .RESET_VECTOR (RESET_VECTOR)
-        )
-    u_hart
-        (
-            .clk          (clk),
-            .hart_rst     (hart_rst),
-            .haltreq      (haltreq),
-            .resumereq    (resumereq),
-            .resethaltreq (resethaltreq),
-            .halted       (halted),
-            .running      (running),
-            .resumed      (resumed),
-            .reg_req      (reg_req),
-            .reg_wr       (reg_wr),
-            .reg_regno    (reg_regno),
-            .reg_size64   (reg_size64),
-            .reg_wdata    (reg_wdata),
-            .reg_ack      (reg_ack),
-            .reg_rdata    (reg_rdata),
-            .reg_err      (reg_err)
-        );
+    assign hart_haltreq      = haltreq;
+    assign hart_resumereq    = resumereq;
+    assign hart_resethaltreq = resethaltreq;
+    assign hart_reg_req      = reg_req;
+    assign hart_reg_wr       = reg_wr;
+    assign hart_reg_regno    = reg_regno;
+    assign hart_reg_size64   = reg_size64;
+    assign hart_reg_wdata    = reg_wdata;
+
+    generate
+        if (HART_STUB != 0) begin : g_stub
+            DBG_HART_STUB
+                #(
+                    .MISA         (MISA),
+                    .MVENDORID    (MVENDORID),
+                    .MARCHID      (MARCHID),
+                    .MIMPL        (MIMPL),
+                    .MHARTID      (MHARTID),
+                    .RESET_VECTOR (RESET_VECTOR)
+                )
+            u_hart
+                (
+                    .clk          (clk),
+                    .hart_rst     (hart_rst),
+                    .haltreq      (haltreq),
+                    .resumereq    (resumereq),
+                    .resethaltreq (resethaltreq),
+                    .halted       (halted),
+                    .running      (running),
+                    .resumed      (resumed),
+                    .reg_req      (reg_req),
+                    .reg_wr       (reg_wr),
+                    .reg_regno    (reg_regno),
+                    .reg_size64   (reg_size64),
+                    .reg_wdata    (reg_wdata),
+                    .reg_ack      (reg_ack),
+                    .reg_rdata    (reg_rdata),
+                    .reg_err      (reg_err)
+                );
+        end else begin : g_core
+            assign halted    = hart_halted;
+            assign running   = hart_running;
+            assign resumed   = hart_resumed;
+            assign reg_ack   = hart_reg_ack;
+            assign reg_rdata = hart_reg_rdata;
+            assign reg_err   = hart_reg_err;
+        end
+    endgenerate
 
     assign dbg_halted  = halted;
     assign dbg_running = running;

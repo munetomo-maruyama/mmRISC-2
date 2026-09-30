@@ -19,6 +19,10 @@
 //     +istall=<n>     hold the ready of the instruction port low in n% of the
 //                     cycles, +dstall=<n> the same for the data port
 //     +maxcycles=n    watchdog (default 200000)
+//
+//   t23_debug is run against a debugger in the bench (see "debugger"): it
+//   halts the core, steps it and reads and writes its registers through the
+//   debug port of the core, the way DBG_DM does.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -84,6 +88,14 @@ module tb_CORE;
     logic [0:0]             irq_m_soft, irq_m_timer;   // one bit per hart
     logic [63:0]            mtime;
 
+    // debug port (driven by the debugger below, idle for the other tests)
+    logic                   dbg_haltreq, dbg_resumereq, dbg_resethaltreq;
+    logic                   dbg_halted, dbg_running, dbg_resumed;
+    logic                   dbg_reg_req, dbg_reg_wr, dbg_reg_size64;
+    logic [15:0]            dbg_reg_regno;
+    logic [63:0]            dbg_reg_wdata, dbg_reg_rdata;
+    logic                   dbg_reg_ack, dbg_reg_err;
+
     // the instruction cache of the system answers the invalidate of a fence.i
     // as soon as it is idle; there is no cache here, so it is always done
     assign i_flush_done = i_flush_valid;
@@ -137,7 +149,21 @@ module tb_CORE;
             .trap_cause    (trap_cause),
             .trap_epc      (trap_epc),
             .trap_tval     (trap_tval),
-            .trap_to_s     (trap_to_s)
+            .trap_to_s     (trap_to_s),
+            .dbg_haltreq      (dbg_haltreq),
+            .dbg_resumereq    (dbg_resumereq),
+            .dbg_resethaltreq (dbg_resethaltreq),
+            .dbg_halted       (dbg_halted),
+            .dbg_running      (dbg_running),
+            .dbg_resumed      (dbg_resumed),
+            .dbg_reg_req      (dbg_reg_req),
+            .dbg_reg_wr       (dbg_reg_wr),
+            .dbg_reg_regno    (dbg_reg_regno),
+            .dbg_reg_size64   (dbg_reg_size64),
+            .dbg_reg_wdata    (dbg_reg_wdata),
+            .dbg_reg_ack      (dbg_reg_ack),
+            .dbg_reg_rdata    (dbg_reg_rdata),
+            .dbg_reg_err      (dbg_reg_err)
         );
 
     //=================================================================
@@ -369,6 +395,281 @@ module tb_CORE;
         end
     end
 
+
+    //=================================================================
+    // debugger (t23_debug)
+    //
+    //   It does what DBG_DM does on behalf of OpenOCD, one step at a time,
+    //   in step with the program (tests/t23_debug.S):
+    //
+    //   1 halt at reset (resethaltreq): cause 5, dpc at the reset vector;
+    //     x10 and dcsr.ebreakm written; errors for a read only CSR, a
+    //     register that does not exist and an access while running
+    //   2 halt request in a loop: cause 3; three single steps (cause 4)
+    //     whose pc follows the loop; x12 written
+    //   3 EBREAK: cause 1 and no trap; GPR (64 and 32 bit), FPR and CSR
+    //     written; a step with an interrupt pending and enabled goes to the
+    //     next instruction, not to the handler; a step over ECALL stops on
+    //     the first instruction of the handler
+    //   4 halt request while WFI waits: the WFI completes, dpc is behind it;
+    //     resumed in user mode through dcsr.prv
+    //=================================================================
+    localparam logic [15:0] R_MSTATUS  = 16'h0300;
+    localparam logic [15:0] R_MTVEC    = 16'h0305;
+    localparam logic [15:0] R_MSCRATCH = 16'h0340;
+    localparam logic [15:0] R_MEPC     = 16'h0341;
+    localparam logic [15:0] R_MCAUSE   = 16'h0342;
+    localparam logic [15:0] R_MHARTID  = 16'h0F14;
+    localparam logic [15:0] R_DCSR     = 16'h07B0;
+    localparam logic [15:0] R_DPC      = 16'h07B1;
+    localparam logic [15:0] R_DSCRATCH0= 16'h07B2;
+    function automatic logic [15:0] R_X(input int n); return 16'h1000 + n; endfunction
+    function automatic logic [15:0] R_F(input int n); return 16'h1020 + n; endfunction
+
+    bit          dbg_test;
+    int          dbg_fail;          // number of the first debugger check that failed
+    logic [63:0] dr_data;
+    logic        dr_err;
+
+    task automatic dbg_check(input int n, input bit ok, input string what);
+        if (!ok && dbg_fail == 0) begin
+            dbg_fail = n;
+            $display("[%0t] tb_CORE: debugger check %0d failed: %s", $time, n, what);
+        end
+    endtask
+
+    // one register access, as DBG_DM makes it : a request pulse, then wait
+    // for the acknowledge
+    task automatic dbg_reg(input bit wr, input logic [15:0] regno,
+                           input bit size64, input logic [63:0] wdata);
+        int t;
+        @(negedge clk);
+        dbg_reg_req    = 1'b1;
+        dbg_reg_wr     = wr;
+        dbg_reg_regno  = regno;
+        dbg_reg_size64 = size64;
+        dbg_reg_wdata  = wdata;
+        @(negedge clk);
+        dbg_reg_req    = 1'b0;
+        t = 0;
+        while (dbg_reg_ack !== 1'b1 && t < 100) begin @(negedge clk); t++; end
+        dr_data = dbg_reg_rdata;
+        dr_err  = (t >= 100) ? 1'b1 : dbg_reg_err;
+        if (t >= 100) $display("[%0t] tb_CORE: no answer to a register access", $time);
+    endtask
+
+    task automatic dbg_rd(input logic [15:0] regno);
+        dbg_reg(1'b0, regno, 1'b1, 64'd0);
+    endtask
+
+    task automatic dbg_wr(input logic [15:0] regno, input logic [63:0] v);
+        dbg_reg(1'b1, regno, 1'b1, v);
+    endtask
+
+    task automatic dbg_wait_halted(input int n);
+        int t;
+        t = 0;
+        while (dbg_halted !== 1'b1 && t < 50000) begin @(negedge clk); t++; end
+        dbg_check(n, dbg_halted === 1'b1, "the core did not halt");
+    endtask
+
+    task automatic dbg_resume(input int n);
+        int t;
+        bit seen;
+        @(negedge clk);
+        dbg_resumereq = 1'b1;
+        @(negedge clk);
+        dbg_resumereq = 1'b0;
+        seen = (dbg_resumed === 1'b1);
+        t = 0;
+        while (!seen && t < 10) begin @(negedge clk); seen = (dbg_resumed === 1'b1); t++; end
+        dbg_check(n, seen && dbg_running === 1'b1, "the core did not resume");
+    endtask
+
+    task automatic dbg_halt(input int n);
+        @(negedge clk);
+        dbg_haltreq = 1'b1;
+        dbg_wait_halted(n);
+        @(negedge clk);
+        dbg_haltreq = 1'b0;
+    endtask
+
+    // dcsr.cause
+    task automatic dbg_cause(input int n, input int cause);
+        dbg_rd(R_DCSR);
+        dbg_check(n, !dr_err && dr_data[8:6] == cause[2:0],
+                  $sformatf("dcsr.cause %0d, expected %0d", dr_data[8:6], cause));
+    endtask
+
+    initial begin
+        string       nm;
+        logic [63:0] v, pc, pc0, x20, mst, bp;
+        int          t;
+
+        dbg_test = $value$plusargs("name=%s", nm) && (nm == "t23_debug");
+        dbg_fail = 0;
+        dbg_haltreq      = 1'b0;
+        dbg_resumereq    = 1'b0;
+        dbg_resethaltreq = dbg_test;       // before the reset ends
+        dbg_reg_req      = 1'b0;
+        dbg_reg_wr       = 1'b0;
+        dbg_reg_regno    = 16'd0;
+        dbg_reg_size64   = 1'b0;
+        dbg_reg_wdata    = 64'd0;
+
+        if (dbg_test) begin
+            wait (rst_n === 1'b1);
+
+            //---------------------------------------------------------
+            // 1 halt at reset
+            //---------------------------------------------------------
+            dbg_wait_halted(101);
+            dbg_resethaltreq = 1'b0;
+            dbg_rd(R_DCSR);
+            dbg_check(102, !dr_err && dr_data[31:28] == 4'd4 && dr_data[8:6] == 3'd5 &&
+                           dr_data[1:0] == 2'd3,
+                      $sformatf("dcsr after reset %016h", dr_data));
+            dbg_rd(R_DPC);
+            dbg_check(103, !dr_err && dr_data == MEM_BASE, "dpc after reset");
+            dbg_wr(R_X(10), 64'h1234);
+            dbg_check(104, !dr_err, "write x10");
+            dbg_rd(R_X(10));
+            dbg_check(105, !dr_err && dr_data == 64'h1234, "read x10 back");
+            dbg_wr(R_X(0), 64'h55);                           // x0 stays 0
+            dbg_rd(R_X(0));
+            dbg_check(106, !dr_err && dr_data == 64'd0, "x0");
+            dbg_reg(1'b1, R_DCSR, 1'b0, 64'h8003);            // ebreakm, prv M
+            dbg_check(107, !dr_err, "write dcsr");
+            dbg_rd(R_DCSR);
+            dbg_check(108, dr_data[15] && !dr_data[2] && dr_data[31:28] == 4'd4,
+                      "dcsr read back");
+            dbg_wr(R_DSCRATCH0, 64'hdead_beef_0bad_f00d);
+            dbg_rd(R_DSCRATCH0);
+            dbg_check(109, !dr_err && dr_data == 64'hdead_beef_0bad_f00d, "dscratch0");
+            dbg_wr(R_MHARTID, 64'd5);                         // read only
+            dbg_check(110, dr_err, "write to mhartid did not fail");
+            dbg_rd(16'h2000);                                 // no such register
+            dbg_check(111, dr_err, "regno 0x2000 did not fail");
+            dbg_rd(16'h07A5);                                 // no such CSR
+            dbg_check(112, dr_err, "CSR 0x7a5 did not fail");
+            dbg_rd(R_X(10));                                  // no error sticks
+            dbg_check(113, !dr_err, "error after an error");
+            dbg_resume(114);
+
+            // the registers are not there while the core runs
+            dbg_rd(R_X(10));
+            dbg_check(115, dr_err, "access while running did not fail");
+
+            //---------------------------------------------------------
+            // 2 halt request in the loop, three steps
+            //---------------------------------------------------------
+            repeat (400) @(negedge clk);
+            dbg_halt(201);
+            dbg_cause(202, 3);
+            dbg_rd(R_X(20));
+            x20 = dr_data;
+            dbg_check(203, x20 > 0 && x20 < 3000, $sformatf("x20 %0d", x20));
+            dbg_rd(R_DPC);
+            pc0 = dr_data;
+            dbg_wr(R_DCSR, 64'h8007);                         // step
+            for (int k = 0; k < 3; k++) begin
+                dbg_rd(R_DPC);
+                pc = dr_data;
+                dbg_resume(204);
+                dbg_wait_halted(205);
+                dbg_cause(206, 4);
+                dbg_rd(R_DPC);
+                // addi / blt : one after the other
+                dbg_check(207, dr_data != pc && (dr_data - pc0 == 4 || pc0 - dr_data == 4 ||
+                                                 dr_data == pc0),
+                          $sformatf("dpc %010h after a step from %010h", dr_data, pc));
+                if (k == 1) begin
+                    dbg_rd(R_X(20));
+                    dbg_check(208, dr_data == x20 + 1,
+                              $sformatf("x20 %0d after two steps from %0d", dr_data, x20));
+                end
+            end
+            dbg_wr(R_DCSR, 64'h8003);
+            dbg_wr(R_X(12), 64'h5678);
+            dbg_resume(209);
+
+            //---------------------------------------------------------
+            // 3 EBREAK
+            //---------------------------------------------------------
+            dbg_wait_halted(301);
+            dbg_cause(302, 1);
+            dbg_rd(R_X(13));
+            bp = dr_data;
+            dbg_rd(R_DPC);
+            dbg_check(303, dr_data == bp, $sformatf("dpc %010h at ebreak %010h", dr_data, bp));
+            dbg_rd(R_MCAUSE);
+            dbg_check(304, dr_data == 64'd0, "EBREAK took a trap");
+            dbg_rd(R_MSCRATCH);
+            dbg_check(305, dr_data == 64'h77, "mscratch");
+            dbg_wr(R_X(15), 64'h9abc);
+            dbg_reg(1'b1, R_X(11), 1'b0, 64'hffff_ffff_1234_5678);  // 32 bit
+            dbg_check(306, !dr_err, "32 bit write");
+            dbg_wr(R_F(1), 64'h3ff0_0000_0000_0000);
+            dbg_check(307, !dr_err, "write f1");
+            dbg_rd(R_F(1));
+            dbg_check(308, dr_data == 64'h3ff0_0000_0000_0000, "f1 read back");
+            dbg_wr(R_MSCRATCH, 64'h88);
+            // an interrupt is pending and enabled in mie, only mstatus.MIE
+            // keeps it out; with MIE on a step still does not take it
+            dbg_rd(R_MSTATUS);
+            mst = dr_data;
+            dbg_wr(R_MSTATUS, mst | 64'h8);
+            dbg_wr(R_DPC, bp + 4);
+            dbg_wr(R_DCSR, 64'h8007);
+            dbg_resume(309);
+            dbg_wait_halted(310);
+            dbg_cause(311, 4);
+            dbg_rd(R_DPC);
+            dbg_check(312, dr_data == bp + 8, $sformatf("dpc %010h after the step", dr_data));
+            dbg_rd(R_X(16));
+            dbg_check(313, dr_data == 64'd1, "the stepped instruction");
+            dbg_rd(R_MCAUSE);
+            dbg_check(314, dr_data == 64'd0, "an interrupt was taken while stepping");
+            dbg_wr(R_MSTATUS, mst);
+            // a step over ECALL ends on the handler
+            dbg_resume(315);
+            dbg_wait_halted(316);
+            dbg_cause(317, 4);
+            dbg_rd(R_MTVEC);
+            v = dr_data;
+            dbg_rd(R_DPC);
+            dbg_check(318, dr_data == v, $sformatf("dpc %010h, mtvec %010h", dr_data, v));
+            dbg_rd(R_MEPC);
+            dbg_check(319, dr_data == bp + 8, "mepc of the ECALL");
+            dbg_rd(R_MCAUSE);
+            dbg_check(320, dr_data == 64'd11, "mcause of the ECALL");
+            dbg_wr(R_DCSR, 64'h8003);
+            dbg_resume(321);
+
+            //---------------------------------------------------------
+            // 4 WFI
+            //---------------------------------------------------------
+            t = 0;
+            while (t < 20) begin
+                @(negedge clk);
+                t = u_core.wfi_wait ? t + 1 : 0;
+            end
+            dbg_halt(401);
+            dbg_cause(402, 3);
+            dbg_rd(R_X(19));
+            v = dr_data;
+            dbg_rd(R_DPC);
+            dbg_check(403, dr_data == v, $sformatf("dpc %010h, behind the WFI %010h", dr_data, v));
+            dbg_rd(R_DCSR);
+            dbg_check(404, dr_data[1:0] == 2'd3, "dcsr.prv");
+            dbg_wr(R_X(12), 64'd1);
+            dbg_wr(R_DCSR, 64'h8000);                        // go on in user mode
+            dbg_rd(R_DCSR);
+            dbg_check(405, dr_data[1:0] == 2'd0, "dcsr.prv written");
+            dbg_resume(406);
+        end
+    end
+
     //=================================================================
     // end of test
     //=================================================================
@@ -448,6 +749,8 @@ module tb_CORE;
                      test_name);
         end else if (retire_error) begin
             $display(" %s : FAIL   (an instruction was retired twice)", test_name);
+        end else if (dbg_fail != 0) begin
+            $display(" %s : FAIL   (debugger check %0d)", test_name, dbg_fail);
         end else if (tohost == 64'd1) begin
             $display(" %s : PASS   (%0d instructions retired, %0d cycles)",
                      test_name, n_retired, cycle_count);

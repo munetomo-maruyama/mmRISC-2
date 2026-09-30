@@ -52,6 +52,9 @@
 #   - the select from MR forwarding the address of a load: EX waits for
 #     that load (lu_hazard) and takes nothing from MR in the meantime that
 #     it keeps
+#   - the gate that keeps a debug entry from taking a trap (trap_en in
+#     CPU_CORE): CORE_CSR gives dbg_enter priority over trap_en as well, so
+#     either one alone keeps mepc and mcause as they were
 #---------------------------------------------------------------------------
 cd "$(dirname "$0")"
 WORK=bug_work
@@ -246,6 +249,26 @@ MUTATIONS=(
 "208#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign i_cancel    = chk_valid \& pmp_fail%assign i_cancel    = pmp_fail%#IFU: the PMP answer is taken when no request is being checked"
 "209#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%mr_refetch    <= (ex_pred_taken \& ~ex_is_ctrl) | ex_csr_fetch;%mr_refetch    <= (ex_pred_taken \& ~ex_is_ctrl);%#core: a write of satp does not refetch what behind it was fetched untranslated"
 "210#CPU_CORE/CORE_CSR/CORE_CSR.sv#s%if (rd_addr == CSR_MIP) rmw_data\[IRQ_S_EXT\] = mip_seip;%;%#CSR: csrrs / csrrc of mip copy the PLIC line into the software SEIP bit"
+"211#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%end else if (irq_req \&\& !dec_is_wfi \&\& !step_active) begin%end else if (irq_req \&\& !dec_is_wfi) begin%#debug: a single step takes a pending interrupt"
+"212#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%\& ~step_active \& ~dbg_haltreq;%\& ~step_active;%#debug: a halt request does not end the wait of WFI"
+"213#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%if (dbg_take \&\& !(dec_is_wfi \&\& dbg_take_cause == 3'd3)) begin%if (dbg_take) begin%#debug: a halt request halts in front of WFI, not behind it"
+"214#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%end else if (dec_is_ebreak \&\& ebreak_dbg) begin%end else if (1'b0) begin%#debug: EBREAK ignores dcsr.ebreakm"
+"216#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%if      (dbg_resume_now) redirect_pc = dpc;%if (dbg_resume_now) redirect_pc = dpc + 64'd4;%#debug: resume does not go to dpc"
+"217#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%step_issued <= 1'b1;%step_issued <= 1'b0;%#debug: dcsr.step does not halt again"
+"218#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%: {dra_old\[63:32\], dra_wdata\[31:0\]};%: {32'd0, dra_wdata[31:0]};%#debug: a 32 bit register write clears the upper half"
+"219#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%if (halted_r) dra_state <= 2'd1;%if (1'b1) dra_state <= 2'd1;%#debug: registers are accessed while the hart runs"
+"220#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%if (!dra_exists || (dra_wr \&\& dra_ro)) begin%if (!dra_exists) begin%#debug: a write to a read only CSR is not an error"
+"221#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%(dra_csr \& csr_exists)%dra_csr%#debug: every CSR number exists"
+"222#CPU_CORE/CORE_CSR/CORE_CSR.sv#s%dcsr_cause <= dbg_cause;%dcsr_cause <= 3'd3;%#debug: dcsr.cause is always haltreq"
+"223#CPU_CORE/CORE_CSR/CORE_CSR.sv#s%dpc        <= {dbg_pc\[63:1\], 1'b0};%dpc        <= dbg_pc + 64'd4;%#debug: dpc is the instruction behind the one halted on"
+"224#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%if (boot_r) reset_halt_pend <= dbg_resethaltreq;%if (1'b0) reset_halt_pend <= dbg_resethaltreq;%#debug: resethaltreq is ignored"
+"225#CPU_CORE/CORE_CSR/CORE_CSR.sv#s%priv_r <= dcsr_prv;%priv_r <= priv_r;%#debug: resume ignores dcsr.prv"
+"226#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%.fs_dirty    ((commit \& ma_is_fp) | dbg_frf_we)%.fs_dirty    (commit \& ma_is_fp)%#debug: a debugger write of an FPR leaves mstatus.FS clean"
+"227#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign rf_ra1      = (dra_state != 2'd0) ? dbg_regno_q\[4:0\] : dec_rs1;%assign rf_ra1      = dec_rs1;%#debug: a GPR read takes the register of the instruction in ID"
+"228#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%\& ~serial_busy \& ~wfi_wait \& ~dbg_halted;%\& ~serial_busy \& ~wfi_wait;%#debug: instructions issue while halted"
+"229#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%.rd_addr     (dbg_csr_sel ? dbg_regno_q\[11:0\] : ex_csr_addr)%.rd_addr     (ex_csr_addr)%#debug: a CSR read takes the CSR of the instruction in EX"
+"230#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%(reset_halt_pend | dbg_haltreq | step_issued)%(reset_halt_pend | step_issued)%#debug: haltreq is ignored"
+"231#CPU_CORE/CORE_CSR/CORE_CSR.sv#s%CSR_DCSR      : if (dbg_access) begin%CSR_DCSR      : if (1'b0) begin%#debug: dcsr cannot be written"
 )
 
 # every mutation is run without and with back pressure on both cache ports
