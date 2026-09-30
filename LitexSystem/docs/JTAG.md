@@ -100,7 +100,23 @@ resume
   すると、WFI を終えた次の命令で止まる。止めている間も `mtime` は進むので、
   resume 直後にタイマ割り込みがまとめて来る。
 - 認証あり(SW2 上)のときは、設定ファイルが `init` のあとで
-  `riscv authdata_write 0xbeefcafe` を実行する。
+  `riscv authdata_write 0xbeefcafe` を実行する(次節)。
+
+### 認証の確認
+
+SW2 は OpenOCD を起動する**前に**上げておく(OpenOCD は接続時に DM をリセットし、
+そこで認証が解ける)。鍵は環境変数 `AUTH_KEY` で差し替えられる。
+
+| 手順 | 期待する結果 |
+|---|---|
+| 1. SW2 上、`AUTH_KEY=0x12345678 openocd -f ../FPGA/ARTY_A7_100T/openocd/ft2232h_jtag.cfg`(誤った鍵) | `Debugger is not authenticated to target Debug Module. (dmstatus=0x3)`、`examination failed`。telnet で `halt` しても `Target not examined yet` で何も起きず、LD0 は緑(実行中)のまま |
+| 2. 続けて telnet で `riscv authdata_write 0xbeefcafe` | `authdata_write resulted in successful authentication`、`Examined RISC-V core`。以後 `halt` / `reg` / `mdw` が使える |
+| 3. SW2 上、`AUTH_KEY` なしで `openocd ... -f scripts/jtag_check.tcl` | 設定ファイルが正しい鍵を書き、`JTAG CHECK RESULT : PASS` |
+| 4. SW2 下、`AUTH_KEY=none`(鍵を書かない) | 認証不要なので、そのまま `examine` が通る |
+
+未認証の間、DM は `dmstatus` の authenticated / version と `authdata` 以外をすべて 0 と
+読ませ、halt 要求・ndmreset・システムバスアクセスを一切行わない(`CPU_DBG_SPEC.md` 4.7)。
+dmstatus=0x3 は version=3(Debug Spec 1.0)で authenticated=0 の値。
 
 ## 4. 検証
 
