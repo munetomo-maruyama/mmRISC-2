@@ -389,6 +389,14 @@ Ethernet が入っていなかった(Rocket 構成から引き継いだ `build_s
   効いた。誤った鍵では `examination failed`(dmstatus=0x3)になり、正しい鍵を書くと
   そのまま examine が通った。
 
+## 12 回目: FPU のタイミング余裕(2026-10-01)
+
+- FPU の sticky ビットのマスクをキャリー連鎖なしで作り、浮動小数点 → 整数変換を
+  2 サイクルに分けた。ロード / ストアの tval の選択から DTLB を外した。配置配線後
+  WNS +0.040 → **+0.205 ns**(`docs/TIMING.md` 22 章)。
+- 実機: Linux がシェルまで起動し、`stress.sh` 10 分(net 3、sd 27、mem 4 回)が
+  PASS、カーネルの警告なし。
+
 ## 手順
 
 ### 1. SoC を生成(Linux VM)
