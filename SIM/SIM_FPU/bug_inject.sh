@@ -66,6 +66,23 @@ MUTATIONS=(
 "a carry leaves the exponent where it was|FPU_ROUND/FPU_ROUND.sv|s|(q_carry ? q_ef_1 : q_ef_0)|q_ef_0|"
 "overflow does not see the carry|FPU_ROUND/FPU_ROUND.sv|s|assign overflow = q_carry ? q_ovf_1 : q_ovf_0;|assign overflow = q_ovf_0;|"
 "tininess is judged without the carry|FPU_ROUND/FPU_ROUND.sv|s|tiny_1   = (int'(exp_in) + (carry_u ? 1 : 0)) < e_min;|tiny_1   = int'(exp_in) < e_min;|"
+
+# the sticky masks (one comparison per bit instead of (1 << n) - 1). The
+# mask of the subnormal shift in FPU_ROUND is not listed: whatever it loses
+# lies 74 or more places below the guard bit, and every bit it keeps there
+# goes into the sticky bit as well, so its loss only shows when all of those
+# are zero and a lost one is not -- a gap of 74 zero bits inside a
+# significand, which no operation of this unit produces.
+"the alignment sticky misses the lowest bit that leaves|CORE_FPU/CORE_FPU.sv|s|m\[i\] = (n\[6:0\] > 7'(i));|m[i] = (n[6:0] > 7'(i + 1));|"
+"the sticky of a conversion to an integer takes in the guard bit|CORE_FPU/CORE_FPU.sv|s|m\[i\] = ({1'b0, k} > 7'(i + 1));|m[i] = ({1'b0, k} > 7'(i));|"
+
+# the conversion to an integer, cut between S_SEL and S_RND
+"the integer part is not held|CORE_FPU/CORE_FPU.sv|s|q_f2i_ival     <= f2i_ival;|q_f2i_ival     <= 64'd0;|"
+"the sticky bit is not held|CORE_FPU/CORE_FPU.sv|s|q_f2i_s        <= f2i_s;|q_f2i_s        <= 1'b0;|"
+"S_RND does not write the converted value|CORE_FPU/CORE_FPU.sv|s|q_sp_res   <= f2i_res;|q_sp_res   <= q_sp_res;|"
+"a negative value is not rounded up|CORE_FPU/CORE_FPU.sv|s|a_sign ? (inc_i ? v_neg_inc : v_neg)|a_sign ? v_neg|"
+"the largest value rounded up does not overflow|CORE_FPU/CORE_FPU.sv|s|((v == lmax) \&\& inc_i)|1'b0|"
+"a NaN converts without the invalid flag|CORE_FPU/CORE_FPU.sv|s/q_f2i_spec_nv  <= a_nan | a_inf;/q_f2i_spec_nv  <= a_inf;/"
 )
 
 FILTER=${1:-}
