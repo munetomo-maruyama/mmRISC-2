@@ -6,6 +6,7 @@
 #   make profile    : run one test and print where the cycles went
 #   make stall      : run them all with random stalls on both bus slaves
 #   make riscv-tests: the official tests, through the caches
+#   make bench      : CoreMark and Dhrystone (bench/), with the profile
 #   make lint
 #   make clean
 #
@@ -73,7 +74,7 @@ TESTS    := t01_alu t02_branch t03_ldst t04_hazard t05_csr t07_trap t08_rvc \
 TEST     ?= t01_alu
 PLUSARGS ?=
 
-.PHONY: all run run-all profile stall romboot riscv-tests lint clean FORCE
+.PHONY: all run run-all profile stall romboot riscv-tests lint clean FORCE bench
 
 all: run-all
 
@@ -102,6 +103,16 @@ progs/%.hex: progs/%.S ../SIM_CORE/tests/link.ld ../SIM_CORE/tests/test.h
 	$(RVPREFIX)objcopy -O binary progs/$*.elf progs/$*.bin
 	python3 ../SIM_CORE/tools/bin2hex.py progs/$*.bin $@
 	$(RVPREFIX)objdump -d progs/$*.elf > progs/$*.dis
+
+# CoreMark and Dhrystone in machine mode, through the caches, with the
+# profile of where the cycles went (bench/Makefile)
+bench: obj_dir/V$(TOP)
+	$(MAKE) -C bench
+	@for b in coremark dhrystone; do \
+	    echo "=== $$b"; \
+	    ./obj_dir/V$(TOP) +hex=bench/$$b.hex +name=$$b +tohost=`cat bench/$$b.tohost` \
+	        +maxcycles=50000000 +profile $(PLUSARGS); \
+	done
 
 run: obj_dir/V$(TOP) tests/$(TEST).hex
 	./obj_dir/V$(TOP) +hex=tests/$(TEST).hex +name=$(TEST) $(PLUSARGS)

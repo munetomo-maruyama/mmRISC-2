@@ -23,6 +23,10 @@
 //     +maxcycles=<n>
 //     +trace            retirement trace
 //     +profile          where the cycles went
+//
+//   A program may mark the part to profile: tohost = 0x0200_0000_0000_0000
+//   (device 2, command 0) starts it -- every counter of the profile goes
+//   back to zero -- and 0x0201_0000_0000_0000 (command 1) stops it.
 //     +stall            random stalls on both bus slaves
 //---------------------------------------------------------------------------
 
@@ -390,6 +394,7 @@ module tb_SYS
     //   cycle later, exactly as the cache takes it (CPU_CACHE_SPEC.md 5.6).
     //=================================================================
     logic [63:0] tohost;
+    logic        prof_start, prof_stop;      // the markers, for one cycle
     logic        s1_valid, s1_store;
     logic [63:0] s1_wdata;
     logic [SOC_ADDR_WIDTH-1:0] s1_vaddr;
@@ -418,6 +423,8 @@ module tb_SYS
                 ({24'd0, s1_addr} == tohost_addr) && (s1_wdata != 64'd0)) begin
                 if (th_dev == 8'd0)                            tohost <= s1_wdata;
                 else if ((th_dev == 8'd1) && (th_cmd == 8'd1)) $write("%c", s1_wdata[7:0]);
+                else if ((th_dev == 8'd2) && (th_cmd == 8'd0)) prof_start = 1'b1;
+                else if ((th_dev == 8'd2) && (th_cmd == 8'd1)) prof_stop  = 1'b1;
             end
         end
     end
@@ -431,49 +438,149 @@ module tb_SYS
 
 `define CORE u_cpu_top.g_core.u_cpu_core
 
+    //-----------------------------------------------------------------
+    // The same cycles once more, counted where an instruction is issued
+    // (ID -> EX) instead of where one retires. A cycle at the end of the
+    // pipeline only sees what is there now: the bubbles a mispredicted
+    // branch leaves behind arrive there later and look like nothing. At
+    // the issue point every cycle either issues or has a reason not to.
+    //-----------------------------------------------------------------
+    int  prof_cycles, prof_retired;
+    int  q_issue, q_redirect, q_ma, q_mr, q_unit, q_lu, q_mmu,
+         q_refill, q_fetch, q_serial, q_other;
+    int  e_br, e_jal, e_jalr, e_mp_br, e_mp_jal, e_mp_jalr, e_mdu, e_trap;
+    bit  after_redirect, prof_on, prof_marked;
+
+    task automatic prof_clear;
+        prof_cycles = 0; prof_retired = 0;
+        q_issue = 0; q_redirect = 0; q_ma = 0; q_mr = 0; q_unit = 0;
+        q_lu = 0; q_mmu = 0; q_refill = 0; q_fetch = 0; q_serial = 0;
+        q_other = 0;
+        e_br = 0; e_jal = 0; e_jalr = 0; e_mp_br = 0; e_mp_jal = 0;
+        e_mp_jalr = 0; e_mdu = 0; e_trap = 0;
+        p_dcache = 0; p_unit = 0; p_mmu = 0; p_starve = 0; p_serial = 0;
+        p_other = 0; n_dacc = 0; n_ifetch = 0;
+    endtask
+
+    initial begin
+        prof_clear();
+        prof_on        = 1'b1;
+        prof_marked    = 1'b0;
+        after_redirect = 1'b0;
+        prof_start     = 1'b0;
+        prof_stop      = 1'b0;
+    end
+
+    always @(posedge clk) begin
+        if (rst_n) begin
+            if (prof_start) begin
+                prof_clear();
+                prof_on     = 1'b1;
+                prof_marked = 1'b1;
+                prof_start  = 1'b0;
+            end
+            if (prof_stop) begin
+                prof_on   = 1'b0;
+                prof_stop = 1'b0;
+            end
+            if (prof_on) begin
+                prof_cycles++;
+                if (`CORE.trace_valid) prof_retired++;
+                if (`CORE.id_issue)                    q_issue++;
+                else if (`CORE.redirect_valid)         q_redirect++;
+                else if (`CORE.stall_ex) begin
+                    if (`CORE.stall_ma)                q_ma++;
+                    else if ((`CORE.mdu_active & ~`CORE.mdu_done) |
+                             (`CORE.fpu_active & ~`CORE.fpu_done))
+                                                       q_unit++;
+                    else if (`CORE.lu_hazard)          q_lu++;
+                    else if (`CORE.ex_mmu_wait)        q_mmu++;
+                    else                               q_mr++;
+                end
+                else if (~`CORE.fq_valid) begin
+                    if (after_redirect)                q_refill++;
+                    else                               q_fetch++;
+                end
+                else if (~`CORE.id_ready)              q_serial++;
+                else                                   q_other++;
+
+                if (`CORE.ex_ctrl_go) begin
+                    if (`CORE.ex_is_branch) begin e_br++;   if (`CORE.ex_mispredict) e_mp_br++;   end
+                    if (`CORE.ex_is_jal)    begin e_jal++;  if (`CORE.ex_mispredict) e_mp_jal++;  end
+                    if (`CORE.ex_is_jalr)   begin e_jalr++; if (`CORE.ex_mispredict) e_mp_jalr++; end
+                end
+                if (`CORE.mdu_start)  e_mdu++;
+                if (`CORE.trap_taken) e_trap++;
+            end
+            // the front end refills from a redirect until the next issue
+            if (`CORE.redirect_valid)  after_redirect = 1'b1;
+            else if (`CORE.id_issue)   after_redirect = 1'b0;
+        end
+    end
+
     always @(posedge clk) begin
         if (rst_n) begin
             cycle_count <= cycle_count + 1;
-            if (u_cpu_top.cpu_d_req_valid & u_cpu_top.cpu_d_req_ready)
-                n_dacc <= n_dacc + 1;
-            if (u_cpu_top.cpu_i_req_valid & u_cpu_top.cpu_i_req_ready)
-                n_ifetch <= n_ifetch + 1;
+            if (prof_on && u_cpu_top.cpu_d_req_valid && u_cpu_top.cpu_d_req_ready)
+                n_dacc++;
+            if (prof_on && u_cpu_top.cpu_i_req_valid && u_cpu_top.cpu_i_req_ready)
+                n_ifetch++;
             if (`CORE.trace_valid) begin
                 n_retired <= n_retired + 1;
                 if ($test$plusargs("trace"))
                     $display("[%0t] %010h : %08h", $time,
                              `CORE.trace_pc, `CORE.trace_insn);
             end
-            else if (`CORE.stall_ma)      p_dcache <= p_dcache + 1;
+            else if (!prof_on)            ;
+            else if (`CORE.stall_ma)      p_dcache++;
             else if ((`CORE.mdu_active & ~`CORE.mdu_done) |
                      (`CORE.fpu_active & ~`CORE.fpu_done))
-                                          p_unit   <= p_unit   + 1;
-            else if (`CORE.ex_mmu_wait)   p_mmu    <= p_mmu    + 1;
-            else if (~`CORE.fq_valid)     p_starve <= p_starve + 1;
-            else if (~`CORE.id_ready)     p_serial <= p_serial + 1;
-            else                          p_other  <= p_other  + 1;
+                                          p_unit++;
+            else if (`CORE.ex_mmu_wait)   p_mmu++;
+            else if (~`CORE.fq_valid)     p_starve++;
+            else if (~`CORE.id_ready)     p_serial++;
+            else                          p_other++;
         end
     end
 
+    function automatic string pct(input int n);
+        return $sformatf("%9d (%5.1f%%)", n, 100.0 * real'(n) / real'(prof_cycles));
+    endfunction
+
     task automatic report_profile;
         $display("");
-        $display(" cycles %0d, retired %0d, CPI %0.2f",
-                 cycle_count, n_retired, real'(cycle_count) / real'(n_retired));
-        $display("   waiting for the data cache : %6d (%0.1f%%)",
-                 p_dcache, 100.0 * real'(p_dcache) / real'(cycle_count));
-        $display("   waiting for MDU or FPU     : %6d (%0.1f%%)",
-                 p_unit,   100.0 * real'(p_unit)   / real'(cycle_count));
-        $display("   waiting for a translation  : %6d (%0.1f%%)",
-                 p_mmu,    100.0 * real'(p_mmu)    / real'(cycle_count));
-        $display("   front end has nothing      : %6d (%0.1f%%)",
-                 p_starve, 100.0 * real'(p_starve) / real'(cycle_count));
-        $display("   serialising an instruction : %6d (%0.1f%%)",
-                 p_serial, 100.0 * real'(p_serial) / real'(cycle_count));
-        $display("   other bubbles              : %6d (%0.1f%%)",
-                 p_other,  100.0 * real'(p_other)  / real'(cycle_count));
-        $display("   %0d data accesses, %0.2f cycles of stall each",
-                 n_dacc, real'(p_dcache) / real'(n_dacc));
-        $display("   %0d fetch words", n_ifetch);
+        $display(" %s: cycles %0d, retired %0d, CPI %0.3f",
+                 prof_marked ? "the marked part" : "the whole run",
+                 prof_cycles, prof_retired, real'(prof_cycles) / real'(prof_retired));
+        $display("");
+        $display(" where an instruction retires (what the last stage sees)");
+        $display("   retired                      : %s", pct(prof_retired));
+        $display("   waiting for the data cache   : %s", pct(p_dcache));
+        $display("   waiting for MDU or FPU       : %s", pct(p_unit));
+        $display("   waiting for a translation    : %s", pct(p_mmu));
+        $display("   front end has nothing        : %s", pct(p_starve));
+        $display("   serialising an instruction   : %s", pct(p_serial));
+        $display("   other bubbles                : %s", pct(p_other));
+        $display("   %0d data accesses, %0.2f cycles of stall each, %0d fetch words",
+                 n_dacc, real'(p_dcache) / real'(n_dacc), n_ifetch);
+        $display("");
+        $display(" where an instruction is issued (ID -> EX)");
+        $display("   issued                       : %s", pct(q_issue));
+        $display("   redirect (the cycle itself)  : %s", pct(q_redirect));
+        $display("   refill after a redirect      : %s", pct(q_refill));
+        $display("   front end empty otherwise    : %s", pct(q_fetch));
+        $display("   EX held: MA waits for D$     : %s", pct(q_ma));
+        $display("   EX held: MR waits for D$     : %s", pct(q_mr));
+        $display("   EX held: load-use            : %s", pct(q_lu));
+        $display("   EX held: MDU or FPU          : %s", pct(q_unit));
+        $display("   EX held: translation         : %s", pct(q_mmu));
+        $display("   serialising (CSR, fence)     : %s", pct(q_serial));
+        $display("   other                        : %s", pct(q_other));
+        $display("");
+        $display(" control transfers (mispredicted / executed)");
+        $display("   branch %0d / %0d, jal %0d / %0d, jalr %0d / %0d",
+                 e_mp_br, e_br, e_mp_jal, e_jal, e_mp_jalr, e_jalr);
+        $display("   MDU operations %0d, traps %0d", e_mdu, e_trap);
     endtask
 
     //=================================================================

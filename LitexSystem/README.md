@@ -52,12 +52,14 @@ LitexSystem/
 ├── software/
 │   ├── mmrisc_arty.dts  デバイスツリー
 │   ├── boot/            SD カードの第 1 パーティションに置くもの(fw_jump.bin)と手順
-│   └── rootfs/          ルートファイルシステムに足すもの(inittab、udhcpc のスクリプト、
+│   ├── rootfs/          ルートファイルシステムに足すもの(inittab、udhcpc のスクリプト、
 │                        負荷試験 stress.sh)
+│   └── bench/           ベンチマーク(CoreMark、Dhrystone、micro)。TFTP でボードへ
 ├── docs/
 │   ├── BRINGUP.md       立ち上げ記録と手順
 │   ├── TIMING.md        タイミング収束の記録
 │   ├── JTAG.md          JTAG / cJTAG デバッグ(ピン、スイッチ、OpenOCD)
+│   ├── BENCH.md         性能測定(シミュレーションと実機、どこでサイクルを失うか)
 │   └── TFTP_SERVER.md   Parallels 上の Ubuntu を TFTP サーバにする手順
 └── build/               生成物(git 管理外)
 ```
