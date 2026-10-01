@@ -27,6 +27,18 @@
 //   `target`". A predicted word is pushed with the parcels behind the
 //   branch thrown away, and the fetch goes on at the target.
 //
+//   A 32 bit branch that begins in the last parcel of a word has its entry
+//   on the next word, as a tail (CORE_BTB): it is used only when that word
+//   is fetched by going on from the one before (seq_fetch), and the word
+//   is kept up to parcel 0, the end of the branch.
+//
+//   Returns take their target from a return address stack. The fetch side
+//   pushes the address behind a call it predicts and pops at a return it
+//   predicts (ras_s, speculative); the execute stage does the same for the
+//   calls and returns that really go through (ras_a), and every redirect
+//   copies that one over the other, so a wrong path never leaves the stack
+//   behind it wrong for longer than until the redirect that ends it.
+//
 //   A prediction is never trusted to be about a real instruction boundary.
 //   The entry was written from a branch that really executed, but the same
 //   bytes can be decoded at another alignment if the program jumps into the
@@ -61,7 +73,7 @@ module CORE_IFU
         parameter int          PADDR_WIDTH  = 40,
         parameter logic [63:0] RESET_VECTOR = 64'h0000_0000_8000_0000,
         parameter int          PQ_DEPTH     = 16,     // parcels, power of two
-        parameter int          BTB_ENTRIES  = 64
+        parameter int          BTB_ENTRIES  = 256
     )
     (
         input  logic                    clk,
@@ -107,6 +119,8 @@ module CORE_IFU
         input  logic                    btb_upd_is32,
         input  logic [63:0]             btb_upd_target,
         input  logic                    btb_upd_taken,
+        input  logic                    btb_upd_call,  // jal / jalr writing ra or t0
+        input  logic                    btb_upd_ret,   // jalr x0 through ra or t0
         input  logic                    btb_flush    // fence.i, sfence.vma
     );
 
@@ -141,11 +155,26 @@ module CORE_IFU
     //-----------------------------------------------------------------
     // the prediction
     //-----------------------------------------------------------------
-    logic        btb_hit, btb_taken, btb_is32;
+    logic        btb_hit, btb_taken, btb_is32, btb_tail, btb_call, btb_ret;
     logic [1:0]  btb_off;
     logic [63:0] btb_target;
     logic        use_pred, no_pred;
     logic [1:0]  next_start;      // first parcel of the word this fetch wants
+    logic        seq_fetch;       // fetch_pc follows the word before it
+    logic [63:0] pred_target;     // btb_target, or the stack for a return
+    logic [1:0]  pred_last;       // last parcel of the predicted branch
+    logic [63:0] pred_link;       // the address behind a predicted call
+
+    //-----------------------------------------------------------------
+    // return address stack
+    //-----------------------------------------------------------------
+    localparam int RAS_DEPTH = 8;
+    localparam int RAS_BITS  = $clog2(RAS_DEPTH);
+    logic [63:0]         ras_s [0:RAS_DEPTH-1];     // fetch, speculative
+    logic [63:0]         ras_a [0:RAS_DEPTH-1];     // execute stage
+    logic [RAS_BITS-1:0] sp_s, sp_a, sp_a_next;
+    logic                a_push, a_pop;
+    logic [63:0]         a_link;
 
     // one record per request that is in the cache
     logic        pr_valid  [0:OS_DEPTH-1];
@@ -191,12 +220,32 @@ module CORE_IFU
             .upd_is32   (btb_upd_is32),
             .upd_target (btb_upd_target),
             .upd_taken  (btb_upd_taken),
+            .upd_call   (btb_upd_call),
+            .upd_ret    (btb_upd_ret),
+            .hit_tail   (btb_tail),
+            .hit_call   (btb_call),
+            .hit_ret    (btb_ret),
             .flush      (btb_flush)
         );
 
+    // A tail belongs to a branch that began in the word before; it means
+    // nothing when this word was jumped into, even at parcel 0.
     assign use_pred = req_want & tr_ready & (tr_fault == 2'd0) &
                       btb_hit & btb_taken & ~no_pred &
-                      (btb_off >= next_start);
+                      (btb_tail ? (seq_fetch & (next_start == 2'd0))
+                                : (btb_off >= next_start));
+
+    assign pred_target = btb_ret ? ras_s[sp_s - RAS_BITS'(1)] : btb_target;
+    assign pred_last   = btb_tail ? 2'd0 : (btb_off + {1'b0, btb_is32});
+    // the call ends at pred_last; what follows it is the return address
+    assign pred_link   = {fetch_pc[63:3], 3'b000} + {61'd0, pred_last, 1'b0} + 64'd2;
+
+    // the stack of the execute stage
+    assign a_push    = btb_upd_valid & btb_upd_call;
+    assign a_pop     = btb_upd_valid & btb_upd_ret;
+    assign a_link    = btb_upd_pc + (btb_upd_is32 ? 64'd4 : 64'd2);
+    assign sp_a_next = sp_a + (a_push ? RAS_BITS'(1) : RAS_BITS'(0))
+                            - (a_pop  ? RAS_BITS'(1) : RAS_BITS'(0));
 
     assign tr_req      = req_want;
     assign tr_vaddr    = fetch_pc;
@@ -291,6 +340,11 @@ module CORE_IFU
             tg_head     <= 3'd0;
             tg_tail     <= 3'd0;
             chk_valid   <= 1'b0;
+            seq_fetch   <= 1'b0;
+            sp_s        <= '0;
+            sp_a        <= '0;
+            for (int i = 0; i < RAS_DEPTH; i++) ras_s[i] <= 64'd0;
+            for (int i = 0; i < RAS_DEPTH; i++) ras_a[i] <= 64'd0;
             for (int i = 0; i < OS_DEPTH; i++) pr_valid[i] <= 1'b0;
             for (int i = 0; i < OS_DEPTH; i++) pr_cancel[i] <= 1'b0;
         end else begin
@@ -298,6 +352,10 @@ module CORE_IFU
             // the cache wants the tag in the cycle after the request was
             // taken (CPU_CACHE_SPEC.md 5.6)
             if (push_req) i_req_paddr <= tr_paddr[PADDR_WIDTH-1:0];
+
+            // the return address stack of the execute stage
+            if (a_push) ras_a[sp_a] <= a_link;
+            sp_a <= sp_a_next;
 
             if (redirect_valid || self_redirect) begin
                 // a misfetch keeps the address it was trying to reach and
@@ -308,6 +366,12 @@ module CORE_IFU
                 push_pc    <= redirect_valid ? redirect_pc : head_pc;
                 next_start <= redirect_valid ? redirect_pc[2:1] : head_pc[2:1];
                 no_pred    <= ~redirect_valid;
+                seq_fetch  <= 1'b0;
+                // the fetch side's stack is whatever the execute stage's
+                // is, including what it does in this very cycle
+                for (int i = 0; i < RAS_DEPTH; i++)
+                    ras_s[i] <= (a_push && (RAS_BITS'(i) == sp_a)) ? a_link : ras_a[i];
+                sp_s     <= sp_a_next;
                 pq_head  <= '0;
                 pq_tail  <= '0;
                 pq_count <= '0;
@@ -320,9 +384,18 @@ module CORE_IFU
                 for (int i = 0; i < OS_DEPTH; i++) pr_cancel[i] <= 1'b0;
             end else begin
                 if (push_req | local_resp) begin
-                    fetch_pc   <= use_pred ? btb_target : fetch_pc + 64'd8;
-                    next_start <= use_pred ? btb_target[2:1] : 2'd0;
+                    fetch_pc   <= use_pred ? pred_target : fetch_pc + 64'd8;
+                    next_start <= use_pred ? pred_target[2:1] : 2'd0;
                     no_pred    <= 1'b0;
+                    seq_fetch  <= ~use_pred;
+                end
+                if (push_req && use_pred) begin
+                    if (btb_call) begin
+                        ras_s[sp_s] <= pred_link;
+                        sp_s        <= sp_s + RAS_BITS'(1);
+                    end else if (btb_ret) begin
+                        sp_s        <= sp_s - RAS_BITS'(1);
+                    end
                 end
 
                 // the record that travels with the request
@@ -331,8 +404,8 @@ module CORE_IFU
                 if (push_req) begin
                     pr_cancel[pr_tail] <= 1'b0;
                     pr_valid [pr_tail] <= use_pred;
-                    pr_last  [pr_tail] <= btb_off + {1'b0, btb_is32};
-                    pr_target[pr_tail] <= btb_target;
+                    pr_last  [pr_tail] <= pred_last;
+                    pr_target[pr_tail] <= pred_target;
                     pr_tail            <= pr_tail + OS_BITS'(1);
                 end
                 if (resp_real) pr_head <= pr_head + OS_BITS'(1);

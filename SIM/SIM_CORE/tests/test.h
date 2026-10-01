@@ -27,7 +27,7 @@
     li   t0, 0x1F;                  \
     csrw pmpcfg0, t0;
 
-// Four words the test bench prints with +bench. A benchmark drops the cycle
+// Eight words the test bench prints with +bench. A benchmark drops the cycle
 // count of each of its parts here; the address is fixed so that the bench
 // needs no symbol from the ELF file.
 #define BENCH_SLOT 0x80002100

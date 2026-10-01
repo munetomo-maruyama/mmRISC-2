@@ -87,7 +87,7 @@ module CPU_TOP
         parameter int          CLINT_TICK_DIV = 1,
 
         // branch target buffer, TLBs, PMP
-        parameter int          BTB_ENTRIES  = 64,
+        parameter int          BTB_ENTRIES  = 256,
         parameter int          ITLB_ENTRIES = 8,
         parameter int          DTLB_ENTRIES = 8,
         parameter int          PMP_ENTRIES  = 8,

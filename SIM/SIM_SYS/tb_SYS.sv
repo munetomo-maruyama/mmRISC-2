@@ -39,7 +39,9 @@ module tb_SYS
         // makes the core fetch its first instructions UNCACHED over
         // AXI4-Lite, which is what the LiteX BIOS does: it runs from a ROM
         // at 0x1000_0000, below MEM_BASE.
-        parameter logic [39:0] RESET_ADDR = 40'h00_8000_0000
+        parameter logic [39:0] RESET_ADDR = 40'h00_8000_0000,
+        // for trying other sizes of the branch target buffer (-GBTB_ENTRIES)
+        parameter int          BTB_ENTRIES = 256
     );
 
     localparam int          SOC_ADDR_WIDTH = 40;
@@ -106,6 +108,7 @@ module tb_SYS
             .MEM_BASE        (MEM_BASE),
             .RESET_VECTOR    ({24'd0, RESET_ADDR}),
             .NUM_IRQ         (32),
+            .BTB_ENTRIES     (BTB_ENTRIES),
             .USE_BFM         (0)
         )
     u_cpu_top
