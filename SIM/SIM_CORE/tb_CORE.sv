@@ -761,8 +761,8 @@ module tb_CORE;
         end
         if ($test$plusargs("profile")) report_profile();
         if ($test$plusargs("bench")) begin
-            // the four words a benchmark leaves at BENCH_SLOT
-            for (int k = 0; k < 4; k++) begin
+            // the eight words a benchmark leaves at BENCH_SLOT
+            for (int k = 0; k < 8; k++) begin
                 bench_v = u_mem.mem[((64'h8000_2100 - MEM_BASE) >> 3) + k];
                 if (bench_v != 64'd0)
                     $display(" part %0d : %0d cycles", k, bench_v);

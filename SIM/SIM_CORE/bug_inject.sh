@@ -31,9 +31,9 @@
 #     building when the predictor is tuned rather than now. 174 and 175 are
 #     listed but are in that category: they are left in for the day such a
 #     benchmark exists. 175 reports NOT DETECTED until then; 174 is caught
-#     by the virtual memory test below (a real wrong answer, check 20 of
-#     rv64ui-v-add), which only runs when its hex exists, that is after
-#     "make riscv-tests-v" has been run once. What covers
+#     by t24_predict (since branches across a fetch word are predicted
+#     through a tail entry, 2026-10) and by the virtual memory test below.
+#     What covers
 #     the buffer instead is that a change to it which alters no prediction
 #     leaves every cycle count in the suite exactly where it was.
 #   - the inside of MMU_PMP, which has its own bench and its own campaign in
@@ -217,12 +217,12 @@ MUTATIONS=(
 "161#CPU_PLIC/CPU_PLIC.sv#s+assign is_claim     = in_context \&\& ((int'(addr) % 32'h1000) == 4);+assign is_claim     = in_context \&\& ((int'(addr) % 32'h1000) == 0);+#PLIC: the claim register is at the wrong offset"
 "162#CPU_PLIC/CPU_PLIC.sv#s+assign ctx_ctl      = (int'(addr) - 32'h20_0000) / 32'h1000;+assign ctx_ctl      = 0;+#PLIC: every context uses the claim register of context zero"
 "163#CPU_PLIC/CPU_PLIC.sv#s+assign ctx_en       = (int'(addr) - 32'h00_2000) / 32'h80;+assign ctx_en       = 0;+#PLIC: every enable word belongs to context zero"
-"174#CPU_CORE/CORE_BTB/CORE_BTB.sv#s%assign spans   = upd_is32 \&\& (upd_off == 2'b11);%assign spans   = 1'b0;%#BTB: a 32 bit branch across two words is allocated"
-"175#CPU_CORE/CORE_BTB/CORE_BTB.sv#s%upd_d\[F_IS32\], upd_target, new_cnt %upd_d[F_IS32], upd_d[F_TARGET +: 64], new_cnt %#BTB: the target of an entry that is hit again is not kept up to date"
-"177#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%(btb_off >= next_start);%1'b1;%#IFU: a prediction is used even when the branch is before the address jumped to"
+"174#CPU_CORE/CORE_BTB/CORE_BTB.sv#s%assign spans    = upd_is32 \&\& (upd_off == 2'b11);%assign spans    = 1'b0;%#BTB: a 32 bit branch across two words is allocated on its own word, not as a tail"
+"175#CPU_CORE/CORE_BTB/CORE_BTB.sv#s%                              upd_target, new_cnt }%                              upd_d[F_TARGET +: 64], new_cnt }%#BTB: the target of an entry that is hit again is not kept up to date"
+"177#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%: (btb_off >= next_start));%: 1'b1);%#IFU: a prediction is used even when the branch is before the address jumped to"
 "178#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign straddle      = fq_have \& ~fq_is_rvc \& d0;%assign straddle      = 1'b0;%#IFU: the misfetch of a trim inside an instruction is not caught"
 "179#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign fq_pred_taken  = fq_is_rvc ? d0 : d1;%assign fq_pred_taken  = d0;%#IFU: the prediction of a 32 bit instruction is read from its first parcel"
-"180#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%pr_last  \[pr_tail\] <= btb_off + {1'b0, btb_is32};%pr_last  [pr_tail] <= btb_off;%#IFU: the trim keeps only the first half of a 32 bit branch"
+"180#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%2'd0 : (btb_off + {1'b0, btb_is32});%2'd0 : (btb_off);%#IFU: the trim keeps only the first half of a 32 bit branch"
 "181#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%head_pc <= fq_pred_target;%head_pc <= head_pc + 64'd4;%#IFU: the head does not follow a prediction to its target"
 "182#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%push_pc <= pred_resp ? pr_target\[pr_head\]%push_pc <= pred_resp ? 64'd0%#IFU: the push address after a prediction is wrong"
 "183#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%(take_branch \& (target_pc != ex_pred_target))%1'b0%#core: a prediction to the wrong target is not put right"
@@ -270,6 +270,13 @@ MUTATIONS=(
 "230#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%(reset_halt_pend | dbg_haltreq | step_issued)%(reset_halt_pend | step_issued)%#debug: haltreq is ignored"
 "231#CPU_CORE/CORE_CSR/CORE_CSR.sv#s%CSR_DCSR      : if (dbg_access) begin%CSR_DCSR      : if (1'b0) begin%#debug: dcsr cannot be written"
 "232#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%            ex_exc_tval = mem_addr;%            ex_exc_tval = ex_exc_tval_pre;%#core: a page fault of a load or a store reports no address in tval"
+"233#CPU_CORE/CORE_BTB/CORE_BTB.sv#s%    assign allow   = upd_valid;%    assign allow   = upd_valid \&\& !spans;%#BTB: a branch across a fetch word gets no tail entry (t24)"
+"234#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%(btb_tail ? (seq_fetch \& (next_start == 2'd0))%(btb_tail ? ((next_start == 2'd0))%#IFU: a tail entry is used in a word that was jumped into (t24)"
+"235#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign pred_target = btb_ret ? ras_s\[sp_s - RAS_BITS'(1)\] : btb_target;%assign pred_target = btb_target;%#IFU: returns go where the buffer last saw them go, not to the stack (t24)"
+"236#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%                sp_s     <= sp_a_next;%                sp_s     <= sp_s;%#IFU: a redirect leaves the fetch side's stack pointer where the wrong path left it"
+"237#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%{61'd0, pred_last, 1'b0} + 64'd2;%{61'd0, pred_last, 1'b0};%#IFU: a predicted call pushes its own address instead of the one behind it"
+"238#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign a_pop     = btb_upd_valid \& btb_upd_ret;%assign a_pop     = 1'b0;%#IFU: the stack of the execute stage never pops"
+"239#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign btb_upd_ret  = ex_is_jalr \& (ex_rd == 5'd0) \& ex_rs1_link;%assign btb_upd_ret  = 1'b0;%#core: no jalr is taken for a return"
 )
 
 # every mutation is run without and with back pressure on both cache ports
