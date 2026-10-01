@@ -42,7 +42,7 @@ ee/ee_printf.c: $(COREMARK)/barebones/ee_printf.c
 	! grep -q '^#error' $@
 
 .PHONY: all clean
-all: coremark.hex dhrystone.hex
+all: coremark.hex dhrystone.hex ldloop.hex
 
 %.hex: %.elf ../../SIM_CORE/tools/bin2hex.py
 	$(RVPREFIX)objcopy -O binary $< $*.bin
@@ -74,6 +74,11 @@ dhrystone.elf: $(ENV) dhry/dhrystone.h dhry_shim.c
 	    -Idhry -I. -I$(COREMARK) \
 	    crt.S minilib.c ee/ee_printf.c dhry_shim.c dhry/dhrystone.c dhry/dhrystone_main.c \
 	    -lgcc -o $@
+
+# the four loops of micro.c (LitexSystem/software/bench/loops.h), to hold
+# against the board one for one
+ldloop.elf: $(ENV) ldloop.c ../../../LitexSystem/software/bench/loops.h
+	$(CC) $(CFLAGS) -I. -I$(COREMARK) crt.S minilib.c ee/ee_printf.c ldloop.c -lgcc -o $@
 
 clean:
 	rm -rf dhry ee *.elf *.bin *.hex *.dis *.tohost

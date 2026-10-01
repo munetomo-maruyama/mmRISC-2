@@ -75,7 +75,7 @@ out/dhrystone: out/dhry/dhrystone.h out/dhry/util.h dhry_shim.c
 	$(CC) $(CFLAGS) -std=gnu89 -fno-common -fno-builtin-printf -w -Iout/dhry \
 	    out/dhry/dhrystone.c out/dhry/dhrystone_main.c dhry_shim.c -o $@
 
-out/micro: micro.c | out
+out/micro: micro.c loops.h | out
 	$(CC) $(CFLAGS) -Wall -o $@ $<
 
 tftp: all
