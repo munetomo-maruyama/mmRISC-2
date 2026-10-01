@@ -1231,3 +1231,18 @@ valid に依存させない変更がキャッシュ側に要る(未着手)。
 残りは転送と PMP → D$ / MDU の 2 系統。PMP → D$ の対策(調停と RAM の読み出しを
 valid から切り離す)は、余裕が 0.2 ns ある今は見送る。次に論理を足して負に振れたら
 ここから削る。
+
+## 23. 分岐予測を大きくした版: +0.002 ns(2026-10-02)
+
+BTB 256 エントリ + 戻りアドレススタック(`CPU_CORE_SPEC.md` 決定 56・57)。LUT 41,655
+(65.7 %)。配置配線後 WNS **+0.002 ns**(MET)。最悪 10 本のうち 9 本が
+`u_csr/pmpaddr` から始まり、PMP の比較 → `mr_exc` → `lsu_req_valid` → **ストールの網**
+(`stall_mr` → `stall_ex` → `ex_advance` / `id_advance`)を通って、フェッチキューの
+`pq_count`、`ex_valid`、MDU / FPU の状態、D$ のタグ読み出しに着く。残る 1 本は
+`u_lsu/size_r` → MDU の状態(同じ網)。BTB と IF1 は上位に出てこない。
+
+PMP の判定がパイプライン全体の止める / 進めるに直結しているのが構造的な限界。
+ロードのレイテンシ短縮(`LitexSystem/docs/BENCH.md` の A)で D$ への要求を EX から
+出す形にすれば、PMP は要求の取り消しと例外だけに効き、ストールの網から外れる
+(`RTL/CPU/CPU_CORE/PLAN_LOAD_LATENCY.md`)。
+

@@ -23,6 +23,8 @@
 //     +maxcycles=<n>
 //     +trace            retirement trace
 //     +profile          where the cycles went
+//     +dtrace           every request and answer on the data port of the
+//                       core, with the cycle and the stage it is issued from
 //
 //   A program may mark the part to profile: tohost = 0x0200_0000_0000_0000
 //   (device 2, command 0) starts it -- every counter of the profile goes
@@ -550,6 +552,19 @@ module tb_SYS
             else if (~`CORE.fq_valid)     p_starve++;
             else if (~`CORE.id_ready)     p_serial++;
             else                          p_other++;
+        end
+    end
+
+    // +dtrace : the data port of the core, cycle by cycle
+    always @(posedge clk) begin
+        if (rst_n && $test$plusargs("dtrace")) begin
+            if (u_cpu_top.cpu_d_req_valid && u_cpu_top.cpu_d_req_ready)
+                $display("[%0d] D REQ  cmd=%0d addr=%010h  (pc in MR %010h, in MA %010h)",
+                         cycle_count, u_cpu_top.cpu_d_req_cmd, u_cpu_top.cpu_d_req_addr,
+                         `CORE.mr_pc, `CORE.ma_pc);
+            if (u_cpu_top.cc_d_resp_valid)
+                $display("[%0d] D RESP data=%016h  (pc in MA %010h, stall_ma=%0d)",
+                         cycle_count, u_cpu_top.cc_d_resp_data, `CORE.ma_pc, `CORE.stall_ma);
         end
     end
 
