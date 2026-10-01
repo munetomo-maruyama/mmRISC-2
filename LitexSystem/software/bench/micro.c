@@ -17,6 +17,8 @@
  *                         multiple of 8: the core traps, and the access is
  *                         done in software (OpenSBI or the kernel)
  *   dgemm                 double precision multiply and add
+ *   sweep                 (micro 50 sweep) the stride 64 load loop over
+ *                         8 ... 256 lines, all within the D$
  *   loops                 four loops of four instructions (loops.h), the
  *                         same ones SIM/SIM_SYS/bench/ldloop.c runs in the
  *                         simulation: cycles per iteration, one for one
@@ -252,14 +254,46 @@ static void loops(void)
     free(lp_buf);
 }
 
+/* the stride 64 loop over 8 ... 256 lines (512 B ... 16 KiB, all of them
+ * fit in the D$): flat in the simulation */
+static int sw_lines;
+
+static void body_sweep(long n)
+{
+    unsigned long s = 0;
+    for (long r = 0; r < n; r++)
+        s += loop_ld(lp_buf, lp_buf + sw_lines * 64, 64);
+    sink = s;
+}
+
+static void sweep(void)
+{
+    static const int lines[] = { 8, 16, 32, 48, 64, 96, 128, 192, 256 };
+    lp_buf = aligned_alloc(4096, 16384);
+    memset(lp_buf, 5, 16384);
+    for (unsigned k = 0; k < sizeof lines / sizeof lines[0]; k++) {
+        long   n = 1;
+        double t;
+        sw_lines = lines[k];
+        t = timed(body_sweep, &n, 1.0);
+        printf("sweep %3d lines (%5d B) :  %5.2f cycles per load\n",
+               sw_lines, sw_lines * 64, t * mhz * 1e6 / ((double)n * sw_lines));
+    }
+    free(lp_buf);
+}
+
 /*--------------------------------------------------------------------------*/
 int main(int argc, char **argv)
 {
     if (argc > 1) mhz = atof(argv[1]);
     printf("micro : %.0f MHz assumed for the cycle counts\n", mhz);
-    /* micro loops : only the four loops */
+    /* micro loops / micro sweep : only those */
     if (argc > 2 && strcmp(argv[2], "loops") == 0) {
         loops();
+        return 0;
+    }
+    if (argc > 2 && strcmp(argv[2], "sweep") == 0) {
+        sweep();
         return 0;
     }
     bandwidth("buffer", 8 * 1024);          /* in the D$ */
