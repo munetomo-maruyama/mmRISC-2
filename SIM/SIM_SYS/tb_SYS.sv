@@ -449,6 +449,7 @@ module tb_SYS
     int  q_issue, q_redirect, q_ma, q_mr, q_unit, q_lu, q_mmu,
          q_refill, q_fetch, q_serial, q_other;
     int  e_br, e_jal, e_jalr, e_mp_br, e_mp_jal, e_mp_jalr, e_mdu, e_trap;
+    int  e_strad, e_mp_strad;     // 32 bit branch / jal whose upper half is in the next fetch word
     bit  after_redirect, prof_on, prof_marked;
 
     task automatic prof_clear;
@@ -457,7 +458,7 @@ module tb_SYS
         q_lu = 0; q_mmu = 0; q_refill = 0; q_fetch = 0; q_serial = 0;
         q_other = 0;
         e_br = 0; e_jal = 0; e_jalr = 0; e_mp_br = 0; e_mp_jal = 0;
-        e_mp_jalr = 0; e_mdu = 0; e_trap = 0;
+        e_mp_jalr = 0; e_mdu = 0; e_trap = 0; e_strad = 0; e_mp_strad = 0;
         p_dcache = 0; p_unit = 0; p_mmu = 0; p_starve = 0; p_serial = 0;
         p_other = 0; n_dacc = 0; n_ifetch = 0;
     endtask
@@ -508,6 +509,12 @@ module tb_SYS
                     if (`CORE.ex_is_branch) begin e_br++;   if (`CORE.ex_mispredict) e_mp_br++;   end
                     if (`CORE.ex_is_jal)    begin e_jal++;  if (`CORE.ex_mispredict) e_mp_jal++;  end
                     if (`CORE.ex_is_jalr)   begin e_jalr++; if (`CORE.ex_mispredict) e_mp_jalr++; end
+                end
+                // the buffer never predicts these (CPU_CORE_SPEC.md decision 34)
+                if (`CORE.ex_ctrl_go && !`CORE.ex_is_rvc && (`CORE.ex_pc[2:1] == 2'b11) &&
+                    (`CORE.ex_is_branch || `CORE.ex_is_jal)) begin
+                    e_strad++;
+                    if (`CORE.ex_mispredict) e_mp_strad++;
                 end
                 if (`CORE.mdu_start)  e_mdu++;
                 if (`CORE.trap_taken) e_trap++;
@@ -580,6 +587,8 @@ module tb_SYS
         $display(" control transfers (mispredicted / executed)");
         $display("   branch %0d / %0d, jal %0d / %0d, jalr %0d / %0d",
                  e_mp_br, e_br, e_mp_jal, e_jal, e_mp_jalr, e_jalr);
+        $display("   of the branches and jal: %0d / %0d at the end of a fetch word (32 bit at offset 6)",
+                 e_mp_strad, e_strad);
         $display("   MDU operations %0d, traps %0d", e_mdu, e_trap);
     endtask
 
