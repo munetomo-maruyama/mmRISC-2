@@ -1,0 +1,226 @@
+/*---------------------------------------------------------------------------
+ * micro.c : small measurements of mmRISC-2 under Linux
+ *
+ *   micro [MHz]        (default 50, only used to turn time into cycles)
+ *
+ * Each test runs for about a second of wall clock, measured with
+ * clock_gettime (the user mode of this kernel may read time, not cycle).
+ * The numbers are per access or per byte, and in clock cycles at the given
+ * frequency, so that they can be held against the size of the caches:
+ *
+ *   D$ 16 KiB (64 sets x 4 ways x 64 bytes), no L2, DDR3 behind LiteDRAM
+ *
+ *   read / write / copy   bandwidth of a buffer that fits in the D$ and of
+ *                         one that does not
+ *   chase                 latency of a dependent load, random order
+ *   misaligned            an 8 byte load at an address that is not a
+ *                         multiple of 8: the core traps, and the access is
+ *                         done in software (OpenSBI or the kernel)
+ *   dgemm                 double precision multiply and add
+ *-------------------------------------------------------------------------*/
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <time.h>
+
+static double mhz = 50.0;
+
+static double now(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec + ts.tv_nsec * 1e-9;
+}
+
+/* run body(n) with n doubling until it takes at least `min` seconds;
+ * returns the seconds of the last run and its n */
+typedef void (*body_t)(long n);
+static double timed(body_t body, long *n_io, double min)
+{
+    long   n = *n_io;
+    double t;
+    for (;;) {
+        double t0 = now();
+        body(n);
+        t = now() - t0;
+        if (t >= min) break;
+        n *= 2;
+    }
+    *n_io = n;
+    return t;
+}
+
+static volatile uint64_t sink;
+
+/*--------------------------------------------------------------------------*/
+static uint64_t *buf;
+static size_t    words;                 /* size of the buffer in 8 byte words */
+
+static void body_read(long n)
+{
+    uint64_t s = 0;
+    for (long r = 0; r < n; r++)
+        for (size_t i = 0; i < words; i += 4)
+            s += buf[i] + buf[i + 1] + buf[i + 2] + buf[i + 3];
+    sink = s;
+}
+
+static void body_write(long n)
+{
+    for (long r = 0; r < n; r++)
+        for (size_t i = 0; i < words; i += 4) {
+            buf[i] = r; buf[i + 1] = r; buf[i + 2] = r; buf[i + 3] = r;
+        }
+}
+
+static uint64_t *buf2;
+static void body_copy(long n)
+{
+    for (long r = 0; r < n; r++)
+        memcpy(buf2, buf, words * 8);
+}
+
+static void bandwidth(const char *what, size_t bytes)
+{
+    long   n;
+    double t;
+
+    words = bytes / 8;
+    buf  = aligned_alloc(64, bytes);
+    buf2 = aligned_alloc(64, bytes);
+    memset(buf, 1, bytes);
+    memset(buf2, 2, bytes);
+
+    printf("%-6s %8zu KiB :", what, bytes / 1024);
+    n = 1; t = timed(body_read,  &n, 1.0);
+    printf("  read %7.1f MB/s", n * (double)bytes / t / 1e6);
+    n = 1; t = timed(body_write, &n, 1.0);
+    printf("  write %7.1f MB/s", n * (double)bytes / t / 1e6);
+    n = 1; t = timed(body_copy,  &n, 1.0);
+    printf("  copy %7.1f MB/s\n", n * (double)bytes / t / 1e6);
+
+    free(buf);
+    free(buf2);
+}
+
+/*--------------------------------------------------------------------------*/
+static uint64_t **chain;
+
+static void body_chase(long n)
+{
+    uint64_t **p = chain;
+    for (long i = 0; i < n; i++)
+        p = (uint64_t **)*p;
+    sink = (uint64_t)(uintptr_t)p;
+}
+
+static void chase(size_t bytes)
+{
+    /* one pointer per 64 byte line, visited in a random cycle */
+    size_t  lines = bytes / 64;
+    char   *mem   = aligned_alloc(64, bytes);
+    size_t *perm  = malloc(lines * sizeof(size_t));
+    long    n = 1024;
+    double  t;
+
+    for (size_t i = 0; i < lines; i++) perm[i] = i;
+    srand(1);
+    for (size_t i = lines - 1; i > 0; i--) {
+        size_t j = (size_t)rand() % (i + 1);
+        size_t x = perm[i]; perm[i] = perm[j]; perm[j] = x;
+    }
+    for (size_t i = 0; i < lines; i++)
+        *(char **)(mem + perm[i] * 64) = mem + perm[(i + 1) % lines] * 64;
+    chain = (uint64_t **)(mem + perm[0] * 64);
+
+    t = timed(body_chase, &n, 1.0);
+    printf("chase  %8zu KiB :  %6.1f ns  %5.1f cycles per load\n",
+           bytes / 1024, t / n * 1e9, t / n * mhz * 1e6);
+    free(perm);
+    free(mem);
+}
+
+/*--------------------------------------------------------------------------*/
+static char *mis_base;
+static int   mis_off;
+
+static void body_mis(long n)
+{
+    uint64_t s = 0;
+    for (long r = 0; r < n; r++) {
+        char *p = mis_base + mis_off;
+        for (int i = 0; i < 64; i++, p += 64) {
+            uint64_t v;
+            /* a real ld: the compiler must not split it into bytes */
+            __asm__ volatile ("ld %0, 0(%1)" : "=r"(v) : "r"(p));
+            s += v;
+        }
+    }
+    sink = s;
+}
+
+static void misaligned(void)
+{
+    long   n;
+    double t_al, t_mis;
+
+    mis_base = aligned_alloc(64, 64 * 64 + 64);
+    memset(mis_base, 3, 64 * 64 + 64);
+
+    mis_off = 0; n = 1;
+    t_al  = timed(body_mis, &n, 1.0);
+    t_al  = t_al / (n * 64.0);
+    mis_off = 1; n = 1;
+    t_mis = timed(body_mis, &n, 1.0);
+    t_mis = t_mis / (n * 64.0);
+    printf("ld 8 bytes, aligned    :  %8.1f ns  %8.1f cycles\n", t_al * 1e9, t_al * mhz * 1e6);
+    printf("ld 8 bytes, misaligned :  %8.1f ns  %8.1f cycles  (x%.0f)\n",
+           t_mis * 1e9, t_mis * mhz * 1e6, t_mis / t_al);
+    free(mis_base);
+}
+
+/*--------------------------------------------------------------------------*/
+#define DN 64
+static double A[DN][DN], B[DN][DN], C[DN][DN];
+
+static void body_dgemm(long n)
+{
+    for (long r = 0; r < n; r++)
+        for (int i = 0; i < DN; i++)
+            for (int k = 0; k < DN; k++) {
+                double a = A[i][k];
+                for (int j = 0; j < DN; j++)
+                    C[i][j] += a * B[k][j];
+            }
+}
+
+static void dgemm(void)
+{
+    long   n = 1;
+    double t;
+    for (int i = 0; i < DN; i++)
+        for (int j = 0; j < DN; j++) {
+            A[i][j] = 1.0 + i * 0.001;
+            B[i][j] = 2.0 - j * 0.001;
+            C[i][j] = 0.0;
+        }
+    t = timed(body_dgemm, &n, 1.0);
+    printf("dgemm %dx%d (double)    :  %6.2f MFLOPS  %5.1f cycles per multiply-add\n",
+           DN, DN, 2.0 * DN * DN * DN * n / t / 1e6,
+           t * mhz * 1e6 / ((double)DN * DN * DN * n));
+}
+
+/*--------------------------------------------------------------------------*/
+int main(int argc, char **argv)
+{
+    if (argc > 1) mhz = atof(argv[1]);
+    printf("micro : %.0f MHz assumed for the cycle counts\n", mhz);
+    bandwidth("buffer", 8 * 1024);          /* in the D$ */
+    bandwidth("buffer", 8 * 1024 * 1024);   /* DRAM */
+    chase(8 * 1024);
+    chase(8 * 1024 * 1024);
+    misaligned();
+    dgemm();
+    return 0;
+}
