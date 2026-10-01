@@ -833,12 +833,18 @@ module CPU_CORE
         ex_exc_int   = ex_exc_int_r;
         ex_exc_cause = ex_exc_cause_pre;
         ex_exc_tval  = ex_exc_tval_pre;
+        // Whatever a load or a store with nothing before it raises here or
+        // in MR -- misaligned, a page fault, an access fault -- reports its
+        // own address, so the value is chosen without asking which: the
+        // answer of the DTLB is not in front of the select (a path of
+        // forwarding, address, DTLB and fault that had no time to spare)
+        if (!ex_exc_r && (ex_is_load || ex_is_store))
+            ex_exc_tval = mem_addr;
         if (d_tr_req && (d_tr_fault != 2'd0)) begin
             ex_exc       = 1'b1;
             ex_exc_cause = (d_tr_fault == 2'd2)
                          ? (ex_is_store ? EXC_SPAGE  : EXC_LPAGE)
                          : (ex_is_store ? EXC_SFAULT : EXC_LFAULT);
-            ex_exc_tval  = mem_addr;
         end
     end
 

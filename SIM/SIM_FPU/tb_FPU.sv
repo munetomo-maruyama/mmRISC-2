@@ -104,8 +104,8 @@ module tb_FPU;
     //-----------------------------------------------------------------
     // operand pools
     //-----------------------------------------------------------------
-    localparam int NP64 = 34;
-    localparam int NP32 = 34;
+    localparam int NP64 = 40;
+    localparam int NP32 = 40;
     logic [63:0] pool64 [0:NP64-1];
     logic [63:0] pool32 [0:NP32-1];
 
@@ -144,6 +144,17 @@ module tb_FPU;
         pool64[31] = 64'hC000_0000_0000_0000;   // -2.0
         pool64[32] = 64'h3CA0_0000_0000_0000;   // 2^-53
         pool64[33] = 64'h4330_0000_0000_0001;
+        // ties with an integer part: round to nearest even goes down for one
+        // and up for the other (a conversion to an integer, a rounding of
+        // the significand that is not at the bottom of it)
+        pool64[34] = 64'h3FF8_0000_0000_0000;   // 1.5
+        pool64[35] = 64'h4004_0000_0000_0000;   // 2.5
+        pool64[36] = 64'hC004_0000_0000_0000;   // -2.5
+        // a half below the end of the 32 bit formats: rounding it up is an
+        // overflow found only by comparing before the increment
+        pool64[37] = 64'h41DF_FFFF_FFE0_0000;   // 2^31 - 0.5
+        pool64[38] = 64'h41EF_FFFF_FFF0_0000;   // 2^32 - 0.5
+        pool64[39] = 64'hC1E0_0000_0010_0000;   // -2^31 - 0.5
 
         pool32[0]  = {32'hFFFF_FFFF, 32'h0000_0000};   // +0
         pool32[1]  = {32'hFFFF_FFFF, 32'h8000_0000};   // -0
@@ -179,6 +190,12 @@ module tb_FPU;
         pool32[31] = {32'hFFFF_FFFF, 32'hC000_0000};   // -2.0
         pool32[32] = 64'h0000_0000_3F80_0000;          // 1.0 but NOT boxed
         pool32[33] = 64'h1234_5678_3F80_0000;          // not boxed either
+        pool32[34] = {32'hFFFF_FFFF, 32'h3FC0_0000};   // 1.5
+        pool32[35] = {32'hFFFF_FFFF, 32'h4020_0000};   // 2.5
+        pool32[36] = {32'hFFFF_FFFF, 32'hC020_0000};   // -2.5
+        pool32[37] = {32'hFFFF_FFFF, 32'h4AFF_FFFF};   // 2^23 - 0.5
+        pool32[38] = {32'hFFFF_FFFF, 32'h4B7F_FFFF};   // 2^24 - 1
+        pool32[39] = {32'hFFFF_FFFF, 32'hCAFF_FFFF};   // -(2^23 - 0.5)
     end
 
     //-----------------------------------------------------------------

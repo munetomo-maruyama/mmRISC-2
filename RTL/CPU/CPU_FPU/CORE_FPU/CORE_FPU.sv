@@ -414,85 +414,125 @@ module CORE_FPU
     end
 
     // floating point -> integer
+    //
+    //   Two cycles, so that the shift and the rounding are not in one:
+    //
+    //   S_SEL  the integer part, the guard bit and the sticky bit, out of
+    //          the held exponent and significand (f2i_*), into q_f2i_*
+    //   S_RND  the increment of the rounding, the overflow check and the
+    //          negation, out of q_f2i_*, into q_sp_res / q_sp_flags. S_RND
+    //          is the first cycle of the rounder, which a conversion to an
+    //          integer does not use, so it costs no cycle.
+    //
+    //   The overflow is checked on the value before the increment (v > lim,
+    //   or v == lim and it is rounded up), so the comparison runs beside the
+    //   adder rather than behind it; the same for the negation, which is
+    //   ~v + 1 or, rounded up, ~v.
+
+    // the limits of the integer format: the largest value, and the magnitude
+    // of the most negative one
+    logic [63:0] f2i_lim_max, f2i_lim_min;
+
+    task automatic iw_lim(input logic w, input logic sgn,
+                          output logic [63:0] lmax, output logic [63:0] lmin);
+        lmax = sgn ? (w ? 64'h7FFF_FFFF_FFFF_FFFF : 64'h0000_0000_7FFF_FFFF)
+                   : (w ? 64'hFFFF_FFFF_FFFF_FFFF : 64'h0000_0000_FFFF_FFFF);
+        lmin = sgn ? (w ? 64'h8000_0000_0000_0000 : 64'h0000_0000_8000_0000)
+                   : 64'd0;
+    endtask
+
+    logic [63:0] f2i_ival;
+    logic        f2i_g, f2i_s, f2i_big, f2i_spec;
+    logic [63:0] f2i_spec_res;
+
+    always @(*) begin
+        logic [5:0]  k;          // the shift, 1 .. 63
+        logic [63:0] m;
+
+        iw_lim(u_int_w, u_int_signed, f2i_lim_max, f2i_lim_min);
+
+        f2i_ival     = 64'd0;
+        f2i_g        = 1'b0;
+        f2i_s        = 1'b0;
+        f2i_big      = 1'b0;
+        f2i_spec     = 1'b1;
+        f2i_spec_res = 64'd0;
+        k            = 6'd0;
+        m            = 64'd0;
+
+        if (a_nan) begin
+            f2i_spec_res = f2i_lim_max;
+        end else if (a_inf) begin
+            f2i_spec_res = a_sign ? (u_int_signed ? (~f2i_lim_min + 64'd1) : 64'd0)
+                                  : f2i_lim_max;
+        end else if (a_zero) begin
+            f2i_spec_res = 64'd0;
+        end else begin
+            f2i_spec = 1'b0;
+            // the significand has its leading one at bit 63, so an exponent
+            // of 63 is an integer as it stands, anything above it is out of
+            // range of every format, and anything below 0 is a fraction
+            if (a_exp > 63) begin
+                f2i_big = 1'b1;
+            end else if (a_exp == 63) begin
+                f2i_ival = a_sig;
+            end else if (a_exp < 0) begin
+                f2i_g = (a_exp == -1) & a_sig[63];
+                f2i_s = (a_exp == -1) ? (|a_sig[62:0]) : 1'b1;
+            end else begin
+                k        = ~a_exp[5:0];                 // 63 - a_exp
+                f2i_ival = a_sig >> k;
+                f2i_g    = a_sig[k - 6'd1];
+                for (int i = 0; i < 64; i++) m[i] = ({1'b0, k} > 7'(i + 1));   // below the guard
+                f2i_s    = |(a_sig & m);
+            end
+        end
+    end
+
+    // held by S_SEL
+    logic [63:0] q_f2i_ival, q_f2i_spec_res;
+    logic        q_f2i_g, q_f2i_s, q_f2i_big, q_f2i_spec, q_f2i_spec_nv;
+
     logic [63:0] f2i_res;
     logic [4:0]  f2i_flags;
 
     always @(*) begin
-        logic [127:0] wide;
-        logic [63:0]  ival;
-        logic         g, s, inc_i, ovf;
-        int signed    sh;
-        logic [63:0]  lim_max, lim_min;
-        int           iw;
+        logic        inc_i, ovf, nz;
+        logic [63:0] v, v_inc, v_neg, v_neg_inc, lmax, lmin;
 
-        iw      = u_int_w ? 64 : 32;
-        lim_max = u_int_signed ? ((64'd1 << (iw-1)) - 64'd1)
-                             : (u_int_w ? {64{1'b1}} : 64'h0000_0000_FFFF_FFFF);
-        lim_min = u_int_signed ? (64'd1 << (iw-1)) : 64'd0;   // magnitude of the min
+        iw_lim(u_int_w, u_int_signed, lmax, lmin);
+        v = q_f2i_ival;
 
-        f2i_res   = 64'd0;
+        case (u_rm)
+            3'b000:  inc_i = q_f2i_g & (q_f2i_s | v[0]);
+            3'b001:  inc_i = 1'b0;
+            3'b010:  inc_i =  a_sign & (q_f2i_g | q_f2i_s);
+            3'b011:  inc_i = ~a_sign & (q_f2i_g | q_f2i_s);
+            3'b100:  inc_i = q_f2i_g;
+            default: inc_i = 1'b0;
+        endcase
+
+        v_inc     = v + 64'd1;            // the magnitude, rounded up
+        v_neg     = ~v + 64'd1;           // -v
+        v_neg_inc = ~v;                   // -(v + 1)
+        nz        = (v != 64'd0) | inc_i;
+
+        ovf = q_f2i_big;
+        if (!a_sign && ((v > lmax) || ((v == lmax) && inc_i)))               ovf = 1'b1;
+        if (a_sign &&  u_int_signed && ((v > lmin) || ((v == lmin) && inc_i))) ovf = 1'b1;
+        if (a_sign && !u_int_signed && nz)                                   ovf = 1'b1;
+
         f2i_flags = 5'd0;
-        ovf       = 1'b0;
-        ival      = 64'd0;
-        wide      = 128'd0;
-        sh        = 0;
-        inc_i     = 1'b0;
-        g = 1'b0; s = 1'b0;
-
-        if (a_nan) begin
-            f2i_res         = lim_max;
+        if (q_f2i_spec) begin
+            f2i_res         = q_f2i_spec_res;
+            f2i_flags[F_NV] = q_f2i_spec_nv;
+        end else if (ovf) begin
+            f2i_res         = a_sign ? (u_int_signed ? (~lmin + 64'd1) : 64'd0) : lmax;
             f2i_flags[F_NV] = 1'b1;
-        end else if (a_inf) begin
-            f2i_res         = a_sign ? (u_int_signed ? (~lim_min + 64'd1) : 64'd0)
-                                     : lim_max;
-            f2i_flags[F_NV] = 1'b1;
-        end else if (a_zero) begin
-            f2i_res = 64'd0;
         end else begin
-            // the significand has its leading one at bit 63; an exponent of
-            // 63 therefore means the value is already an integer
-            sh = 63 - a_exp;
-            if (sh <= 0) begin
-                // far too large, unless it is exactly the most negative value
-                wide = {64'd0, a_sig} << (-sh);
-                ival = wide[63:0];
-                ovf  = (-sh > 0) || 1'b0;
-                if (wide[127:64] != 64'd0) ovf = 1'b1;
-            end else if (sh >= 64) begin
-                ival = 64'd0;
-                g    = (sh == 64) ? a_sig[63] : 1'b0;
-                s    = (sh == 64) ? (|a_sig[62:0]) : 1'b1;
-            end else begin
-                ival = a_sig >> sh;
-                g    = a_sig[sh-1];
-                s    = |(a_sig & ((64'd1 << (sh-1)) - 64'd1));
-            end
-
-            case (u_rm)
-                3'b000:  inc_i = g & (s | ival[0]);
-                3'b001:  inc_i = 1'b0;
-                3'b010:  inc_i =  a_sign & (g | s);
-                3'b011:  inc_i = ~a_sign & (g | s);
-                3'b100:  inc_i = g;
-                default: inc_i = 1'b0;
-            endcase
-            if (inc_i) begin
-                if (ival == {64{1'b1}}) ovf = 1'b1;
-                ival = ival + 64'd1;
-            end
-
-            if (a_sign && !u_int_signed && (ival != 64'd0)) ovf = 1'b1;
-            if (!a_sign && (ival > lim_max))              ovf = 1'b1;
-            if (a_sign && u_int_signed && (ival > lim_min)) ovf = 1'b1;
-
-            if (ovf) begin
-                f2i_res         = a_sign ? (u_int_signed ? (~lim_min + 64'd1) : 64'd0)
-                                         : lim_max;
-                f2i_flags[F_NV] = 1'b1;
-            end else begin
-                f2i_res         = a_sign ? (~ival + 64'd1) : ival;
-                f2i_flags[F_NX] = g | s;
-            end
+            f2i_res         = a_sign ? (inc_i ? v_neg_inc : v_neg)
+                                     : (inc_i ? v_inc     : v);
+            f2i_flags[F_NX] = q_f2i_g | q_f2i_s;
         end
 
         // a 32 bit result is sign extended into the register
@@ -636,8 +676,12 @@ module CORE_FPU
         end else if (n >= 128) begin
             sh = 128'd0; st = |v;
         end else begin
-            sh = v >> n;
-            st = |(v & ((128'd1 << n) - 128'd1));
+            // the bits that leave, n of them: a mask made of one comparison
+            // per bit, not (1 << n) - 1, which is a carry chain as wide as v
+            logic [127:0] m;
+            for (int i = 0; i < 128; i++) m[i] = (n[6:0] > 7'(i));
+            sh = v >> n[6:0];
+            st = |(v & m);
         end
         return {st, sh};
     endfunction
@@ -862,9 +906,7 @@ module CORE_FPU
             end
 
             FOP_CVT_I_F: begin                    // floating point -> integer
-                sp_res     = f2i_res;
-                sp_is_int = 1'b1;
-                sp_flags     = f2i_flags;
+                sp_is_int = 1'b1;                 // the value comes in S_RND
             end
 
             FOP_DIV, FOP_SQRT: begin
@@ -958,6 +1000,9 @@ module CORE_FPU
             al_gt <= 129'd0; al_ls <= 129'd0; al_st <= 1'b0;
             al_add <= 1'b0; al_sgn_gt <= 1'b0; al_sgn_ls <= 1'b0;
             q_sp_res <= 64'd0; q_sp_is_int <= 1'b0; q_sp_flags <= 5'd0;
+            q_f2i_ival <= 64'd0; q_f2i_g <= 1'b0; q_f2i_s <= 1'b0;
+            q_f2i_big <= 1'b0; q_f2i_spec <= 1'b0; q_f2i_spec_res <= 64'd0;
+            q_f2i_spec_nv <= 1'b0;
             q_use_rnd <= 1'b0;
             q_rnd_sign <= 1'b0; q_rnd_exp <= 14'sd0; q_rnd_sig <= 128'd0;
             q_rnd_sticky <= 1'b0; q_rnd_fmt <= 1'b0;
@@ -1138,6 +1183,13 @@ module CORE_FPU
                 end
                 //-----------------------------------------------------
                 S_SEL: begin
+                    q_f2i_ival     <= f2i_ival;
+                    q_f2i_g        <= f2i_g;
+                    q_f2i_s        <= f2i_s;
+                    q_f2i_big      <= f2i_big;
+                    q_f2i_spec     <= f2i_spec;
+                    q_f2i_spec_res <= f2i_spec_res;
+                    q_f2i_spec_nv  <= a_nan | a_inf;
                     q_sp_res     <= sp_res;
                     q_sp_is_int  <= sp_is_int;
                     q_sp_flags   <= sp_flags;
@@ -1150,8 +1202,15 @@ module CORE_FPU
                     state        <= S_RND;
                 end
                 //-----------------------------------------------------
-                // the rounder takes its first cycle
-                S_RND: state <= S_PACK;
+                // the rounder takes its first cycle; a conversion to an
+                // integer finishes its own
+                S_RND: begin
+                    if (u_op == FOP_CVT_I_F) begin
+                        q_sp_res   <= f2i_res;
+                        q_sp_flags <= f2i_flags;
+                    end
+                    state <= S_PACK;
+                end
                 //-----------------------------------------------------
                 S_PACK: begin
                     result        <= q_use_rnd ? rnd_result : q_sp_res;

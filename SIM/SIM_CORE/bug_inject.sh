@@ -269,6 +269,7 @@ MUTATIONS=(
 "229#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%.rd_addr     (dbg_csr_sel ? dbg_regno_q\[11:0\] : ex_csr_addr)%.rd_addr     (ex_csr_addr)%#debug: a CSR read takes the CSR of the instruction in EX"
 "230#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%(reset_halt_pend | dbg_haltreq | step_issued)%(reset_halt_pend | step_issued)%#debug: haltreq is ignored"
 "231#CPU_CORE/CORE_CSR/CORE_CSR.sv#s%CSR_DCSR      : if (dbg_access) begin%CSR_DCSR      : if (1'b0) begin%#debug: dcsr cannot be written"
+"232#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%            ex_exc_tval = mem_addr;%            ex_exc_tval = ex_exc_tval_pre;%#core: a page fault of a load or a store reports no address in tval"
 )
 
 # every mutation is run without and with back pressure on both cache ports

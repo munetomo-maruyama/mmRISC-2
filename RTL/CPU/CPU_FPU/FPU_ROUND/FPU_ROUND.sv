@@ -115,6 +115,12 @@ module FPU_ROUND
     logic [127:0] shifted;
     logic         lost;
 
+    // the bits that leave: a mask of one comparison per bit, not
+    // (1 << n) - 1, which is a carry chain 128 bits long
+    logic [127:0] lost_mask;
+    always @(*)
+        for (int i = 0; i < 128; i++) lost_mask[i] = (shift_n[6:0] > 7'(i));
+
     always @(*) begin
         if (shift_n == 0) begin
             shifted = sig_in;
@@ -123,8 +129,8 @@ module FPU_ROUND
             shifted = 128'd0;
             lost    = |sig_in;
         end else begin
-            shifted = sig_in >> shift_n;
-            lost    = |(sig_in & ((128'd1 << shift_n) - 128'd1));
+            shifted = sig_in >> shift_n[6:0];
+            lost    = |(sig_in & lost_mask);
         end
     end
 
