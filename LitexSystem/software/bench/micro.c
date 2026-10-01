@@ -17,12 +17,16 @@
  *                         multiple of 8: the core traps, and the access is
  *                         done in software (OpenSBI or the kernel)
  *   dgemm                 double precision multiply and add
+ *   loops                 four loops of four instructions (loops.h), the
+ *                         same ones SIM/SIM_SYS/bench/ldloop.c runs in the
+ *                         simulation: cycles per iteration, one for one
  *-------------------------------------------------------------------------*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
+#include "loops.h"
 
 static double mhz = 50.0;
 
@@ -212,15 +216,58 @@ static void dgemm(void)
 }
 
 /*--------------------------------------------------------------------------*/
+static char *lp_buf;
+static int   lp_kind;
+
+static void body_loops(long n)
+{
+    unsigned long s = 0;
+    for (long r = 0; r < n; r++) {
+        switch (lp_kind) {
+        case 0:  s += loop_n  (lp_buf, lp_buf + 4096, 64); break;
+        case 1:  s += loop_ld0(lp_buf, 64);                break;
+        case 2:  s += loop_ld (lp_buf, lp_buf + 512, 8);   break;
+        default: s += loop_ld (lp_buf, lp_buf + 4096, 64); break;
+        }
+    }
+    sink = s;
+}
+
+static void loops(void)
+{
+    static const char *name[4] = {
+        "no load, 64 iterations     ",
+        "ld the same word           ",
+        "ld stride 8, one 512 B     ",
+        "ld stride 64, 4 KiB        ",
+    };
+    lp_buf = aligned_alloc(4096, 8192);
+    memset(lp_buf, 5, 8192);
+    for (lp_kind = 0; lp_kind < 4; lp_kind++) {
+        long   n = 1;
+        double t = timed(body_loops, &n, 1.0);
+        printf("loop %s:  %5.2f cycles per iteration\n",
+               name[lp_kind], t * mhz * 1e6 / (n * 64.0));
+    }
+    free(lp_buf);
+}
+
+/*--------------------------------------------------------------------------*/
 int main(int argc, char **argv)
 {
     if (argc > 1) mhz = atof(argv[1]);
     printf("micro : %.0f MHz assumed for the cycle counts\n", mhz);
+    /* micro loops : only the four loops */
+    if (argc > 2 && strcmp(argv[2], "loops") == 0) {
+        loops();
+        return 0;
+    }
     bandwidth("buffer", 8 * 1024);          /* in the D$ */
     bandwidth("buffer", 8 * 1024 * 1024);   /* DRAM */
     chase(8 * 1024);
     chase(8 * 1024 * 1024);
     misaligned();
     dgemm();
+    loops();
     return 0;
 }
