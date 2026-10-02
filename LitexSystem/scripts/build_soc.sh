@@ -86,7 +86,8 @@ PY
 fi
 
 # the Windows side runs this from the gateware directory
-cp "$HERE/build_digilent_arty.bat" "$BUILD/gateware/" 2>/dev/null || true
+cp "$HERE/build_digilent_arty.bat" "$HERE/timing_paths.bat" "$HERE/timing_paths.tcl" \
+   "$BUILD/gateware/" 2>/dev/null || true
 
 echo ""
 echo "SoC built in $BUILD"

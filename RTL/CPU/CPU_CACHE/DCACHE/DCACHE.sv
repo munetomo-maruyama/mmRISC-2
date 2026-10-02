@@ -576,7 +576,7 @@ module DCACHE
     // Lookup
     //=================================================================
     logic [WAYS-1:0]     hit_oh;
-    logic                hit;
+    logic                hit, hit_nk;     // hit_nk : as if not taken back
     logic [WAY_BITS-1:0] hit_way;
     logic [63:0]         hit_word;
 
@@ -584,7 +584,8 @@ module DCACHE
         for (int w = 0; w < WAYS; w++)
             hit_oh[w] = eff_valid[w] &&
                         (eff_tag[w*TAG_BITS +: TAG_BITS] == s1_ptag);
-        hit     = s1_valid & s1_cacheable & s1_data_ok & ~s1_kill & (|hit_oh);
+        hit_nk  = s1_valid & s1_cacheable & s1_data_ok & (|hit_oh);
+        hit     = hit_nk & ~s1_kill;
         hit_way = onehot_to_bin(hit_oh);
         hit_word = dat_rd_data[hit_way*64 +: 64];
         if (fwd_valid && (fwd_way == hit_way) &&
@@ -691,40 +692,52 @@ module DCACHE
     assign ms_attach_ok = !((ms_match_id == ms_head) && (f_state == F_DATA) &&
                             !(addr_woff(s1_addr) > f_beat));
 
-    logic s1_can_retire, s1_busy;
+    logic s1_can_retire, s1_can_go, s1_busy;
+    logic s1_amo_rd;            // the old value of the atomic is in amo_old_r
+    logic [63:0] amo_old_r;
+
+    // s1_can_go : whether the request could leave stage 1 if it was not
+    // taken back. It does not look at s1_kill, which comes late (from the
+    // PMP of the core, through e_go), and it is what the next request waits
+    // for (d_req_ready). A request taken back leaves stage 1 all the same
+    // (s1_can_retire); the one behind it waits for one cycle more only when
+    // the one taken back could not have gone on either.
+    logic hit_busy_nk;
+    assign hit_busy_nk = hit_nk && busy_way[hit_way];
 
     always @(*) begin
-        s1_can_retire = 1'b0;
-        if (s1_kill) begin
-            s1_can_retire = 1'b1;                     // taken back: nothing to do
-        end else if (s1_valid && s1_data_ok) begin
+        s1_can_go = 1'b0;
+        if (s1_valid && s1_data_ok) begin
             if (s1_is_fence) begin
-                s1_can_retire = all_idle;
+                s1_can_go = all_idle;
             end else if (s1_is_flush) begin
-                s1_can_retire = (fl_state == FL_IDLE) && all_idle;
+                s1_can_go = (fl_state == FL_IDLE) && all_idle;
             end else if (!s1_cacheable) begin
-                s1_can_retire = (u_state == U_IDLE);
+                s1_can_go = (u_state == U_IDLE);
             end else if (s1_is_stwthr) begin
                 // write through: the bus write slot must be free. A line that
                 // is being filled has to be waited for, otherwise the fill
                 // would overwrite the new value with the old memory word.
-                s1_can_retire = !sw_busy && !fl_busy &&
-                                (hit ? (!hit_busy && !fill_beat_now) : !ms_match);
-            end else if (hit) begin
-                // writing accesses need the array and the tag write port
-                s1_can_retire = !hit_busy && !(s1_writes && (fill_beat_now || fl_busy));
+                s1_can_go = !sw_busy && !fl_busy &&
+                            (hit_nk ? (!hit_busy_nk && !fill_beat_now) : !ms_match);
+            end else if (hit_nk) begin
+                // writing accesses need the array and the tag write port;
+                // an atomic first reads (s1_amo_rd)
+                s1_can_go = !hit_busy_nk && !(s1_writes && (fill_beat_now || fl_busy)) &&
+                            !(s1_is_amo && !s1_amo_rd);
             end else if (s1_needs_line) begin
-                s1_can_retire = 1'b0;                 // wait for the fill, then retry
+                s1_can_go = 1'b0;                     // wait for the fill, then retry
             end else if (ms_match) begin
-                s1_can_retire = !ms_locked[ms_match_id] && ms_attach_ok;
+                s1_can_go = !ms_locked[ms_match_id] && ms_attach_ok;
             end else begin
-                s1_can_retire = !ms_full && victim_avail && !(victim_dirty && wb_full) &&
-                                !fl_busy;
+                s1_can_go = !ms_full && victim_avail && !(victim_dirty && wb_full) &&
+                            !fl_busy;
             end
         end
     end
 
-    assign s1_busy     = s1_valid & ~s1_can_retire;
+    assign s1_can_retire = s1_kill | s1_can_go;   // taken back: nothing to do
+    assign s1_busy     = s1_valid & ~s1_can_go;
     assign d_req_ready = rst_n & ~s1_busy & ~s1_reread & ~rob_full & ~array_rd_busy & ~fl_busy;
 
     //=================================================================
@@ -740,17 +753,36 @@ module DCACHE
     // core traps a misaligned one before it gets here), so its lanes are
     // the whole word or one of its halves, picked by address bit 2. That is
     // one 2:1 multiplexer on each side of the arithmetic instead of the
-    // byte shifters of extract and align_wdata: this path runs from the tag
-    // array through the way select and the arithmetic into the data array
-    // in one cycle, and was the longest of the design once the core was cut
-    // (LitexSystem/docs/TIMING.md 17). For a word, amo_calc only looks at
-    // the low half of what it is given, and the write strobe only lets the
-    // four bytes of the word through.
+    // byte shifters of extract and align_wdata. For a word, amo_calc only
+    // looks at the low half of what it is given, and the write strobe only
+    // lets the four bytes of the word through.
+    //
+    // An atomic hit takes two cycles in stage 1: the first one keeps the old
+    // value (amo_old_r), the second one does the arithmetic on it and
+    // writes. In one cycle the path ran from the tag array through the way
+    // select and the arithmetic into the data array, and was among the
+    // longest of the design (LitexSystem/docs/TIMING.md 17 and 24). The
+    // arrays do not change in between unless s1_data_ok drops, and then the
+    // old value is read again.
     logic [63:0] amo_old, amo_wr;
 
     assign amo_old    = s1_addr[2] ? {32'd0, hit_word[63:32]} : hit_word;
-    assign amo_result = amo_calc(s1_cmd, s1_size, amo_old, s1_wdata);
+    assign amo_result = amo_calc(s1_cmd, s1_size, amo_old_r, s1_wdata);
     assign amo_wr     = s1_addr[2] ? {amo_result[31:0], 32'd0} : amo_result;
+
+    // the first cycle of an atomic hit; the arrays stop belonging to stage
+    // 1 when s1_data_ok drops, and the value is read again after that
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            s1_amo_rd <= 1'b0;
+            amo_old_r <= 64'd0;
+        end else if ((d_req_valid && d_req_ready) || !s1_data_ok) begin
+            s1_amo_rd <= 1'b0;
+        end else if (s1_valid && s1_cacheable && s1_is_amo && hit && !s1_amo_rd) begin
+            s1_amo_rd <= 1'b1;
+            amo_old_r <= amo_old;
+        end
+    end
 
     always @(*) begin
         s1_store_hit = 1'b0;

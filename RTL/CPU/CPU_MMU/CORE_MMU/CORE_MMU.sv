@@ -394,12 +394,13 @@ module CORE_MMU
     //-----------------------------------------------------------------
     // the answers
     //-----------------------------------------------------------------
+    // The answer for the fetch address does not depend on i_req: the fetch
+    // unit only looks at it together with its own request, and i_req
+    // carries the redirect, which is late (LitexSystem/docs/TIMING.md 24).
     always @(*) begin
         i_ready = 1'b1;
         i_fault = FAULT_NONE;
-        if (!i_req) begin
-            i_fault = FAULT_NONE;
-        end else if (i_trans && !i_va_ok) begin
+        if (i_trans && !i_va_ok) begin
             i_fault = FAULT_PAGE;            // not a sign extension of bit 38
         end else if (i_trans && !i_hit) begin
             if (i_flt_hit) i_fault = i_flt_code;
