@@ -9,8 +9,10 @@
 //   - many operands: random ones, and the edges (0, 1, -1, the most negative
 //     number, the largest, one bit set) of both 64 and 32 bits
 //   - the number of cycles: MUL / MULW are done one cycle after the start,
-//     MULH / MULHSU / MULHU two cycles after it (CPU_CORE_SPEC.md 10.3),
-//     so a slower unit fails here, not only in the benchmarks
+//     MULH / MULHSU / MULHU two cycles after it, a division by zero or the
+//     overflow one, a divide 2 + steps after it, where the steps are what
+//     is left after the early out (CPU_CORE_SPEC.md decisions 61, 62); so a
+//     slower unit fails here, not only in the benchmarks
 //   - the answer held while the core does not take it (ack late), and
 //   - kill in the middle of an operation or while the answer is held: the
 //     unit must be idle afterwards and the next operation right
@@ -124,6 +126,34 @@ module tb_MDU;
         endcase
     endfunction
 
+    // cycles from the start to done for a divide (CORE_MDU.sv, S_DIVN)
+    function automatic int div_latency(input logic [2:0] o, input logic w,
+                                       input logic [63:0] a, input logic [63:0] b);
+        logic        sgn;
+        logic [63:0] da, db;
+        int          width, lz, bits_d, skip;
+        sgn   = (o == 3'd4) || (o == 3'd6);
+        width = w ? 32 : 64;
+        if (w) begin
+            da = sgn ? sx32(a[31:0]) : {32'd0, a[31:0]};
+            db = sgn ? sx32(b[31:0]) : {32'd0, b[31:0]};
+        end else begin
+            da = a;  db = b;
+        end
+        if (db == 0) return 1;
+        if (sgn && (db == 64'hFFFF_FFFF_FFFF_FFFF) &&
+            (da == (w ? 64'hFFFF_FFFF_8000_0000 : 64'h8000_0000_0000_0000))) return 1;
+        if (sgn && da[63]) da = -da;
+        if (sgn && db[63]) db = -db;
+        lz = width;
+        for (int i = 0; i < width; i++) if (da[i]) lz = width - 1 - i;
+        bits_d = 0;
+        for (int i = 0; i < 64; i++) if (db[i]) bits_d = i + 1;
+        skip = lz + bits_d - 1;
+        if (skip > width - 1) skip = width - 1;
+        return 2 + (width - skip);
+    endfunction
+
     //-----------------------------------------------------------------
     int n_ops = 200000;
     int errors = 0, checks = 0, kills = 0;
@@ -159,7 +189,8 @@ module tb_MDU;
 
             // one operation in sixteen is killed somewhere along the way
             kill_at = ($urandom_range(0, 15) == 0) ? $urandom_range(0, 6) : -1;
-            want_lat = (op == 3'd0) ? 1 : (op inside {3'd1, 3'd2, 3'd3}) ? 2 : -1;
+            want_lat = (op == 3'd0) ? 1 : (op inside {3'd1, 3'd2, 3'd3}) ? 2
+                                        : div_latency(op, word_op, rs1, rs2);
 
             start = 1'b1;
             @(posedge clk);

@@ -20,8 +20,14 @@
 //   MULHSU and MULHU sum the whole product first and subtract the
 //   correction in the cycle after that (EX waits two cycles).
 //
-//   Divide : restoring division, one bit of the quotient per cycle, so 32 or
-//   64 steps. Division by zero and the one overflow case are answered at once.
+//   Divide : restoring division, one bit of the quotient per cycle. One
+//   cycle after the start (S_DIVN) skips the steps whose quotient bit is
+//   known to be 0, all at once with a shift: the leading zeros of the
+//   dividend, and as many more as the divisor has bits less one (until then
+//   the partial remainder is shorter than the divisor). What is left is
+//   about the length of the quotient: bits(dividend) - bits(divisor) + 1
+//   steps, at most 32 or 64. Division by zero and the one overflow case are
+//   answered at once.
 //
 //   op is the funct3 field of the instruction:
 //       0 MUL     1 MULH   2 MULHSU  3 MULHU
@@ -58,7 +64,7 @@ module CORE_MDU
     localparam logic [2:0] OP_REM    = 3'd6;
     localparam logic [2:0] OP_REMU   = 3'd7;
 
-    typedef enum logic [2:0] {S_IDLE, S_MUL, S_MULH, S_DIV, S_DONE} state_t;
+    typedef enum logic [2:0] {S_IDLE, S_MUL, S_MULH, S_DIVN, S_DIV, S_DONE} state_t;
     state_t state;
 
     logic [2:0]  op_r;
@@ -121,6 +127,25 @@ module CORE_MDU
     logic [127:0] acc_shift;
     logic [63:0]  acc_hi_next;
     logic         acc_ge;
+
+    // the steps that can be skipped (S_DIVN). A 32 bit form has its
+    // dividend in acc[63:32] (see the start).
+    function automatic logic [6:0] clz64(input logic [63:0] v);
+        logic [6:0] n;
+        n = 7'd64;
+        for (int i = 0; i < 64; i++)
+            if (v[i]) n = 7'(63 - i);         // the highest one set wins
+        return n;
+    endfunction
+
+    logic [6:0] dvd_lz, dvs_lz, width, skip_raw, skip;
+    assign width    = word_r ? 7'd32 : 7'd64;
+    assign dvd_lz   = word_r ? ((acc[63:32] == 32'd0) ? 7'd32 : clz64({acc[63:32], 32'd0}))
+                             : clz64(acc[63:0]);
+    assign dvs_lz   = clz64(divisor);                        // divisor is not 0
+    // dvd_lz + bits(divisor) - 1 (at most 127, no wrap), leaving one step
+    assign skip_raw = dvd_lz + (7'd63 - dvs_lz);
+    assign skip     = (skip_raw > width - 7'd1) ? width - 7'd1 : skip_raw;
 
     assign acc_shift   = acc << 1;
     assign acc_ge      = (acc_shift[127:64] >= divisor);
@@ -202,8 +227,7 @@ module CORE_MDU
                             acc     <= word_op ? {64'd0, a_mag[31:0], 32'd0}
                                                : {64'd0, a_mag};
                             divisor <= b_mag;
-                            count   <= word_op ? 7'd32 : 7'd64;
-                            state   <= S_DIV;
+                            state   <= S_DIVN;
                         end
                     end
                 end
@@ -223,6 +247,11 @@ module CORE_MDU
                     if (ack) state <= S_IDLE;
                 end
                 //-----------------------------------------------------
+                S_DIVN: begin
+                    acc   <= acc << skip;
+                    count <= width - skip;
+                    state <= S_DIV;
+                end
                 S_DIV: begin
                     acc <= {acc_hi_next, acc_shift[63:1], acc_ge};
                     if (count == 7'd1) begin
