@@ -26,6 +26,10 @@
 //   18. A request held in stage 1 after a write to its set was forwarded
 //       to it: data (store then AMO during a fill) and tag (a store hit
 //       then a miss of the same set waiting for an MSHR)
+//   19. Requests taken back in the cycle after they were accepted
+//       (d_req_cancel): stores, AMO, LR, SC, misses, uncached accesses,
+//       one by one and mixed at random into section 11's traffic. They
+//       must leave no trace and get no answer
 //
 //   Plusargs: +mops=<n> number of CPU operations of section 17
 //
@@ -1016,6 +1020,97 @@
             u_mem.stall_en = 1'b0;
             check_memory("memory image after the forwarding tests");
             if (n_error == e0) ok("held requests read the arrays again after a forwarded write");
+        end
+
+        //=============================================================
+        section("19. Requests taken back (d_req_cancel)");
+        //=============================================================
+        if (from_sec <= 19 && 19 <= to_sec) begin
+            logic [PADDR_WIDTH-1:0] a;
+            e0 = n_error;
+            // (a) a store hit taken back: the load behind it sees the old value
+            a = a_mem(40);
+            d_store("(a) store", a, 2'd3, 64'h1900_0000_0000_00A1);
+            d_load ("(a) load, the line is in", a, 2'd3);
+            d_ghost(CMD_STORE, a, 2'd3, 64'hDEAD_DEAD_DEAD_DEAD);
+            d_load ("(a) load behind the store taken back", a, 2'd3);
+            d_ghost(CMD_STORE, a + 4, 2'd2, 64'hBAD0_BAD0);
+            d_load ("(a) and behind a word store taken back", a, 2'd3);
+            d_drain();
+            // (b) a miss taken back: no fill, nothing written
+            d_flush("(b) empty the cache");
+            d_drain();
+            a = a_mem(41);
+            d_ghost(CMD_STORE, a, 2'd3, 64'hDEAD_0000_0000_00B1);
+            d_ghost(CMD_LOAD,  a_mem(42), 2'd3, 64'd0);
+            d_load ("(b) load after a store miss taken back", a, 2'd3);
+            d_drain();
+            // (c) atomics taken back
+            a = a_mem(43);
+            d_store("(c) store", a, 2'd3, 64'h1900_0000_0000_00C1);
+            d_ghost(4'd4, a, 2'd3, 64'h1111);                      // an AMO
+            d_load ("(c) load after an AMO taken back", a, 2'd3);
+            d_drain();
+            // (d) an LR taken back makes no reservation
+            d_flush("(d) drop the reservation");
+            d_drain();
+            d_ghost(CMD_LR, a_mem(44), 2'd3, 64'd0);
+            d_drain();
+            repeat (4) @(posedge clk);
+            check("(d) no reservation from an LR taken back",
+                  u_cache.u_dcache.res_valid === 1'b0);
+            // an SC taken back does not write
+            d_push("(d) LR", CMD_LR, a_mem(44), 2'd3, 64'd0);
+            d_ghost(CMD_SC, a_mem(44), 2'd3, 64'hDEAD_0000_0000_00D1);
+            d_load ("(d) load after an SC taken back", a_mem(44), 2'd3);
+            d_drain();
+            // (e) uncached accesses taken back never reach the bus
+            d_store("(e) uncached store", a_peri(5), 2'd3, 64'h1900_0000_0000_00E1);
+            d_ghost(CMD_STORE, a_peri(5), 2'd3, 64'hDEAD_0000_0000_00E2);
+            d_ghost(CMD_LOAD,  a_peri(6), 2'd3, 64'd0);
+            d_load ("(e) uncached load after a store taken back", a_peri(5), 2'd3);
+            d_drain();
+            // (f) at random, in between everything else
+            for (int i = 0; i < 3000; i++) begin
+                int r, sz, widx;
+                r    = $urandom_range(0, 99);
+                sz   = $urandom_range(0, 3);
+                widx = $urandom_range(0, 255);
+                a    = a_mem(widx) + PADDR_WIDTH'($urandom_range(0, 7) & ~((1 << sz) - 1));
+                if (r < 25) begin
+                    int k;
+                    k = $urandom_range(0, 5);
+                    case (k)
+                        0: d_ghost(CMD_LOAD,  a, 2'(sz), 64'd0);
+                        1: d_ghost(CMD_STORE, a, 2'(sz), {$urandom, $urandom});
+                        2: d_ghost(4'($urandom_range(4, 12)), a_mem(widx), 2'd3, {$urandom, $urandom});
+                        3: d_ghost(CMD_SC, a_mem(widx), 2'd3, {$urandom, $urandom});
+                        4: d_ghost(CMD_STORE, a_peri($urandom_range(0, 63)), 2'd3, {$urandom, $urandom});
+                        default: d_ghost(CMD_LR, a_mem(widx), 2'd3, 64'd0);
+                    endcase
+                end else if (r < 55) begin
+                    d_load($sformatf("(f) load @%010h sz%0d", a, sz), a, 2'(sz));
+                end else if (r < 85) begin
+                    d_store($sformatf("(f) store @%010h sz%0d", a, sz), a, 2'(sz), {$urandom, $urandom});
+                end else if (r < 90) begin
+                    d_push($sformatf("(f) AMO @%010h", a_mem(widx)), 4'($urandom_range(4, 12)),
+                           a_mem(widx), 2'd3, {$urandom, $urandom});
+                end else if (r < 94) begin
+                    d_load("(f) uncached load", a_peri($urandom_range(0, 63)), 2'd3);
+                end else if (r < 98) begin
+                    d_store("(f) uncached store", a_peri($urandom_range(0, 63)), 2'd3,
+                            {$urandom, $urandom});
+                end else begin
+                    d_drain();
+                    d_flush("(f) flush");
+                    d_drain();
+                end
+            end
+            d_drain();
+            d_flush("(f) final flush");
+            d_drain();
+            check_memory("memory image after the requests taken back");
+            if (n_error == e0) ok("requests taken back leave no trace and get no answer");
         end
 
         //=============================================================

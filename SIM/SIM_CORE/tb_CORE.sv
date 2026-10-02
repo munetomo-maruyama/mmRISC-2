@@ -65,6 +65,7 @@ module tb_CORE;
     logic [1:0]             d_req_size;
     logic [3:0]             d_req_cmd;
     logic [63:0]            d_req_wdata, d_resp_data;
+    logic                   d_req_cancel;
 
     logic                   trace_valid, trace_rd_we;
     logic [63:0]            trace_pc, trace_rd_data;
@@ -129,6 +130,7 @@ module tb_CORE;
             .d_req_size    (d_req_size),
             .d_req_cmd     (d_req_cmd),
             .d_req_wdata   (d_req_wdata),
+            .d_req_cancel  (d_req_cancel),
             .d_resp_valid  (d_resp_valid),
             .d_resp_data   (d_resp_data),
             .d_resp_error  (d_resp_error),
@@ -206,6 +208,7 @@ module tb_CORE;
             .d_req_ready  (d_req_ready),
             .d_req_addr   (d_req_addr),
             .d_req_paddr  (d_req_paddr),
+            .d_req_cancel (d_req_cancel),
             .d_req_size   (d_req_size),
             .d_req_cmd    (d_req_cmd),
             .d_req_wdata  (d_req_wdata),
@@ -286,6 +289,7 @@ module tb_CORE;
     logic        last_trace_valid;
     logic [63:0] last_trace_pc;
     logic        retire_error;
+    logic        resp_error_tb;     // an answer of the data port nobody waits for
 
     logic        seen_trap;
     logic        last_trap_int;
@@ -314,6 +318,7 @@ module tb_CORE;
         last_trace_valid = 1'b0;
         last_trace_pc    = 64'd0;
         retire_error     = 1'b0;
+        resp_error_tb    = 1'b0;
         seen_trap        = 1'b0;
     end
 
@@ -331,7 +336,7 @@ module tb_CORE;
     logic [63:0] th_value;
     logic [7:0]  th_dev, th_cmd;
 
-    assign th_write = u_mem.s1d_valid && (u_mem.s1d_cmd == 4'd1) &&
+    assign th_write = u_mem.s1d_live && (u_mem.s1d_cmd == 4'd1) &&
                       ({24'd0, u_mem.s1d_addr} == tohost_addr);
     assign th_value = u_mem.s1d_wdata;
     assign th_dev   = th_value[63:56];
@@ -364,6 +369,13 @@ module tb_CORE;
                              trap_cause, trap_epc, trap_tval);
             end
 
+            // Every answer the LSU passes on belongs to the access in MA
+            // (CORE_LSU): one that arrives while MA waits for none is an
+            // answer of a flushed access that should have been dropped.
+            if (u_core.lsu_resp_valid && !(u_core.ma_valid && u_core.ma_mem)) begin
+                resp_error_tb <= 1'b1;
+                $display("[%0t] tb_CORE: an answer of the data port that no access in MA waits for", $time);
+            end
             last_trace_valid <= trace_valid;
             last_trace_pc    <= trace_pc;
             if (trace_valid) begin
@@ -749,6 +761,8 @@ module tb_CORE;
                      test_name);
         end else if (retire_error) begin
             $display(" %s : FAIL   (an instruction was retired twice)", test_name);
+        end else if (resp_error_tb) begin
+            $display(" %s : FAIL   (an answer of the data port that nothing waited for)", test_name);
         end else if (dbg_fail != 0) begin
             $display(" %s : FAIL   (debugger check %0d)", test_name, dbg_fail);
         end else if (tohost == 64'd1) begin

@@ -103,6 +103,8 @@ module tb_CACHE;
     logic                    d_resp_valid, d_resp_error;
     logic [XLEN-1:0]         d_resp_data;
     logic [PADDR_WIDTH-1:0]  d_req_paddr;     // physical address, one cycle later
+    logic                    d_req_cancel;    // ... or the request taken back
+    logic                    d_req_ghost;     // the request on the port is one to take back
 
     // second port of the data cache (debug module in CPU_TOP)
     logic                    dbg_req_valid, dbg_req_ready;
@@ -194,10 +196,13 @@ module tb_CACHE;
         if (!rst_n) begin
             i_req_paddr   <= '0;
             d_req_paddr   <= '0;
+            d_req_cancel  <= 1'b0;
             dbg_req_paddr <= '0;
         end else begin
             if (i_req_valid   && i_req_ready)   i_req_paddr   <= i_req_pa_cur;
             if (d_req_valid   && d_req_ready)   d_req_paddr   <= d_req_pa_cur;
+            // a ghost is taken back in the cycle after it was accepted
+            d_req_cancel <= d_req_valid && d_req_ready && d_req_ghost;
             if (dbg_req_valid && dbg_req_ready) dbg_req_paddr <= dbg_req_addr;
         end
     end
@@ -245,6 +250,7 @@ module tb_CACHE;
             .d_req_cmd      (d_req_cmd),
             .d_req_wdata    (d_req_wdata),
             .d_req_paddr    (d_req_paddr),
+            .d_req_cancel   (d_req_cancel),
             .d_resp_valid   (d_resp_valid),
             .d_resp_data    (d_resp_data),
             .d_resp_error   (d_resp_error),
@@ -617,6 +623,7 @@ module tb_CACHE;
     logic [PADDR_WIDTH-1:0] rq_addr  [0:QDEPTH-1];
     logic [1:0]             rq_size  [0:QDEPTH-1];
     logic [63:0]            rq_wdata [0:QDEPTH-1];
+    bit                     rq_ghost [0:QDEPTH-1];
     int rq_wr = 0, rq_rd = 0;
 
     logic [PADDR_WIDTH-1:0] iq_addr_f [0:QDEPTH-1];
@@ -625,6 +632,7 @@ module tb_CACHE;
     always @(posedge clk) begin
         if (!rst_n) begin
             d_req_valid <= 1'b0;
+            d_req_ghost <= 1'b0;
         end else if (!d_req_valid || d_req_ready) begin
             if (rq_rd != rq_wr) begin
                 d_req_valid <= 1'b1;
@@ -633,6 +641,7 @@ module tb_CACHE;
                 d_req_pa_cur<= rq_addr[rq_rd];
                 d_req_size  <= rq_size[rq_rd];
                 d_req_wdata <= rq_wdata[rq_rd];
+                d_req_ghost <= rq_ghost[rq_rd];
                 rq_rd       <= (rq_rd + 1) % QDEPTH;
             end else begin
                 d_req_valid <= 1'b0;
@@ -656,8 +665,10 @@ module tb_CACHE;
     end
 
     task automatic rq_put(input logic [3:0] cmd, input logic [PADDR_WIDTH-1:0] addr,
-                          input logic [1:0] size, input logic [63:0] wdata);
+                          input logic [1:0] size, input logic [63:0] wdata,
+                          input bit ghost = 1'b0);
         while (((rq_wr + 1) % QDEPTH) == rq_rd) @(posedge clk);
+        rq_ghost[rq_wr] = ghost;
         rq_cmd[rq_wr]   = cmd;
         rq_addr[rq_wr]  = addr;
         rq_size[rq_wr]  = size;
@@ -793,6 +804,15 @@ module tb_CACHE;
         // expected value from a reference memory that does not yet contain the
         // store of this SC.
         if (cmd == CMD_SC) d_drain();
+    endtask
+
+    // A request that is driven and taken back in the next cycle
+    // (d_req_cancel): no expectation, so an answer for it, or any trace of
+    // it in memory, the arrays or the reservation, is an error.
+    task automatic d_ghost(input logic [3:0] cmd, input logic [PADDR_WIDTH-1:0] addr,
+                           input logic [1:0] size, input logic [63:0] wdata);
+        if (oplog) $display("[%0t] GHOST cmd=%0d addr=%010h", $time, cmd, addr);
+        rq_put(cmd, addr, size, wdata, 1'b1);
     endtask
 
     // convenience wrappers

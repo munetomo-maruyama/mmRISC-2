@@ -21,6 +21,11 @@
 //     A hit that is the oldest request answers straight from stage 1, two
 //     cycles after the request instead of three (s1_fast); everything else
 //     waits in the buffer for its turn.
+//   - The CPU may take back the request of the previous cycle (d_req_cancel,
+//     with its physical address): the core issues loads and stores before it
+//     knows whether they may go (CPU_CORE_SPEC.md 5). A cancelled request
+//     leaves stage 1 without touching anything -- no array or tag write, no
+//     miss, no bus access, no reservation -- and is not answered.
 //
 // Array ports: one read and one write port each. Priorities are
 //   read  : flush walk > victim copy > pipeline
@@ -72,7 +77,13 @@ module DCACHE
         // present d_req_addr before the translation is finished (VIPT). With
         // no MMU, drive it with d_req_addr delayed by one cycle.
         input  logic [PADDR_WIDTH-1:0]   d_req_paddr,
+        // Take back the request of the previous cycle, with d_req_paddr: it
+        // does nothing and gets no answer. Only looked at in that cycle.
+        input  logic                     d_req_cancel,
         output logic                     d_resp_valid,
+        // with d_resp_valid: the turn of a cancelled request, not an answer.
+        // CACHE_PORT_ARB needs it to keep its record of who asked in step.
+        output logic                     d_resp_drop,
         output logic [XLEN-1:0]          d_resp_data,
         output logic                     d_resp_error,
 
@@ -280,6 +291,7 @@ module DCACHE
     logic                    s1_valid, s1_data_ok, s1_reread, s1_wait_fill;
     logic                    s1_ptag_v;                 // the tag has been captured
     logic [TAG_BITS-1:0]     s1_ptag_r;
+    logic                    s1_kill;                   // taken back by the CPU
     logic [TAG_BITS-1:0]     s1_ptag;                   // tag of stage 1 (live or captured)
     logic [PADDR_WIDTH-1:0]  s1_paddr;                  // full physical address of stage 1
     logic [LINE_BITS-1:0]    s1_line;                   // physical line of stage 1
@@ -336,6 +348,7 @@ module DCACHE
     // Reorder buffer, MSHRs, writeback buffers, reservation
     //=================================================================
     logic [ROB_DEPTH-1:0]  rob_valid, rob_done, rob_err, rob_wait, rob_st;
+    logic [ROB_DEPTH-1:0]  rob_silent;     // cancelled: leaves without an answer
     logic [63:0]           rob_data  [0:ROB_DEPTH-1];
     logic [MSHR_BITS-1:0]  rob_mshr  [0:ROB_DEPTH-1];
     logic [WOFF_BITS-1:0]  rob_woff  [0:ROB_DEPTH-1];
@@ -571,7 +584,7 @@ module DCACHE
         for (int w = 0; w < WAYS; w++)
             hit_oh[w] = eff_valid[w] &&
                         (eff_tag[w*TAG_BITS +: TAG_BITS] == s1_ptag);
-        hit     = s1_valid & s1_cacheable & s1_data_ok & (|hit_oh);
+        hit     = s1_valid & s1_cacheable & s1_data_ok & ~s1_kill & (|hit_oh);
         hit_way = onehot_to_bin(hit_oh);
         hit_word = dat_rd_data[hit_way*64 +: 64];
         if (fwd_valid && (fwd_way == hit_way) &&
@@ -641,6 +654,9 @@ module DCACHE
     // stage 1 cycle uses the input directly and every later cycle (re-read,
     // waiting for a fill) uses the captured value.
     assign s1_ptag     = s1_ptag_v ? s1_ptag_r : addr_tag(d_req_paddr);
+    // only in the first stage 1 cycle, with the tag; a request taken back
+    // leaves stage 1 in that same cycle, so nothing has to remember it
+    assign s1_kill     = s1_valid & ~s1_ptag_v & d_req_cancel;
     assign s1_paddr    = {s1_ptag, s1_addr[PADDR_WIDTH-TAG_BITS-1:0]};
     assign s1_line     = {s1_ptag, addr_index(s1_addr)};
     assign s1_cacheable = (s1_paddr >= PADDR_WIDTH'(MEM_BASE));
@@ -679,7 +695,9 @@ module DCACHE
 
     always @(*) begin
         s1_can_retire = 1'b0;
-        if (s1_valid && s1_data_ok) begin
+        if (s1_kill) begin
+            s1_can_retire = 1'b1;                     // taken back: nothing to do
+        end else if (s1_valid && s1_data_ok) begin
             if (s1_is_fence) begin
                 s1_can_retire = all_idle;
             end else if (s1_is_flush) begin
@@ -851,6 +869,7 @@ module DCACHE
             rob_err      <= '0;
             rob_wait     <= '0;
             rob_st       <= '0;
+            rob_silent   <= '0;
             rob_head     <= '0;
             rob_tail     <= '0;
             rob_count    <= '0;
@@ -908,6 +927,7 @@ module DCACHE
             f_wb_way_q   <= '0;
             fl_way_q     <= '0;
             d_resp_valid <= 1'b0;
+            d_resp_drop  <= 1'b0;
             d_resp_data  <= '0;
             d_resp_error <= 1'b0;
             m_axi4_arvalid <= 1'b0;
@@ -931,6 +951,7 @@ module DCACHE
         end else begin
             lfsr         <= {lfsr[14:0], lfsr[15] ^ lfsr[13] ^ lfsr[12] ^ lfsr[10]};
             d_resp_valid <= 1'b0;
+            d_resp_drop  <= 1'b0;
             s1_reread    <= 1'b0;
             rob_push = 1'b0; rob_pop = 1'b0;
             s1_fast  = 1'b0; s1_fast_data = '0;
@@ -977,6 +998,7 @@ module DCACHE
                 rob_err[rob_tail]   <= 1'b0;
                 rob_wait[rob_tail]  <= 1'b0;
                 rob_st[rob_tail]    <= 1'b0;
+                rob_silent[rob_tail] <= 1'b0;
                 rob_data[rob_tail]  <= '0;
                 rob_lsb[rob_tail]   <= d_req_addr[2:0];
                 rob_size[rob_tail]  <= d_req_size;
@@ -1027,7 +1049,12 @@ module DCACHE
             //---------------------------------------------------------
             // stage 1 : execute
             //---------------------------------------------------------
-            if (s1_valid && s1_data_ok && s1_can_retire) begin
+            if (s1_kill) begin
+                // taken back by the CPU: it only has to leave the buffer
+                rob_done[s1_rob]   <= 1'b1;
+                rob_silent[s1_rob] <= 1'b1;
+            end
+            else if (s1_valid && s1_data_ok && s1_can_retire) begin
                 if (s1_is_fence) begin
                     rob_done[s1_rob] <= 1'b1;
                 end
@@ -1438,6 +1465,7 @@ module DCACHE
             //   the buffer cannot be answering for it as well.
             if (!rob_empty && rob_valid[rob_head] && rob_done[rob_head]) begin
                 d_resp_valid        <= 1'b1;
+                d_resp_drop         <= rob_silent[rob_head];
                 d_resp_data         <= rob_data[rob_head];
                 d_resp_error        <= rob_err[rob_head];
                 rob_valid[rob_head] <= 1'b0;

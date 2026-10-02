@@ -497,6 +497,9 @@ module CPU_TOP
     logic [63:0]                cc_d_resp_data;
 
     // debug side of the data cache
+    // the core takes back the request of the last cycle (CPU_CORE_SPEC.md 5)
+    logic                       cpu_d_req_cancel;
+
     logic                       dbg_dc_req_valid, dbg_dc_req_ready;
     logic [AXI4_ADDR_WIDTH-1:0] dbg_dc_req_addr, dbg_dc_req_paddr;
     logic [1:0]                 dbg_dc_req_size;
@@ -724,6 +727,7 @@ module CPU_TOP
             .s0_req_cmd    (dbg_dc_req_cmd),
             .s0_req_wdata  (dbg_dc_req_wdata),
             .s0_req_paddr  (dbg_dc_req_paddr),
+            .s0_req_cancel (1'b0),          // neither the debugger nor DMA takes back
             .s0_resp_valid (dbg_dc_resp_valid),
             .s0_resp_data  (dbg_dc_resp_data),
             .s0_resp_error (dbg_dc_resp_error),
@@ -744,9 +748,11 @@ module CPU_TOP
             .m_req_cmd     (p2_req_cmd),
             .m_req_wdata   (p2_req_wdata),
             .m_req_paddr   (p2_req_paddr),
+            .m_req_cancel  (),
             .m_resp_valid  (p2_resp_valid),
             .m_resp_data   (p2_resp_data),
-            .m_resp_error  (p2_resp_error)
+            .m_resp_error  (p2_resp_error),
+            .m_resp_drop   (1'b0)
         );
 
     //=================================================================
@@ -809,6 +815,7 @@ module CPU_TOP
             .d_req_ready     (cpu_d_req_ready),
             .d_req_addr      (cpu_d_req_addr),
             .d_req_paddr     (cpu_d_req_paddr),
+            .d_req_cancel    (cpu_d_req_cancel),
             .d_req_size      (cpu_d_req_size),
             .d_req_cmd       (cpu_d_req_cmd),
             .d_req_wdata     (cpu_d_req_wdata),
@@ -1340,6 +1347,7 @@ module CPU_TOP
     //=================================================================
     generate
         if (USE_BFM != 0) begin : g_bfm
+            assign cpu_d_req_cancel = 1'b0;    // the BFM never takes a request back
             // the pseudo hart inside CPU_DBG answers the debug module
             assign hart_halted    = 1'b0;
             assign hart_running   = 1'b0;
@@ -1460,7 +1468,8 @@ module CPU_TOP
                     .PMP_ENTRIES  (PMP_ENTRIES),
                     .ITLB_ENTRIES (ITLB_ENTRIES),
                     .DTLB_ENTRIES (DTLB_ENTRIES),
-                    .BTB_ENTRIES  (BTB_ENTRIES)
+                    .BTB_ENTRIES  (BTB_ENTRIES),
+                    .MEM_BASE     ({24'd0, MEM_BASE})
                 )
             u_cpu_core
                 (
@@ -1484,6 +1493,7 @@ module CPU_TOP
                     .d_req_size    (cpu_d_req_size),
                     .d_req_cmd     (cpu_d_req_cmd),
                     .d_req_wdata   (cpu_d_req_wdata),
+                    .d_req_cancel  (cpu_d_req_cancel),
                     .d_resp_valid  (cc_d_resp_valid),
                     .d_resp_data   (cc_d_resp_data),
                     .d_resp_error  (cc_d_resp_error),

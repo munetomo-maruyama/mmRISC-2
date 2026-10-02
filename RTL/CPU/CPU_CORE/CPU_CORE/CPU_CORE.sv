@@ -43,7 +43,10 @@ module CPU_CORE
         parameter int          PMP_ENTRIES  = 8,     // 0 removes PMP
         parameter int          ITLB_ENTRIES = 8,
         parameter int          DTLB_ENTRIES = 8,
-        parameter int          BTB_ENTRIES  = 256
+        parameter int          BTB_ENTRIES  = 256,
+        // the cacheable region begins here (CPU_CACHE_SPEC.md 4.1): a load
+        // below it may have a side effect and does not go early
+        parameter logic [63:0] MEM_BASE     = 64'h0000_0000_8000_0000
     )
     (
         input  logic                    clk,
@@ -70,6 +73,7 @@ module CPU_CORE
         output logic [1:0]              d_req_size,
         output logic [3:0]              d_req_cmd,
         output logic [63:0]             d_req_wdata,
+        output logic                    d_req_cancel,   // the request of the last cycle
         input  logic                    d_resp_valid,
         input  logic [63:0]             d_resp_data,
         input  logic                    d_resp_error,
@@ -474,6 +478,12 @@ module CPU_CORE
     logic        ma_csr_wr;
     logic [11:0] ma_csr_addr;
     logic [63:0] ma_csr_wdata;
+    // the access, for when it goes from MA (CORE_LSU)
+    logic [3:0]  ma_cmd;
+    logic [63:0] ma_paddr, ma_wdata;
+    logic [1:0]  ma_size;
+    logic        ma_signed;
+    logic        ma_issued;       // its request is in flight or answered
     logic        ma_exc_r, ma_exc_int_r;
     logic [4:0]  ma_exc_cause_r;
     logic [63:0] ma_exc_tval_r;
@@ -892,7 +902,7 @@ module CPU_CORE
             .sfence_vaddr (ma_sfence_vaddr),
             .sfence_asid  (ma_sfence_asid),
             .kill         (flush),
-            .lsu_idle     (lsu_idle & ~(mr_valid & mr_mem)),
+            .lsu_idle     (lsu_idle & ~(mr_valid & mr_mem) & ~(ma_valid & ma_mem)),
             .ptw_active   (ptw_active),
             .m_req_valid  (ptw_req_valid),
             .m_req_ready  (ptw_req_ready),
@@ -916,6 +926,9 @@ module CPU_CORE
     assign d_req_size   = ptw_active ? 2'd3  : lsu_d_req_size;   // eight bytes
     assign d_req_cmd    = ptw_active ? 4'd0  : lsu_d_req_cmd;    // a plain load
     assign d_req_wdata  = ptw_active ? 64'd0 : lsu_d_req_wdata;
+    // the walker takes the port only when nothing of the LSU is in flight
+    // (lsu_idle), so a take back is always the LSU's
+    assign d_req_cancel = ~ptw_active & lsu_d_req_cancel;
 
     assign ptw_req_ready   = ptw_active & d_req_ready;
     assign ptw_resp_valid  = ptw_active & d_resp_valid;
@@ -923,29 +936,75 @@ module CPU_CORE
     assign lsu_d_resp_valid= ~ptw_active & d_resp_valid;
 
     //=================================================================
-    // load / store unit
+    // load / store unit (CPU_CORE_SPEC.md 5)
+    //
+    //   EX issues the access as soon as the address is added up (e_*). In
+    //   the next cycle the instruction is in MR, with the translation and
+    //   the PMP, and MR lets the request go or takes it back (lsu_e_go).
+    //   It may go when
+    //     - nothing refuses it (exception, translation, PMP, flush), and
+    //     - it has no side effect (a load of the cacheable region) or the
+    //       instruction in front of it, in MA, commits in this cycle (or
+    //       there is none): a store, an atomic or an uncached access must
+    //       not happen for an instruction that a trap in front of it will
+    //       throw away.
+    //   and in any case only when every access in front of it has gone: the
+    //   cache does them in the order it took them, and one that was taken
+    //   back goes again later, from MA. A load that went past it would read
+    //   memory before an older store has written it.
+    //   A request that did not go from EX goes from MA (m_*), where nothing
+    //   in front of it can trap any more.
     //=================================================================
-    logic lsu_req_valid, lsu_accept;
+    logic        lsu_e_valid, lsu_e_accept, lsu_e_go;
+    logic        lsu_m_valid, lsu_m_accept;
+    logic        lsu_d_req_cancel;
+    logic        ex_ls;            // a load or a store of any kind (not fence.i)
+    logic        ex_e_blocked;     // EX issued, but stayed: let MA do it
+    logic        mr_e_acc;         // MR's request went from EX last cycle
+    logic        mr_issued_r, mr_issued;
+    logic        mr_spec_ok, older_done;
+
+    assign ex_ls       = ex_is_load | ex_is_store;
+    // Only signals that settle early: nothing of the translation or of the
+    // PMP. A request of an instruction that does not go on to MR (it waits
+    // for the page table walker) is taken back in the next cycle.
+    assign lsu_e_valid = ex_valid & ex_ls & ~ex_exc_r & ~ex_e_blocked &
+                         ~stall_ma & ~lu_hazard;
+
+    assign mr_spec_ok  = (mr_cmd == 4'd0) & (mr_paddr >= MEM_BASE);  // a cacheable load
+    assign older_done  = ~ma_valid | commit;
+    assign lsu_e_go    = mr_e_acc & mr_valid & ~mr_exc & ~flush &
+                         ~(ma_valid & ma_mem & ~ma_issued) &
+                         (mr_spec_ok | older_done);
+    assign mr_issued   = mr_e_acc ? lsu_e_go : mr_issued_r;
+
+    assign lsu_m_valid = ma_valid & ma_mem & ~ma_issued;
 
     CORE_LSU #(.PADDR_WIDTH(PADDR_WIDTH)) u_lsu
         (
             .clk          (clk),
             .rst_n        (rst_n),
-            .req_valid    (lsu_req_valid),
-            .req_cmd      (mr_cmd),
-            .req_addr     (mr_vaddr),
-            .req_size     (mr_size),
-            .req_signed   (mr_signed),
-            .req_paddr    (mr_paddr),
-            .req_wdata    (mr_wdata),
-            .req_accept   (lsu_accept),
+            .e_valid      (lsu_e_valid),
+            .e_cmd        (ex_mem_cmd),
+            .e_addr       (mem_addr),
+            .e_size       (ex_mem_size),
+            .e_wdata      (ex_is_fp_store ? ex_fs2_fwd : ex_b_fwd),
+            .e_accept     (lsu_e_accept),
+            .e_go         (lsu_e_go),
+            .e_paddr      (mr_paddr),
+            .m_valid      (lsu_m_valid),
+            .m_cmd        (ma_cmd),
+            .m_addr       (ma_result),       // the address of the access
+            .m_paddr      (ma_paddr),
+            .m_size       (ma_size),
+            .m_wdata      (ma_wdata),
+            .m_accept     (lsu_m_accept),
+            .r_size       (ma_size),
+            .r_signed     (ma_signed),
             .resp_valid   (lsu_resp_valid),
             .resp_data    (lsu_resp_data),
             .resp_error   (lsu_resp_error),
-            .kill         (1'b0),      // nothing is ever in flight at a trap:
-                                       // a memory access moves to MA in the
-                                       // cycle it is issued, and the younger
-                                       // instructions are killed before EX
+            .flush        (flush),
             .idle         (lsu_idle),
             .d_req_valid  (lsu_d_req_valid),
             .d_req_ready  (lsu_d_req_ready),
@@ -954,10 +1013,58 @@ module CPU_CORE
             .d_req_size   (lsu_d_req_size),
             .d_req_cmd    (lsu_d_req_cmd),
             .d_req_wdata  (lsu_d_req_wdata),
+            .d_req_cancel (lsu_d_req_cancel),
             .d_resp_valid (lsu_d_resp_valid),
             .d_resp_data  (d_resp_data),
             .d_resp_error (d_resp_error)
         );
+
+    // where each access stands
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            ex_e_blocked <= 1'b0;
+            mr_e_acc     <= 1'b0;
+            mr_issued_r  <= 1'b0;
+            ma_issued    <= 1'b0;
+            ma_cmd       <= 4'd0;
+            ma_paddr     <= 64'd0;
+            ma_wdata     <= 64'd0;
+            ma_size      <= 2'd0;
+            ma_signed    <= 1'b0;
+        end else begin
+            // EX issued but did not go on (it waits for the page table
+            // walker): no more tries from EX, MA will do it
+            if (flush || ex_advance)  ex_e_blocked <= 1'b0;
+            else if (lsu_e_accept)    ex_e_blocked <= 1'b1;
+
+            if (flush) begin
+                mr_e_acc    <= 1'b0;
+                mr_issued_r <= 1'b0;
+            end else if (ex_advance) begin
+                mr_e_acc    <= lsu_e_accept;      // decided in the next cycle
+                mr_issued_r <= 1'b0;
+            end else if (mr_advance) begin
+                mr_e_acc    <= 1'b0;              // bubble
+                mr_issued_r <= 1'b0;
+            end else begin
+                mr_e_acc    <= 1'b0;              // MR keeps its instruction
+                mr_issued_r <= mr_issued;
+            end
+
+            if (flush) begin
+                ma_issued <= 1'b0;
+            end else if (mr_advance) begin
+                ma_issued <= mr_issued;
+                ma_cmd    <= mr_cmd;
+                ma_paddr  <= mr_paddr;
+                ma_wdata  <= mr_wdata;
+                ma_size   <= mr_size;
+                ma_signed <= mr_signed;
+            end else if (lsu_m_accept) begin
+                ma_issued <= 1'b1;
+            end
+        end
+    end
 
     //=================================================================
     // MR : the protection check, and the access goes to the cache
@@ -1039,11 +1146,9 @@ module CPU_CORE
     // is invalidated
     assign ex_mem        = ex_is_load | ex_is_store | ex_is_fencei;
     assign mr_is_mem     = mr_valid & mr_mem & ~mr_exc;
-    // a memory access must not be started when the instruction in front of it
-    // traps, because the cache cannot take the write back
-    assign lsu_req_valid = mr_is_mem & ~stall_ma & ~flush;
+    // MA waits for the answer of its access, whichever way it went
     assign stall_ma      = ma_valid & ma_mem & ~lsu_resp_valid;
-    assign stall_mr      = stall_ma | (mr_is_mem & ~lsu_accept & ~flush);
+    assign stall_mr      = stall_ma;
     assign mr_advance    = ~stall_mr;
     // the page table is being walked : the address is not there yet
     assign ex_mmu_wait   = d_tr_req & ~d_tr_ready & ~flush;
