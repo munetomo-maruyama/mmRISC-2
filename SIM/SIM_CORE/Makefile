@@ -9,6 +9,7 @@
 #   make riscv-tests-v : the same tests under Sv39 in user mode (env/v)
 #   make clint      : CPU_CLINT with several harts (tb_CLINT)
 #   make plic       : CPU_PLIC with several contexts (tb_PLIC)
+#   make mdu        : CORE_MDU against a reference, with its cycle counts (tb_MDU)
 #   make trace      : run one test with the retirement trace
 #   make profile    : run one test and print where the cycles went
 #   make wave       : run one test and dump tb_CORE.vcd
@@ -44,6 +45,7 @@ RTL_SRCS := \
 SIM_SRCS := CORE_MEM_MODEL.sv $(TOP).sv
 CLINT_SRCS := $(RTL_DIR)/CPU/CPU_CLINT/CPU_CLINT.sv tb_CLINT.sv
 PLIC_SRCS  := $(RTL_DIR)/CPU/CPU_PLIC/CPU_PLIC.sv tb_PLIC.sv
+MDU_SRCS   := $(RTL_DIR)/CPU/CPU_CORE/CORE_MDU/CORE_MDU.sv tb_MDU.sv
 SRCS     := $(RTL_SRCS) $(SIM_SRCS)
 
 VERILATOR       := verilator
@@ -73,7 +75,7 @@ HEXES    := $(addprefix tests/,$(addsuffix .hex,$(TESTS)))
 TEST     ?= $(firstword $(TESTS))
 PLUSARGS ?=
 
-.PHONY: all run run-all stress bugs riscv-tests riscv-tests-v clint plic \
+.PHONY: all run run-all stress bugs riscv-tests riscv-tests-v clint plic mdu \
         trace profile wave lint iverilog clean tests
 
 # back pressure on both cache ports : ready is low in 40 % of the cycles
@@ -114,6 +116,12 @@ obj_plic/.srchash: FORCE
 	@h=`cat $(PLIC_SRCS) | md5sum | cut -d' ' -f1`; \
 	 if [ "`cat $@ 2>/dev/null`" != "$$h" ]; then \
 	     rm -f obj_plic/Vtb_PLIC; echo "$$h" > $@; fi
+
+obj_mdu/.srchash: FORCE
+	@mkdir -p obj_mdu
+	@h=`cat $(MDU_SRCS) | md5sum | cut -d' ' -f1`; \
+	 if [ "`cat $@ 2>/dev/null`" != "$$h" ]; then \
+	     rm -f obj_mdu/Vtb_MDU; echo "$$h" > $@; fi
 
 obj_clint/.srchash: FORCE
 	@mkdir -p obj_clint
@@ -157,6 +165,14 @@ obj_plic/Vtb_PLIC: obj_plic/.srchash
 
 plic: obj_plic/Vtb_PLIC
 	./obj_plic/Vtb_PLIC
+
+# operands, cycle counts, late ack and kill, which a program cannot steer
+obj_mdu/Vtb_MDU: obj_mdu/.srchash
+	$(VERILATOR) $(VERILATOR_BASE) --top-module tb_MDU -Mdir obj_mdu \
+	    $(MDU_SRCS)
+
+mdu: obj_mdu/Vtb_MDU
+	./obj_mdu/Vtb_MDU $(PLUSARGS)
 
 run-all: obj_dir/V$(TOP) $(HEXES)
 	@fail=0; \
@@ -204,4 +220,4 @@ iverilog: $(HEXES)
 	exit $$fail
 
 clean:
-	rm -rf obj_dir obj_trace obj_clint obj_plic bug_work rvtests $(TOP).vvp *.vcd *.log tests/*.elf tests/*.bin tests/*.hex tests/*.dis
+	rm -rf obj_dir obj_trace obj_clint obj_plic obj_mdu bug_work rvtests $(TOP).vvp *.vcd *.log tests/*.elf tests/*.bin tests/*.hex tests/*.dis

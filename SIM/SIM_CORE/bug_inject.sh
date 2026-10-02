@@ -149,13 +149,17 @@ MUTATIONS=(
 "49#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/csr_wr = (funct3\[1:0\] == 2'b01) || (rs1 != 5'd0);/csr_wr = 1'b1;/#decoder: CSRRS with x0 writes the CSR"
 "50#CPU_CORE/CORE_DEC/CORE_DEC.sv#s|12'h302: begin is_mret   = 1'b1; sys_noarg = 1'b1; end|12'h302: illegal = 1'b1;|#decoder: MRET is not known"
 "51#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/OP_MULH:            begin a_signed = 1'b1; b_signed = 1'b1; end/OP_MULH:            begin a_signed = 1'b0; b_signed = 1'b0; end/#MDU: MULH multiplies unsigned"
-"52#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/prod\[127:64\] <= prod\[127:64\] - (a_neg ? b_r : 64'd0)/prod[127:64] <= prod[127:64] - (1'b0 ? b_r : 64'd0)/#MDU: the sign of the first operand is not corrected"
+"52#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/corr  <= ((a_signed \& a_prep\[63\]) ? b_prep : 64'd0) +/corr  <= ((1'b0) ? b_prep : 64'd0) +/#MDU: the sign of the first operand is not corrected"
 "53#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/                            quo_r <= {64{1'b1}};/                            quo_r <= 64'd0;/#MDU: a division by zero answers zero"
 "54#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/                            quo_r <= a_prep;                 \/\/ overflow/                            quo_r <= 64'd0;/#MDU: the one overflow of a division is not special"
 "55#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/quo_neg <= a_signed \& (a_prep\[63\] ^ b_prep\[63\]);/quo_neg <= 1'b0;/#MDU: the quotient keeps no sign"
 "56#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/rem_neg <= a_signed \& a_prep\[63\];/rem_neg <= a_signed \& b_prep[63];/#MDU: the remainder takes the sign of the divisor"
 "57#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/count   <= word_op ? 7'd32 : 7'd64;/count   <= 7'd64;/#MDU: the 32 bit forms divide over 64 steps"
 "58#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/{64'd0, a_mag\[31:0\], 32'd0}/{64'd0, a_mag}/#MDU: the dividend of a 32 bit form is not moved up"
+"59#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/assign mid_lo = pp_hl\[31:0\] + pp_lh\[31:0\];/assign mid_lo = pp_hl[31:0];/#MDU: the low half of MUL leaves out one middle product"
+"60#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/if (op_r == OP_MUL) mul_result = word_r ? {{32{mul_lo\[31\]}}, mul_lo\[31:0\]} : mul_lo;/if (op_r == OP_MUL) mul_result = word_r ? {32'd0, mul_lo[31:0]} : mul_lo;/#MDU: MULW does not extend the sign"
+"61#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/assign done   = ((state == S_MUL) \&\& (op_r == OP_MUL)) || (state == S_MULH) ||/assign done   = (state == S_MUL) || (state == S_MULH) ||/#MDU: MULH is answered before its high half is summed"
+"62#CPU_CORE/CORE_MDU/CORE_MDU.sv#s/                    if (op_r == OP_MUL) begin/                    if (1'b0) begin/#MDU: MUL takes the long way (one cycle slower, same result)"
 "59#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/else if (ex_is_mdu)                mr_result <= mdu_result;/else if (1'b0)                     mr_result <= mdu_result;/#core: the result of the multiplier is thrown away"
 "60#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/| (mdu_active \& ~mdu_done \& ~flush)/| (1'b0)/#core: EX does not wait for the multiplier"
 "61#CPU_CORE/CORE_DEC/CORE_DEC.sv#s/5'b00000: mem_cmd = 4'd5;           \/\/ AMOADD/5'b00000: mem_cmd = 4'd4;/#decoder: AMOADD is issued as AMOSWAP"
@@ -356,6 +360,18 @@ CORE_MEM_MODEL.sv tb_CORE.sv"
         fails=$((fails+1))
     else
         passes=$((passes+1))
+    fi
+
+    # the multiply / divide unit also on its own bench (tb_MDU): operands
+    # and cycle counts the programs do not reach
+    if [[ $file == */CORE_MDU.sv ]]; then
+        if verilator --binary --timing -j 2 -Wno-fatal --top-module tb_MDU -Mdir $d/obj_mdu \
+               $R/CORE_MDU/CORE_MDU.sv tb_MDU.sv > $d/build_mdu.log 2>&1 &&
+           timeout 300 ./$d/obj_mdu/Vtb_MDU +n=20000 2>&1 | grep -q "RESULT : PASS"; then
+            passes=$((passes+1))
+        else
+            fails=$((fails+1))
+        fi
     fi
 
     if [ $fails -eq 0 ]; then
