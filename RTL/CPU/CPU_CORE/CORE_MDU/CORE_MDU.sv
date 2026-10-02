@@ -7,11 +7,18 @@
 //   waits for it. It is not pipelined: one operation at a time, which is what
 //   an in order pipeline with a single issue can use anyway.
 //
-//   Multiply : three cycles. The product is built from four unsigned 32 x 32
-//   partial products, which is what the DSP blocks of the FPGA do well, and
-//   the sign is corrected afterwards:
+//   Multiply : the product is built from four unsigned 32 x 32 partial
+//   products, which is what the DSP blocks of the FPGA do well, and the sign
+//   is corrected afterwards:
 //
 //       a * b (signed) = ua * ub - (a < 0 ? ub << 64 : 0) - (b < 0 ? ua << 64 : 0)
+//
+//   The correction only touches the high half, and is added up while the
+//   partial products are made (corr). So MUL and MULW, which want the low
+//   half, are done one cycle after the start: the low half is the partial
+//   products summed, straight into the result (EX waits one cycle). MULH,
+//   MULHSU and MULHU sum the whole product first and subtract the
+//   correction in the cycle after that (EX waits two cycles).
 //
 //   Divide : restoring division, one bit of the quotient per cycle, so 32 or
 //   64 steps. Division by zero and the one overflow case are answered at once.
@@ -51,12 +58,11 @@ module CORE_MDU
     localparam logic [2:0] OP_REM    = 3'd6;
     localparam logic [2:0] OP_REMU   = 3'd7;
 
-    typedef enum logic [2:0] {S_IDLE, S_MUL1, S_MUL2, S_DIV, S_DONE} state_t;
+    typedef enum logic [2:0] {S_IDLE, S_MUL, S_MULH, S_DIV, S_DONE} state_t;
     state_t state;
 
     logic [2:0]  op_r;
     logic        word_r;
-    logic [63:0] a_r, b_r;
 
     //-----------------------------------------------------------------
     // what the operands mean for this operation
@@ -95,7 +101,13 @@ module CORE_MDU
     //-----------------------------------------------------------------
     logic [63:0]  pp_ll, pp_hl, pp_lh, pp_hh;
     logic [127:0] prod;
-    logic         a_neg, b_neg;
+    logic [63:0]  corr;           // what the signs take off the high half
+    logic [31:0]  mid_lo;
+    logic [63:0]  mul_lo;
+
+    // the low half: only the low 32 bits of the two middle products reach it
+    assign mid_lo = pp_hl[31:0] + pp_lh[31:0];
+    assign mul_lo = pp_ll + {mid_lo, 32'd0};
 
     //-----------------------------------------------------------------
     // divide
@@ -120,8 +132,8 @@ module CORE_MDU
     logic [63:0] mul_result, div_result;
 
     always @(*) begin
-        if (op_r == OP_MUL) mul_result = word_r ? {{32{prod[31]}}, prod[31:0]} : prod[63:0];
-        else                mul_result = prod[127:64];
+        if (op_r == OP_MUL) mul_result = word_r ? {{32{mul_lo[31]}}, mul_lo[31:0]} : mul_lo;
+        else                mul_result = prod[127:64] - corr;
     end
 
     always @(*) begin
@@ -131,8 +143,9 @@ module CORE_MDU
     end
 
     assign result = (op_r[2]) ? div_result : mul_result;
-    assign busy   = (state != S_IDLE) && (state != S_DONE);
-    assign done   = (state == S_DONE);
+    assign done   = ((state == S_MUL) && (op_r == OP_MUL)) || (state == S_MULH) ||
+                    (state == S_DONE);
+    assign busy   = (state != S_IDLE) && !done;
 
     //-----------------------------------------------------------------
     always_ff @(posedge clk or negedge rst_n) begin
@@ -140,15 +153,12 @@ module CORE_MDU
             state   <= S_IDLE;
             op_r    <= 3'd0;
             word_r  <= 1'b0;
-            a_r     <= 64'd0;
-            b_r     <= 64'd0;
             pp_ll   <= 64'd0;
             pp_hl   <= 64'd0;
             pp_lh   <= 64'd0;
             pp_hh   <= 64'd0;
             prod    <= 128'd0;
-            a_neg   <= 1'b0;
-            b_neg   <= 1'b0;
+            corr    <= 64'd0;
             acc     <= 128'd0;
             divisor <= 64'd0;
             count   <= 7'd0;
@@ -165,17 +175,15 @@ module CORE_MDU
                     if (start) begin
                         op_r   <= op;
                         word_r <= word_op;
-                        a_r    <= a_prep;
-                        b_r    <= b_prep;
                         if (!op[2]) begin
                             // multiply : the four unsigned partial products
                             pp_ll <= {32'd0, a_prep[31:0]}  * {32'd0, b_prep[31:0]};
                             pp_hl <= {32'd0, a_prep[63:32]} * {32'd0, b_prep[31:0]};
                             pp_lh <= {32'd0, a_prep[31:0]}  * {32'd0, b_prep[63:32]};
                             pp_hh <= {32'd0, a_prep[63:32]} * {32'd0, b_prep[63:32]};
-                            a_neg <= a_signed & a_prep[63];
-                            b_neg <= b_signed & b_prep[63];
-                            state <= S_MUL1;
+                            corr  <= ((a_signed & a_prep[63]) ? b_prep : 64'd0) +
+                                     ((b_signed & b_prep[63]) ? a_prep : 64'd0);
+                            state <= S_MUL;
                         end else if (b_prep == 64'd0) begin
                             // divide by zero : all ones and the dividend
                             quo_r <= {64{1'b1}};
@@ -200,16 +208,19 @@ module CORE_MDU
                     end
                 end
                 //-----------------------------------------------------
-                S_MUL1: begin
-                    prod  <= {pp_hh, 64'd0} + {32'd0, pp_hl, 32'd0} +
-                             {32'd0, pp_lh, 32'd0} + {64'd0, pp_ll};
-                    state <= S_MUL2;
+                // MUL / MULW are done here (mul_lo); the high half goes on
+                S_MUL: begin
+                    if (op_r == OP_MUL) begin
+                        if (ack) state <= S_IDLE;
+                    end else begin
+                        prod  <= {pp_hh, 64'd0} + {32'd0, pp_hl, 32'd0} +
+                                 {32'd0, pp_lh, 32'd0} + {64'd0, pp_ll};
+                        state <= S_MULH;
+                    end
                 end
-                S_MUL2: begin
-                    // the correction of the sign only touches the high half
-                    prod[127:64] <= prod[127:64] - (a_neg ? b_r : 64'd0)
-                                                 - (b_neg ? a_r : 64'd0);
-                    state <= S_DONE;
+                // the high half minus the correction, held until ack
+                S_MULH: begin
+                    if (ack) state <= S_IDLE;
                 end
                 //-----------------------------------------------------
                 S_DIV: begin

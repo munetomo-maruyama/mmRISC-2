@@ -26,9 +26,10 @@
 | `make trace` | リタイアトレース付きで 1 本走らせる |
 | `make wave` | VCD を出す |
 | `make iverilog` | Icarus Verilog で同じ試験 |
+| `make mdu` | `CORE_MDU` を参照モデルと突き合わせる(`tb_MDU.sv`、既定 20 万演算)。境界値のオペランド、サイクル数(MUL / MULW は 1、MULH 系は 2)、答えを遅れて受け取る場合、途中の kill。プログラムからは選べないものを見る |
 | `make clint` | `CPU_CLINT` を 4 ハート構成で直接叩く(`tb_CLINT.sv`)。単一コアのプログラムからは届かないレジスタマップの検査 |
 | `make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / mi)。`RVTESTS` でリポジトリの場所を指定 |
-| `make bugs` / `./bug_inject.sh` | バグ注入 209 種(背圧あり/なしの両方で判定。M211〜M231 はデバッグモード、M240 以降は EX からの早出し) |
+| `make bugs` / `./bug_inject.sh` | バグ注入 213 種(背圧あり/なしの両方で判定。M211〜M231 はデバッグモード、M240 以降は EX からの早出し。`CORE_MDU` の変異は `tb_MDU` でも判定) |
 | `make lint` | Verilator lint |
 
 プラスアーグ:
