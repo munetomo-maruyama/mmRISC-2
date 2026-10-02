@@ -18,6 +18,9 @@
 //       * AMO / LR / SC that miss wait for the line and are executed again.
 //   - Writeback buffers (NUM_WB entries) hold evicted dirty lines.
 //   - Responses come back in request order through a small reorder buffer.
+//     A hit that is the oldest request answers straight from stage 1, two
+//     cycles after the request instead of three (s1_fast); everything else
+//     waits in the buffer for its turn.
 //
 // Array ports: one read and one write port each. Priorities are
 //   read  : flush walk > victim copy > pipeline
@@ -822,6 +825,10 @@ module DCACHE
     // (two separate assignments would lose one of them).
     /* verilator lint_off BLKSEQ */
     logic rob_push, rob_pop, ms_push, ms_pop, wb_push, wb_pop;
+    // a hit in stage 1 that is the head of the reorder buffer: its answer
+    // goes out from stage 1, not one cycle later from the buffer
+    logic        s1_fast;
+    logic [63:0] s1_fast_data;
     logic [WOFF_BITS-1:0] f_wb_word_q, fl_word_q;
     logic [WAY_BITS-1:0]  f_wb_way_q,  fl_way_q;
     logic                 f_wb_cap,    fl_cap;
@@ -926,6 +933,7 @@ module DCACHE
             d_resp_valid <= 1'b0;
             s1_reread    <= 1'b0;
             rob_push = 1'b0; rob_pop = 1'b0;
+            s1_fast  = 1'b0; s1_fast_data = '0;
             ms_push  = 1'b0; ms_pop  = 1'b0;
             wb_push  = 1'b0; wb_pop  = 1'b0;
 
@@ -1079,6 +1087,11 @@ module DCACHE
                     rob_done[s1_rob] <= 1'b1;
                     if (s1_is_load | s1_is_lr | s1_is_amo)
                         rob_data[s1_rob] <= extract(hit_word, s1_addr[2:0], s1_size);
+                    // nothing older is waiting: answer now (see "response")
+                    s1_fast      = (s1_rob == rob_head);
+                    s1_fast_data = s1_is_sc ? (sc_ok ? 64'd0 : 64'd1)
+                                 : (s1_is_load | s1_is_lr | s1_is_amo)
+                                   ? extract(hit_word, s1_addr[2:0], s1_size) : 64'd0;
                     if (s1_is_lr) begin
                         res_valid <= 1'b1;
                         res_line  <= s1_line;
@@ -1420,10 +1433,21 @@ module DCACHE
             //---------------------------------------------------------
             // response (in request order)
             //---------------------------------------------------------
+            //   A hit of stage 1 that is the head goes out in the same
+            //   cycle it is found: rob_done of the head was 0 until now, so
+            //   the buffer cannot be answering for it as well.
             if (!rob_empty && rob_valid[rob_head] && rob_done[rob_head]) begin
                 d_resp_valid        <= 1'b1;
                 d_resp_data         <= rob_data[rob_head];
                 d_resp_error        <= rob_err[rob_head];
+                rob_valid[rob_head] <= 1'b0;
+                rob_done[rob_head]  <= 1'b0;
+                rob_head            <= rob_head + ROB_BITS'(1);
+                rob_pop              = 1'b1;
+            end else if (s1_fast) begin
+                d_resp_valid        <= 1'b1;
+                d_resp_data         <= s1_fast_data;
+                d_resp_error        <= 1'b0;
                 rob_valid[rob_head] <= 1'b0;
                 rob_done[rob_head]  <= 1'b0;
                 rob_head            <= rob_head + ROB_BITS'(1);
