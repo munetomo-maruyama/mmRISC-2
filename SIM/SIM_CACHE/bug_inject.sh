@@ -47,6 +47,9 @@ MUTATIONS=(
 "26#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                    sw_rob  <= s1_rob;/                    sw_rob  <= s1_rob; rob_wait[s1_rob] <= 1'b1;/#16#16#D\$: a fill answers a write through that is still on the bus"
 "27#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/if (array_rd_busy || fl_busy || (fill_beat_now/if (array_rd_busy || (fill_beat_now/#17#17#D\$: a request held during the flush walk looks at the tags of other sets"
 "28#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/(tfwd_en   \&\& (tfwd_index == addr_index(s1_addr))) ||/1'b0 ||/; s/(fwd_valid \&\& (fwd_addr\[DADDR_BITS-1 -: IDX_BITS\] == addr_index(s1_addr))))/1'b0)/#17#18#D\$: a held request forgets the writes forwarded to it (a store hit writes tag and data together, so the two conditions are one)"
+"29#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_fast      = (s1_rob == rob_head);/s1_fast      = 1'b1;/#1#18#D\$: a hit answers from stage 1 even when an older request is still waiting"
+"30#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_fast_data = s1_is_sc ? (sc_ok ? 64'd0 : 64'd1)/s1_fast_data = s1_is_sc ? (sc_ok ? 64'd1 : 64'd0)/#1#18#D\$: an SC answered from stage 1 reports the opposite"
+"31#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/? extract(hit_word, s1_addr\[2:0\], s1_size) : 64'd0;/? hit_word : 64'd0;/#1#18#D\$: a load answered from stage 1 is not shifted to its byte"
 )
 
 run_one() {

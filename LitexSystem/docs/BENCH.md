@@ -162,3 +162,9 @@ SD モデルからの Linux 起動。
 実機の伸びがシミュレーション(CoreMark +2.6 %)より大きいのは、実機のバイナリ
 (glibc、Linux)のほうが語をまたぐ分岐や関数の戻りが多いためと見られる。
 
+## 5. A1: D$ のヒットを 2 サイクルで答える(2026-10-02、シミュレーション)
+
+`RTL/CPU/CPU_CORE/PLAN_LOAD_LATENCY.md` 5 章。CoreMark 1.76 → **2.00 CoreMark/MHz**
+(+13.7 %)、Dhrystone +22 %。MA の D$ 待ちは CoreMark 13.8 %、Dhrystone 22.2 % に
+(A2 で残りを消す)。
+
