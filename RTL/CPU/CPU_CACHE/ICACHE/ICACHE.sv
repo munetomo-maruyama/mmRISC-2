@@ -235,8 +235,12 @@ module ICACHE
 
     // A new request is accepted while stage 1 hits (one request per cycle).
     // When stage 1 misses, the pipeline stops until the fill has finished.
+    // A miss that is killed or cancelled also holds the request of that
+    // cycle back by one: the core never sends one then, and leaving i_kill
+    // and i_cancel out keeps the redirect away from everything the fetch
+    // unit does with i_req_ready (LitexSystem/docs/TIMING.md 24).
     assign i_req_ready = (state == S_IDLE) && !i_flush_valid &&
-                         !(s1_valid && !hit && !i_kill && !i_cancel);
+                         !(s1_valid && !hit);
 
     // array read for a new request
     assign tag_rd_en    = i_req_valid & i_req_ready;

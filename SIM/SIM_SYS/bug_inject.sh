@@ -44,12 +44,13 @@ MUTATIONS=(
 "1#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign ex_mem        = ex_is_load | ex_is_store | ex_is_fencei;%assign ex_mem        = ex_is_load | ex_is_store;%#core: fence.i does not write the data cache back"
 "2#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign i_flush_valid = fencei_busy;%assign i_flush_valid = 1'b0;%#core: fence.i does not invalidate the instruction cache"
 "3#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign fencei_taken = ma_valid \& ma_is_fencei \& ~stall_ma \& ~trap_taken;%assign fencei_taken = ma_valid \& ma_is_fencei \& ~trap_taken;%#core: the instruction cache is invalidated before the write back is done"
-"4#CPU_CORE/CORE_LSU/CORE_LSU.sv#s%d_req_paddr <= req_paddr\[PADDR_WIDTH-1:0\];%d_req_paddr <= req_addr[PADDR_WIDTH-1:0];%#LSU: the cache is given the virtual address as a tag"
-"5#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%if (push_req) i_req_paddr <= tr_paddr\[PADDR_WIDTH-1:0\];%if (push_req) i_req_paddr <= i_req_addr;%#IFU: the cache is given the virtual address as a tag"
+"4#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%\.e_paddr      (mr_paddr),%.e_paddr      (mr_vaddr),%#LSU: the cache is given the virtual address as a tag"
+"5#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%if (push_req \&\& !redirect_valid) i_req_paddr <= tr_paddr\[PADDR_WIDTH-1:0\];%if (push_req \&\& !redirect_valid) i_req_paddr <= i_req_addr;%#IFU: the cache is given the virtual address as a tag"
 "6#CPU_CACHE/ICACHE/ICACHE.sv#s%if (s1_valid \&\& (i_kill || i_cancel)) begin%if (s1_valid \&\& i_kill) begin%#I\$: a fetch the PMP refused still goes to memory"
 "8#CPU_DMA/DMA_CACHE.sv#s%w_got <= 1'b1; w_q <= s_wdata; left <= s_wstrb;%w_got <= 1'b1; w_q <= s_wdata; left <= 8'hFF;%#DMA: the write strobes are ignored"
 "9#CPU_DMA/DMA_CACHE.sv#s%assign dc_req_wdata = w_q >> (8 \* int'(p_off));%assign dc_req_wdata = w_q;%#DMA: the data of a piece is not moved to the right"
 "11#CPU_DMA/DMA_CACHE.sv#s%else                      dc_req_addr = {ar_q\[ADDR_WIDTH-1:3\], 3'b000};%else                      dc_req_addr = {aw_q[ADDR_WIDTH-1:3], 3'b000};%#DMA: a read goes to the address of the last write"
+"12#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign i_req_valid = req_go \& ~redirect_valid;%assign i_req_valid = req_go;%#IFU: a fetch goes out in the cycle of a redirect"
 )
 
 SEL=("$@")

@@ -20,7 +20,7 @@ VFLAGS="--binary --timing -j 2 --top-module tb_CACHE -Wno-fatal"
 # id # file # sed expression # +from # +to # description
 MUTATIONS=(
 "1#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/.inv_all(i_flush_valid)/.inv_all(1'b0)/#6#6#I\$: fence.i does not invalidate the array"
-"2#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/!(s1_valid \&\& !hit \&\& !i_kill \&\& !i_cancel)/1'b1/#10#11#I\$: accepts a new request while the current one misses"
+"2#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/!(s1_valid \&\& !hit);/1'b1;/#10#11#I\$: accepts a new request while the current one misses"
 "3#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/!fill_flushed \&\& !i_flush_valid/1'b1/#6#6#I\$: fill validates a line invalidated by fence.i"
 "4#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/tag_wr_dirty = 1'b1;\$/tag_wr_dirty = 1'b0;/#11#12#D\$: store hit does not set the dirty bit"
 "5#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/ms_wb_needed\[ms_tail\]  <= victim_dirty;/ms_wb_needed[ms_tail]  <= 1'b0;/#3#3#D\$: dirty victim is not written back"
@@ -31,7 +31,7 @@ MUTATIONS=(
 "10#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/4'd9:    return (so < ss) ? o : s;/4'd9:    return (o < s) ? o : s;/#4#4#D\$: AMOMIN compares unsigned"
 "11#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/4'd5:    return o + s;/4'd5:    return o - s;/#4#4#D\$: AMOADD subtracts"
 "12#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/if (res_valid \&\& (res_line == s1_line)) res_valid <= 1'b0;/;/g#5#5#D\$: a store does not clear the reservation"
-"13#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_can_retire = !ms_locked\[ms_match_id\] \&\& ms_attach_ok;/s1_can_retire = ms_attach_ok;/#9#12#D\$: ignores the MSHR lock of a pending store"
+"13#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_can_go = !ms_locked\[ms_match_id\] \&\& ms_attach_ok;/s1_can_go = ms_attach_ok;/#9#12#D\$: ignores the MSHR lock of a pending store"
 "14#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/m_axil_wstrb   <= size_strb(s1_addr\[2:0\], s1_size);/m_axil_wstrb   <= 8'hFF;/#7#7#D\$: uncached store ignores the byte strobe"
 "15#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/rob_err\[i\]  <= f_err | (m_axi4_rresp != 2'b00);/rob_err[i]  <= 1'b0;/#8#8#D\$: bus error of a store fill is not reported"
 "16#CPU/CPU_CACHE/CACHE_DATA_ARRAY/CACHE_DATA_ARRAY.sv#s/(int'(wr_way) == gw)/(gw == 0)/#1#3#data array: writes always go to way 0"
@@ -51,11 +51,19 @@ MUTATIONS=(
 "30#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_fast_data = s1_is_sc ? (sc_ok ? 64'd0 : 64'd1)/s1_fast_data = s1_is_sc ? (sc_ok ? 64'd1 : 64'd0)/#1#18#D\$: an SC answered from stage 1 reports the opposite"
 "31#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/? extract(hit_word, s1_addr\[2:0\], s1_size) : 64'd0;/? hit_word : 64'd0;/#1#18#D\$: a load answered from stage 1 is not shifted to its byte"
 "32#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/assign s1_kill     = s1_valid \& ~s1_ptag_v \& d_req_cancel;/assign s1_kill     = 1'b0;/#19#19#D\$: a request taken back is executed all the same"
-"33#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_data_ok \& ~s1_kill \& (|hit_oh)/s1_data_ok \& (|hit_oh)/#19#19#D\$: a hit taken back still writes the line"
+"33#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/hit     = hit_nk \& ~s1_kill;/hit     = hit_nk;/#19#19#D\$: a hit taken back still writes the line"
 "34#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/d_resp_drop         <= rob_silent\[rob_head\];/d_resp_drop         <= 1'b0;/#19#19#D\$: a request taken back is answered"
 "35#CPU/CPU_CACHE/CACHE_PORT_ARB/CACHE_PORT_ARB.sv#s/assign s0_resp_valid = m_resp_valid \& ~m_resp_drop \& ~owner\[head\];/assign s0_resp_valid = m_resp_valid \& ~owner[head];/#19#19#arbiter: the turn of a request taken back is passed on as an answer"
 "36#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                rob_silent\[s1_rob\] <= 1'b1;/                rob_silent[s1_rob] <= 1'b0;/#19#19#D\$: a request taken back leaves the buffer as an answer"
+"37#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/!(s1_is_amo \&\& !s1_amo_rd);/1'b1;/#4#4#D\$: an atomic writes in its first cycle, with the old value of the one before"
 )
+
+# Not listed, equivalent to the design:
+#   clearing s1_amo_rd when s1_data_ok drops (DCACHE.sv, the first cycle of
+#   an atomic). Between its two cycles only stage 1 itself writes to the
+#   word: a fill that evicts the line brings it back with the same value
+#   before the atomic runs again. The clear stays as a safeguard for a
+#   coherent probe (CPU_CACHE_SPEC.md 6.4), which would change that.
 
 run_one() {
     local line="$1"

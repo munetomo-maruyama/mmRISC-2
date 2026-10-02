@@ -149,6 +149,7 @@ module CORE_IFU
     logic push_req, push_resp, resp_real, local_resp, pop_q;
     logic chk_valid, resp_cancel;
     logic req_want, fetch_bad, self_redirect;
+    logic req_go, cancel_q;
     logic [2:0] push_n;           // parcels of this answer that are kept
     logic [1:0] keep_lo, keep_hi;
 
@@ -193,7 +194,12 @@ module CORE_IFU
     // request that is in the cache brings four
     logic [PQ_BITS+1:0] pq_inflight;
     assign pq_inflight = (PQ_BITS+2)'(pq_count) + ((PQ_BITS+2)'(os_count) << 2);
-    assign req_want    = rst_n & ~redirect_valid & ~self_redirect &
+    // A redirect is left out of req_want and of everything made from it
+    // (use_pred, push_req, local_resp): it arrives late in the cycle, and in
+    // a cycle with a redirect the state below takes the redirect branch
+    // anyway. Only what leaves the unit (tr_req, i_req_valid, i_cancel)
+    // carries it (LitexSystem/docs/TIMING.md 24).
+    assign req_want    = rst_n & ~self_redirect &
                          (pq_inflight <= (PQ_BITS+2)'(PQ_DEPTH - 4));
 
     //-----------------------------------------------------------------
@@ -247,7 +253,7 @@ module CORE_IFU
     assign sp_a_next = sp_a + (a_push ? RAS_BITS'(1) : RAS_BITS'(0))
                             - (a_pop  ? RAS_BITS'(1) : RAS_BITS'(0));
 
-    assign tr_req      = req_want;
+    assign tr_req      = req_want & ~redirect_valid;
     assign tr_vaddr    = fetch_pc;
 
     assign fetch_bad   = req_want & tr_ready & (tr_fault != 2'd0);
@@ -256,14 +262,16 @@ module CORE_IFU
     // cycle, which the cache is looking at now; the PMP judges it here.
     // No new request goes out in the cycle one is cancelled: the cache
     // would take it into the stage that is being emptied.
-    assign i_cancel    = chk_valid & pmp_fail & ~redirect_valid & ~self_redirect;
-    assign i_req_valid = req_want & tr_ready & (tr_fault == 2'd0) & ~i_cancel;
+    assign cancel_q    = chk_valid & pmp_fail & ~self_redirect;
+    assign i_cancel    = cancel_q & ~redirect_valid;
+    assign req_go      = req_want & tr_ready & (tr_fault == 2'd0) & ~cancel_q;
+    assign i_req_valid = req_go & ~redirect_valid;
     // the cache is indexed with the virtual address and tagged with the
     // physical one, and the two agree on the bits it indexes with
     assign i_req_addr  = fetch_pc[PADDR_WIDTH-1:0];
     assign i_kill      = redirect_valid | self_redirect;
 
-    assign push_req  = i_req_valid & i_req_ready;
+    assign push_req  = req_go & i_req_ready;       // without the redirect
     // A cancelled request is answered here when it is at the head. The
     // cache has no answer for it, and the one for the request behind it
     // cannot come in the same cycle: that request went out at least one
@@ -351,7 +359,7 @@ module CORE_IFU
             chk_valid <= push_req & ~redirect_valid & ~self_redirect;
             // the cache wants the tag in the cycle after the request was
             // taken (CPU_CACHE_SPEC.md 5.6)
-            if (push_req) i_req_paddr <= tr_paddr[PADDR_WIDTH-1:0];
+            if (push_req && !redirect_valid) i_req_paddr <= tr_paddr[PADDR_WIDTH-1:0];
 
             // the return address stack of the execute stage
             if (a_push) ras_a[sp_a] <= a_link;
@@ -400,7 +408,7 @@ module CORE_IFU
 
                 // the record that travels with the request
                 // the request of the last cycle is the newest in the record
-                if (i_cancel) pr_cancel[pr_tail - OS_BITS'(1)] <= 1'b1;
+                if (cancel_q) pr_cancel[pr_tail - OS_BITS'(1)] <= 1'b1;
                 if (push_req) begin
                     pr_cancel[pr_tail] <= 1'b0;
                     pr_valid [pr_tail] <= use_pred;
