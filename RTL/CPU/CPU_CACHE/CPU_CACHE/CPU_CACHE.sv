@@ -64,6 +64,7 @@ module CPU_CACHE
         input  logic [3:0]               d_req_cmd,
         input  logic [XLEN-1:0]          d_req_wdata,
         input  logic [PADDR_WIDTH-1:0]   d_req_paddr,
+        input  logic                     d_req_cancel,    // the request of the last cycle
         output logic                     d_resp_valid,
         output logic [XLEN-1:0]          d_resp_data,
         output logic                     d_resp_error,
@@ -350,7 +351,7 @@ module CPU_CACHE
     logic [3:0]             dc_req_cmd;
     logic [XLEN-1:0]        dc_req_wdata;
     logic [PADDR_WIDTH-1:0] dc_req_paddr;
-    logic                   dc_resp_valid, dc_resp_error;
+    logic                   dc_resp_valid, dc_resp_error, dc_resp_drop, dc_req_cancel;
     logic [XLEN-1:0]        dc_resp_data;
 
     CACHE_PORT_ARB
@@ -370,6 +371,7 @@ module CPU_CACHE
             .s0_req_cmd     (d_req_cmd),
             .s0_req_wdata   (d_req_wdata),
             .s0_req_paddr   (d_req_paddr),
+            .s0_req_cancel  (d_req_cancel),
             .s0_resp_valid  (d_resp_valid),
             .s0_resp_data   (d_resp_data),
             .s0_resp_error  (d_resp_error),
@@ -390,9 +392,11 @@ module CPU_CACHE
             .m_req_cmd      (dc_req_cmd),
             .m_req_wdata    (dc_req_wdata),
             .m_req_paddr    (dc_req_paddr),
+            .m_req_cancel   (dc_req_cancel),
             .m_resp_valid   (dc_resp_valid),
             .m_resp_data    (dc_resp_data),
-            .m_resp_error   (dc_resp_error)
+            .m_resp_error   (dc_resp_error),
+            .m_resp_drop    (dc_resp_drop)
         );
 
     //=================================================================
@@ -425,9 +429,11 @@ module CPU_CACHE
             .d_req_cmd      (dc_req_cmd),
             .d_req_wdata    (dc_req_wdata),
             .d_req_paddr    (dc_req_paddr),
+            .d_req_cancel   (dc_req_cancel),
             .d_resp_valid   (dc_resp_valid),
             .d_resp_data    (dc_resp_data),
             .d_resp_error   (dc_resp_error),
+            .d_resp_drop    (dc_resp_drop),
             .m_axi4_awid    (dc_axi4_awid),
             .m_axi4_awaddr  (dc_axi4_awaddr),
             .m_axi4_awlen   (dc_axi4_awlen),

@@ -69,6 +69,7 @@ module CORE_MEM_MODEL
         output logic                    d_req_ready,
         input  logic [PADDR_WIDTH-1:0]  d_req_addr,
         input  logic [PADDR_WIDTH-1:0]  d_req_paddr,
+        input  logic                    d_req_cancel,   // the request of the last cycle
         input  logic [1:0]              d_req_size,
         input  logic [3:0]              d_req_cmd,
         input  logic [63:0]             d_req_wdata,
@@ -248,24 +249,30 @@ module CORE_MEM_MODEL
     assign d_resp_data  = dp_data[0];
     assign d_resp_error = dp_error[0];
 
-    // M1 keeps one data access in flight; more than one would mean the
-    // busy interlock of CORE_LSU is broken
+    // The core keeps at most three data accesses in flight: the one MA
+    // waits for, the one of MR, and the one EX issued in the last cycle,
+    // which is taken back or let go now (CPU_CORE_SPEC.md 5). More would
+    // mean the bookkeeping of CORE_LSU is broken.
     int outstanding;
+    int os_next;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             outstanding <= 0;
             prot_error  <= 1'b0;
         end else begin
-            if (d_req_valid && d_req_ready && !d_resp_valid) begin
-                if (outstanding >= 1) begin
-                    prot_error <= 1'b1;
-                    $display("[%0t] CORE_MEM_MODEL: a second data access was issued while one was outstanding", $time);
-                end
-                outstanding <= outstanding + 1;
-            end else if (d_resp_valid && !(d_req_valid && d_req_ready)) begin
-                outstanding <= outstanding - 1;
+            os_next = outstanding + ((d_req_valid && d_req_ready) ? 1 : 0)
+                                  - (d_resp_valid ? 1 : 0)
+                                  - ((s1d_valid && d_req_cancel) ? 1 : 0);
+            if (os_next > 3) begin
+                prot_error <= 1'b1;
+                $display("[%0t] CORE_MEM_MODEL: a fourth data access was issued while three were outstanding", $time);
             end
+            if (d_req_cancel && !s1d_valid) begin
+                prot_error <= 1'b1;
+                $display("[%0t] CORE_MEM_MODEL: a cancel without a request in the cycle before", $time);
+            end
+            outstanding <= os_next;
         end
     end
 
@@ -278,6 +285,7 @@ module CORE_MEM_MODEL
     logic                   s1i_valid;
     logic [PADDR_WIDTH-1:0] s1i_vaddr, s1i_addr;
     logic                   s1d_valid;
+    logic                   s1d_live;     // not taken back by the core
     logic [PADDR_WIDTH-1:0] s1d_vaddr, s1d_addr;
     logic [1:0]             s1d_size;
     logic [3:0]             s1d_cmd;
@@ -285,6 +293,7 @@ module CORE_MEM_MODEL
 
     assign s1i_addr = {i_req_paddr[PADDR_WIDTH-1:12], s1i_vaddr[11:0]};
     assign s1d_addr = {d_req_paddr[PADDR_WIDTH-1:12], s1d_vaddr[11:0]};
+    assign s1d_live = s1d_valid & ~d_req_cancel;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -325,7 +334,7 @@ module CORE_MEM_MODEL
     assign d_is_amo = (s1d_cmd >= CMD_AMO_LO) && (s1d_cmd <= CMD_AMO_HI);
     assign d_is_lr  = (s1d_cmd == CMD_LR);
     assign d_is_sc  = (s1d_cmd == CMD_SC);
-    assign d_acc    = s1d_valid &
+    assign d_acc    = s1d_live &
                       ((s1d_cmd == CMD_LOAD) || (s1d_cmd == CMD_STORE) ||
                        d_is_lr || d_is_sc || d_is_amo);
     assign d_reads  = (s1d_cmd == CMD_LOAD) || d_is_lr || d_is_amo;
@@ -379,7 +388,7 @@ module CORE_MEM_MODEL
                 dp_data[i]  <= dp_data[i+1];
                 dp_error[i] <= dp_error[i+1];
             end
-            dp_valid[D_LATENCY] <= s1d_valid;
+            dp_valid[D_LATENCY] <= s1d_live;
             dp_error[D_LATENCY] <= d_acc & ~mapped(s1d_addr);
             dp_data[D_LATENCY]  <= 64'd0;
 

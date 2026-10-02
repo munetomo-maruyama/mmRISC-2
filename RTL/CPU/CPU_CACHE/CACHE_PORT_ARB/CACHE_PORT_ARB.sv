@@ -11,6 +11,9 @@
 //     port busy, s1 wins the next arbitration.
 //   - The FIFO must be able to hold every request the cache can have in
 //     flight (its ROB depth).
+//   - s0 may take its request of the previous cycle back (s0_req_cancel).
+//     The cache still gives that request its turn in the answers, flagged
+//     m_resp_drop, so the FIFO stays in step; nothing is forwarded for it.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -34,6 +37,7 @@ module CACHE_PORT_ARB
         input  logic [3:0]             s0_req_cmd,
         input  logic [XLEN-1:0]        s0_req_wdata,
         input  logic [PADDR_WIDTH-1:0] s0_req_paddr,
+        input  logic                   s0_req_cancel,   // the request of the last cycle
         output logic                   s0_resp_valid,
         output logic [XLEN-1:0]        s0_resp_data,
         output logic                   s0_resp_error,
@@ -58,9 +62,11 @@ module CACHE_PORT_ARB
         output logic [3:0]             m_req_cmd,
         output logic [XLEN-1:0]        m_req_wdata,
         output logic [PADDR_WIDTH-1:0] m_req_paddr,
+        output logic                   m_req_cancel,
         input  logic                   m_resp_valid,
         input  logic [XLEN-1:0]        m_resp_data,
-        input  logic                   m_resp_error
+        input  logic                   m_resp_error,
+        input  logic                   m_resp_drop      // a cancelled request's turn
     );
 
     localparam int PTR_BITS = (DEPTH > 1) ? $clog2(DEPTH) : 1;
@@ -107,6 +113,8 @@ module CACHE_PORT_ARB
     end
 
     assign m_req_paddr = last_s1 ? s1_req_paddr : s0_req_paddr;
+    // only a request of s0 can be taken back
+    assign m_req_cancel = ~last_s1 & s0_req_cancel;
 
     assign push = m_req_valid & m_req_ready;
     assign pop  = m_resp_valid;
@@ -139,8 +147,8 @@ module CACHE_PORT_ARB
     //-----------------------------------------------------------------
     // responses (the cache answers in order)
     //-----------------------------------------------------------------
-    assign s0_resp_valid = m_resp_valid & ~owner[head];
-    assign s1_resp_valid = m_resp_valid &  owner[head];
+    assign s0_resp_valid = m_resp_valid & ~m_resp_drop & ~owner[head];
+    assign s1_resp_valid = m_resp_valid & ~m_resp_drop &  owner[head];
     assign s0_resp_data  = m_resp_data;
     assign s1_resp_data  = m_resp_data;
     assign s0_resp_error = m_resp_error;

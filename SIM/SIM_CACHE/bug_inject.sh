@@ -50,6 +50,11 @@ MUTATIONS=(
 "29#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_fast      = (s1_rob == rob_head);/s1_fast      = 1'b1;/#1#18#D\$: a hit answers from stage 1 even when an older request is still waiting"
 "30#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_fast_data = s1_is_sc ? (sc_ok ? 64'd0 : 64'd1)/s1_fast_data = s1_is_sc ? (sc_ok ? 64'd1 : 64'd0)/#1#18#D\$: an SC answered from stage 1 reports the opposite"
 "31#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/? extract(hit_word, s1_addr\[2:0\], s1_size) : 64'd0;/? hit_word : 64'd0;/#1#18#D\$: a load answered from stage 1 is not shifted to its byte"
+"32#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/assign s1_kill     = s1_valid \& ~s1_ptag_v \& d_req_cancel;/assign s1_kill     = 1'b0;/#19#19#D\$: a request taken back is executed all the same"
+"33#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_data_ok \& ~s1_kill \& (|hit_oh)/s1_data_ok \& (|hit_oh)/#19#19#D\$: a hit taken back still writes the line"
+"34#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/d_resp_drop         <= rob_silent\[rob_head\];/d_resp_drop         <= 1'b0;/#19#19#D\$: a request taken back is answered"
+"35#CPU/CPU_CACHE/CACHE_PORT_ARB/CACHE_PORT_ARB.sv#s/assign s0_resp_valid = m_resp_valid \& ~m_resp_drop \& ~owner\[head\];/assign s0_resp_valid = m_resp_valid \& ~owner[head];/#19#19#arbiter: the turn of a request taken back is passed on as an answer"
+"36#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                rob_silent\[s1_rob\] <= 1'b1;/                rob_silent[s1_rob] <= 1'b0;/#19#19#D\$: a request taken back leaves the buffer as an answer"
 )
 
 run_one() {

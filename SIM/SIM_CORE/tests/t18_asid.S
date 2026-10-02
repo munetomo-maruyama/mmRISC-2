@@ -10,18 +10,23 @@
 // Two page tables map the same virtual page, 4000_0000, to two different
 // physical pages:
 //
-//   ASID 1 : page_1, three taken branches
-//   ASID 2 : page_2, at the same three addresses: an addition, a load and a
-//            division (which holds EX for many cycles while it is marked).
-//            In each, the instruction at +4 is the one a core that follows
-//            the stale prediction (taken, to +8) would skip.
+//   ASID 1 : page_1, four taken branches
+//   ASID 2 : page_2, at the same four addresses: an addition, a load, a
+//            division (which holds EX for many cycles while it is marked),
+//            and an addition with a store behind it. In each, the
+//            instruction at +4 is the one a core that follows the stale
+//            prediction (taken, to +8) would skip. In the fourth, +4 moves
+//            the pointer the store at +8 writes through: the store of the
+//            wrong path, which the cache got from EX before MA refetched,
+//            must be taken back, or it writes the old address
+//            (CPU_CORE_SPEC.md 5).
 //
 // The code of both pages is copied from the snippets below and made
 // visible to the fetch side with fence.i; the snippets are position
 // independent. The rest of the test (VA 8000_0000) is mapped the same way
 // in both tables, as one gigabyte page.
 //
-// The three places are 0x40 apart so that they fall on three different
+// The four places are 0x40 apart so that they fall on three different
 // entries of the buffer (it is indexed with bits 8:3 of the address);
 // 0x100 apart, the first and the third shared one and the first was
 // never predicted at all.
@@ -110,7 +115,7 @@ in_s:
     li   x24, 0x1234
     la   x25, data_word
 
-    // teach the buffer the three branches of ASID 1
+    // teach the buffer the four branches of ASID 1
     li   x13, 4
 1:
     li   x14, ALIAS + 0x000
@@ -119,10 +124,12 @@ in_s:
     jalr x1, x14, 0
     li   x14, ALIAS + 0x080
     jalr x1, x14, 0
+    li   x14, ALIAS + 0x0C0
+    jalr x1, x14, 0
     addi x13, x13, -1
     bnez x13, 1b
     TEST_EQ(1, x20, 0)
-    TEST_EQ(2, x21, 12)
+    TEST_EQ(2, x21, 16)
 
     // ASID 2, no fence: the architecture allows it, since ASID 2 has not
     // been used since the last SFENCE.VMA
@@ -160,6 +167,18 @@ in_s:
     TEST_EQ(11, x20, 10 + 0x5A5A)
     TEST_EQ(12, x22, 4)
 
+    // an addition where a branch was, with a store behind it
+    la   x27, st_area
+    li   x28, 0x5707
+    li   x14, ALIAS + 0x0C0
+    jalr x1, x14, 0
+    la   x10, st_area
+    ld   x11, 0(x10)
+    TEST_EQ(15, x11, 0)                  // the wrong path's store never was
+    ld   x11, 8(x10)
+    TEST_EQ(16, x11, 0x5707)
+    TEST_EQ(17, x22, 5)
+
     // and back to ASID 1: the branches are still branches
     la   x10, root_1
     srli x10, x10, 12
@@ -172,7 +191,7 @@ in_s:
     csrw satp, x10
     li   x14, ALIAS + 0x040
     jalr x1, x14, 0
-    TEST_EQ(13, x21, 13)
+    TEST_EQ(13, x21, 17)
     TEST_EQ(14, x20, 10 + 0x5A5A)
 
     TEST_DONE
@@ -242,6 +261,12 @@ snip_1:
 1:  addi x21, x21, 1
     jalr x0, x1, 0
     .balign 0x40, 0
+    // +0x0C0
+    beq  x0, x0, 1f
+    addi x20, x20, 100
+1:  addi x21, x21, 1
+    jalr x0, x1, 0
+    .balign 0x40, 0
 
     .balign 0x100, 0
 snip_2:
@@ -263,6 +288,13 @@ snip_2:
     addi x22, x22, 1
     jalr x0, x1, 0
     .balign 0x40, 0
+    // +0x0C0 : the stale prediction skips the pointer move at +4 and
+    // reaches the store at +8 with the old pointer
+    addi x22, x22, 1
+    addi x27, x27, 8
+    sd   x28, 0(x27)
+    jalr x0, x1, 0
+    .balign 0x40, 0
     .option pop
 
     //-----------------------------------------------------------------
@@ -270,6 +302,8 @@ snip_2:
     .align 3
 data_word:
     .dword 0x5A5A
+st_area:
+    .dword 0, 0
 
     .section .bss
     .align 12

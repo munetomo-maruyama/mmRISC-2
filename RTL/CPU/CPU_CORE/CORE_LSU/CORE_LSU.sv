@@ -1,20 +1,34 @@
 //---------------------------------------------------------------------------
 // CORE_LSU.sv
 //
-// Load / store unit : drives the data cache port and aligns the data.
+// Load / store unit : drives the data cache port and aligns the data
+// (CPU_CORE_SPEC.md 5).
 //
-//   The request is issued when the address is ready (EX), the answer is
-//   awaited in MA. The cache answers in order, and M1 keeps one access in
-//   flight at a time, which makes the load-use interlock fall out of the MA
-//   stall (the pipeline behind it cannot advance either).
+//   An access normally goes to the cache from EX, as soon as its address is
+//   added up and before anything is known about it: the cache takes the
+//   index from the virtual address and wants the physical tag one cycle
+//   later, which is the cycle the instruction is in MR. MR then says whether
+//   the request may go (e_go): the translation, the PMP, an exception, a
+//   flush, and for a store or anything with a side effect, whether the
+//   instruction in front of it can still trap. If not, the request is taken
+//   back (d_req_cancel) and leaves no trace in the cache. A hit then answers
+//   in the cycle the instruction reaches MA, so MA does not wait.
+//
+//   An access that did not go from EX (taken back, or the port was busy, or
+//   the translation was not there yet) goes from MA, where nothing in front
+//   of it can trap any more, and MA waits for it (m_*). That path also takes
+//   fence.i, which flushes the data cache.
+//
+//   The cache answers in order. Up to three accesses are in flight: the one
+//   MA waits for, the one of MR, and the one EX issued in the last cycle
+//   whose fate is decided now. An answer always belongs to the instruction
+//   in MA (an instruction in MR cannot be answered before the one in front
+//   of it has been). A flush throws away MR, so the answers still to come
+//   for it are dropped when they arrive.
 //
 //   The command comes from the decoder, so LR, SC and the atomic operations
 //   of the A extension go through the same path as a load or a store; the
 //   cache does the read modify write and the reservation.
-//
-//   Misaligned accesses never reach this unit: EX turns them into a trap,
-//   and so does an address the MMU refuses, so everything that arrives here
-//   has a physical address already.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -27,26 +41,40 @@ module CORE_LSU
         input  logic                    clk,
         input  logic                    rst_n,
 
-        // request from EX
-        input  logic                    req_valid,     // start an access
-        input  logic [3:0]              req_cmd,       // command of the cache port
-        input  logic [63:0]             req_addr,
-        input  logic [63:0]             req_paddr,     // from the MMU
-        input  logic [1:0]              req_size,      // 0:byte 1:half 2:word 3:double
-        input  logic                    req_signed,
-        input  logic [63:0]             req_wdata,
-        output logic                    req_accept,    // taken by the cache this cycle
+        // from EX : the address has just been added up
+        input  logic                    e_valid,
+        input  logic [3:0]              e_cmd,         // command of the cache port
+        input  logic [63:0]             e_addr,
+        input  logic [1:0]              e_size,        // 0:byte 1:half 2:word 3:double
+        input  logic [63:0]             e_wdata,
+        output logic                    e_accept,      // taken by the cache this cycle
+        // in the cycle after e_accept: let it go, with this physical address
+        // (the translation EX made, held by MR), or take it back
+        input  logic                    e_go,
+        input  logic [63:0]             e_paddr,
 
-        // result for MA
+        // from MA : an access that has not gone yet (takes precedence)
+        input  logic                    m_valid,
+        input  logic [3:0]              m_cmd,
+        input  logic [63:0]             m_addr,
+        input  logic [63:0]             m_paddr,
+        input  logic [1:0]              m_size,
+        input  logic [63:0]             m_wdata,
+        output logic                    m_accept,
+
+        // the answer, for the instruction in MA, aligned by its size
+        input  logic [1:0]              r_size,
+        input  logic                    r_signed,
         output logic                    resp_valid,
         output logic [63:0]             resp_data,
         output logic                    resp_error,
 
-        // flush (exception / redirect while an access is outstanding)
-        input  logic                    kill,
+        // MA flushes the pipeline: what is still in flight belongs to the
+        // instructions behind it
+        input  logic                    flush,
 
-        // nothing of this unit is in the cache : the page table walker may
-        // borrow the port
+        // nothing of this unit is in the cache or on its way there : the
+        // page table walker may borrow the port
         output logic                    idle,
 
         // data cache port
@@ -57,69 +85,81 @@ module CORE_LSU
         output logic [1:0]              d_req_size,
         output logic [3:0]              d_req_cmd,
         output logic [63:0]             d_req_wdata,
+        output logic                    d_req_cancel,
         input  logic                    d_resp_valid,
         input  logic [63:0]             d_resp_data,
         input  logic                    d_resp_error
     );
 
-    logic        busy;            // an access is in the cache
+    logic                   e_acc_q;     // EX's request was taken last cycle
+    logic [PADDR_WIDTH-1:0] m_paddr_q;   // paddr of MA's request of last cycle
+    logic [1:0]             os;          // in flight and let go, not answered
+    logic [1:0]             drop;        // of those, the ones to throw away
+    logic [1:0]             os_next;
 
-    // an access that is accepted this cycle counts as in flight already
-    assign idle = ~busy & ~req_accept;
-    logic [1:0]  size_r;
-    logic        signed_r;
-
-    // a new access may start in the very cycle the previous one answers, so
-    // that back to back loads and stores do not lose a cycle
-    assign d_req_valid = req_valid & (~busy | d_resp_valid);
-    assign d_req_addr  = req_addr[PADDR_WIDTH-1:0];
-    assign d_req_size  = req_size;
-    assign d_req_cmd   = req_cmd;
+    //-----------------------------------------------------------------
+    // request: MA first, it is older and waits for it
+    //-----------------------------------------------------------------
+    assign d_req_valid = m_valid | e_valid;
+    assign d_req_addr  = m_valid ? m_addr[PADDR_WIDTH-1:0]  : e_addr[PADDR_WIDTH-1:0];
+    assign d_req_size  = m_valid ? m_size  : e_size;
+    assign d_req_cmd   = m_valid ? m_cmd   : e_cmd;
     // the data of a store is placed in its lane by the cache
-    assign d_req_wdata = req_wdata;
-    assign req_accept  = d_req_valid & d_req_ready;
+    assign d_req_wdata = m_valid ? m_wdata : e_wdata;
+
+    assign m_accept = m_valid & d_req_ready;
+    assign e_accept = e_valid & ~m_valid & d_req_ready;
+
+    // the cache wants the tag in the cycle after the request was taken
+    // (CPU_CACHE_SPEC.md 5.6), and a take back in the same cycle
+    assign d_req_paddr  = e_acc_q ? e_paddr[PADDR_WIDTH-1:0] : m_paddr_q;
+    assign d_req_cancel = e_acc_q & ~e_go;
+
+    //-----------------------------------------------------------------
+    // what is in flight
+    //-----------------------------------------------------------------
+    assign os_next = os + ((e_acc_q & e_go) ? 2'd1 : 2'd0)
+                        + (m_accept ? 2'd1 : 2'd0)
+                        - (d_resp_valid ? 2'd1 : 2'd0);
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            busy        <= 1'b0;
-            size_r      <= 2'd0;
-            signed_r    <= 1'b0;
-            d_req_paddr <= '0;
+            e_acc_q   <= 1'b0;
+            m_paddr_q <= '0;
+            os        <= 2'd0;
+            drop      <= 2'd0;
         end else begin
-            if (req_accept) begin
-                busy        <= 1'b1;        // wins over the answer of this cycle
-                size_r      <= req_size;
-                signed_r    <= req_signed;
-                // the cache wants the tag one cycle after the request was
-                // taken (CPU_CACHE_SPEC.md 5.6)
-                d_req_paddr <= req_paddr[PADDR_WIDTH-1:0];
-            end else if (d_resp_valid) begin
-                busy        <= 1'b0;
-            end else if (kill) begin
-                busy        <= 1'b0;
-            end
+            e_acc_q <= e_accept;
+            if (m_accept) m_paddr_q <= m_paddr[PADDR_WIDTH-1:0];
+            os <= os_next;
+            // the answer of this cycle, if any, was MA's (a flush waits for
+            // it), so everything still in flight after it is the flushed MR's
+            if (flush)                            drop <= os_next;
+            else if (d_resp_valid && drop != 0)   drop <= drop - 2'd1;
         end
     end
 
-    // the answer of the cache is right aligned already; only the sign
-    // extension of the smaller sizes is left
+    assign idle = (os == 2'd0) & ~e_acc_q & ~d_req_valid;
+
+    //-----------------------------------------------------------------
+    // answer : right aligned by the cache already, only the sign extension
+    // of the smaller sizes is left
+    //-----------------------------------------------------------------
     logic [63:0] ext;
 
     always @(*) begin
-        case (size_r)
-            2'd0:    ext = signed_r ? {{56{d_resp_data[7]}},  d_resp_data[7:0]}
+        case (r_size)
+            2'd0:    ext = r_signed ? {{56{d_resp_data[7]}},  d_resp_data[7:0]}
                                     : {56'd0, d_resp_data[7:0]};
-            2'd1:    ext = signed_r ? {{48{d_resp_data[15]}}, d_resp_data[15:0]}
+            2'd1:    ext = r_signed ? {{48{d_resp_data[15]}}, d_resp_data[15:0]}
                                     : {48'd0, d_resp_data[15:0]};
-            2'd2:    ext = signed_r ? {{32{d_resp_data[31]}}, d_resp_data[31:0]}
+            2'd2:    ext = r_signed ? {{32{d_resp_data[31]}}, d_resp_data[31:0]}
                                     : {32'd0, d_resp_data[31:0]};
             default: ext = d_resp_data;
         endcase
     end
 
-    // the answer is only looked at by an access that writes a register
-    // (load, LR, SC and the atomic operations)
-    assign resp_valid = d_resp_valid;
+    assign resp_valid = d_resp_valid & (drop == 2'd0);
     assign resp_data  = ext;
     assign resp_error = d_resp_error;
 
