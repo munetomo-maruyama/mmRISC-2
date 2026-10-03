@@ -467,3 +467,39 @@ Rocket 構成のものがそのまま使える。第 1 パーティション(FAT
 - (2026-09-30 に解消)JTAG は PMOD JA に出し、デバッグモジュールはコアに
   つないだ。halt / resume / step / レジスタ / メモリが使える(`docs/JTAG.md`、
   `CPU_CORE_SPEC.md` 11 章)。
+
+## 13 回目: Linux で SD カードが読めない ―― SD の I/O タイミング(2026-10-03)
+
+PMP → D$ の取り消しの経路を外した版(`TIMING.md` 28 章、WNS +0.661 ns)で、Linux が
+ルートファイルシステムをマウントできずにパニックした。リセットのたびに同じ。
+
+```
+litex-mmc 12003000.mmc: Data xfer (cmd 18) error, status -84     ← データの CRC エラー
+litex-mmc 12003000.mmc: Command (cmd 12) error, status -110      ← 以後タイムアウト
+...
+VFS: Cannot open root device "/dev/mmcblk0p2"
+```
+
+CPU は動いている(カーネルはドライバの初期化まで進み、パニックは「ルートが開けない」
+もの)。失敗しているのは SD の**データ線の CRC**で、LiteX の BIOS は同じカードから
+Image と fw_jump.bin を読めている(BIOS は遅いクロック、Linux は速いクロック)。
+
+調べたこと:
+
+- LiteSDCard は受け取り側が詰まると SD のクロックを止める(`SDPHYDATAR` の `stop`)ので、
+  DMA の書き込みが 1 サイクル遅くなったこと(D$ のライトスルーが 2 サイクル目から)で
+  データが落ちることはない。それ以前の版でも DMA は SD より遅く、クロックは止まっていた。
+- **SD のピンにはタイミング制約が無く、PHY のレジスタも I/O ブロックに入っていない**
+  (配置後の使用率で OLOGIC 45 = DDR3 の OSERDES、ILOGIC 21 = ISERDES 16 + IDDR 5。
+  SD の FDCE はどれもファブリック)。カードのデータをいつ取り込むかは配置次第で、
+  検査もされていない。
+
+LiteX は SD の PHY を普通のフロップ(`XilinxSDRTristateImpl` の FDCE)で作り、`IOB`
+属性も入出力の遅延制約も付けない。そこで `build_soc.sh` が生成した XDC に
+
+```
+set_property IOB TRUE [get_ports {sdcard_clk sdcard_cmd {sdcard_data[*]}}]
+```
+
+を足すようにした(クロック、コマンド、データの出力・出力イネーブル・入力のレジスタを
+I/O ブロックへ)。どの版でも取り込みのタイミングが同じになる。
