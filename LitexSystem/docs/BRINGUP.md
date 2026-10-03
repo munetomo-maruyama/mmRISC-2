@@ -503,3 +503,11 @@ set_property IOB TRUE [get_ports {sdcard_clk sdcard_cmd {sdcard_data[*]}}]
 
 を足すようにした(クロック、コマンド、データの出力・出力イネーブル・入力のレジスタを
 I/O ブロックへ)。どの版でも取り込みのタイミングが同じになる。
+
+**結果**: 制約を足して合成し直した版(RTL は同じ、WNS +0.681 ns)で Linux が起動し、
+`bench.sh` も通った。配置後の使用率で OLOGIC が 45 → 51(`OUTFF_Register` 6 = クロック・
+コマンド・データ 4 本、`TFF_Register` 5 = コマンド・データ 4 本の出力イネーブル)になり、
+出力側は I/O ブロックに入った。**入力側のレジスタは入らなかった**(ILOGIC は 21 のまま、
+`IFF_IDDR_Register` 5 は以前からある Ethernet の分)。カードからのデータの取り込みは
+まだ配置次第なので、また同じ症状が出たら入力側(LiteX の `XilinxSDRTristateImpl` の
+入力フロップ)を見る。
