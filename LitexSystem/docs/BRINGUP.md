@@ -511,3 +511,26 @@ I/O ブロックへ)。どの版でも取り込みのタイミングが同じに
 `IFF_IDDR_Register` 5 は以前からある Ethernet の分)。カードからのデータの取り込みは
 まだ配置次第なので、また同じ症状が出たら入力側(LiteX の `XilinxSDRTristateImpl` の
 入力フロップ)を見る。
+
+## 14 回目: 性能の作業の後の長時間負荷試験(2026-10-03)
+
+性能の作業(`BENCH.md` 4〜10 章: 分岐予測、D$ の 2 サイクル応答、ロード・ストアの EX
+からの発行、乗算・除算、gshare、遅い分岐、`TIMING.md` 24〜30 章のタイミングの手当て)で
+メモリパイプライン・分岐予測・D$ を大きく変えたので、その最後の版(WNS +0.121 ns、
+2.429 CoreMark/MHz)で `stress.sh` を 120 分回した。
+
+```
+=== stress result (iterations, ok, ng) ===
+mem 58 58 0
+net 33 33 0
+sd  405 405 0
+=== new kernel messages that look like trouble ===
+(none)
+=== PASS ===
+```
+
+- mem: 64 MiB の書き込みと照合 58 回(D$ と DRAM)
+- net: TFTP で 15 MB の Image を取って md5 照合 33 回(Ethernet、割り込み)
+- sd: 2 MB を SD カードに書いて読み戻し照合 405 回(SD の DMA、D$ の第 2 ポート)
+
+3 つが同時に走り、ロードアベレージは 3 前後。NG 0、カーネルの警告も無し。
