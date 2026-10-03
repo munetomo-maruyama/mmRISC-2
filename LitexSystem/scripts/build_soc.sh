@@ -85,6 +85,21 @@ print(f"  {n} absolute paths in the tcl made relative ({rel})")
 PY
 fi
 
+# The SD card's PHY registers in the I/O blocks. LiteX leaves them in the
+# fabric and the pins carry no timing constraint, so where the placer puts
+# them -- and with it when the card's data is sampled -- changed from build
+# to build; one build read the card in the BIOS (slow clock) but got CRC
+# errors on every block in Linux (LitexSystem/docs/BRINGUP.md 13).
+XDC="$BUILD/gateware/digilent_arty.xdc"
+if [ -f "$XDC" ] && grep -q "sdcard_clk" "$XDC" && ! grep -q "IOB TRUE.*sdcard" "$XDC"; then
+    cat >> "$XDC" <<'EOF2'
+
+# mmRISC-2: SD card PHY registers in the I/O blocks (build_soc.sh)
+set_property IOB TRUE [get_ports {sdcard_clk sdcard_cmd {sdcard_data[*]}}]
+EOF2
+    echo "  SD card registers put in the I/O blocks"
+fi
+
 # the Windows side runs this from the gateware directory
 cp "$HERE/build_digilent_arty.bat" "$HERE/timing_paths.bat" "$HERE/timing_paths.tcl" \
    "$BUILD/gateware/" 2>/dev/null || true
