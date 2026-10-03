@@ -67,6 +67,7 @@ RVOBJDUMP:= $(RVPREFIX)objdump
 MARCH_DEFAULT := rv64imafd_zicsr_zifencei
 MARCH_t08_rvc := rv64imafdc_zicsr_zifencei
 MARCH_t24_predict := rv64imafdc_zicsr_zifencei
+MARCH_t28_bitmanip := rv64imafd_zba_zbb_zicsr_zifencei
 RVFLAGS   = -march=$(or $(MARCH_$*),$(MARCH_DEFAULT)) -mabi=lp64 -mcmodel=medany \
             -nostdlib -nostartfiles -Wl,--no-warn-rwx-segments -T tests/link.ld
 

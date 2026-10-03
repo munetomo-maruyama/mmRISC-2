@@ -52,12 +52,15 @@
 			/* The extensions one by one, as Linux wants them now (without
 			 * them it falls back to riscv,isa and warns). Only what the
 			 * core has: the counters are cycle, time and instret (Zicntr),
-			 * there are no hpmcounters (no Zihpm). riscv,isa stays for
-			 * OpenSBI and older software. */
-			riscv,isa = "rv64imafdc_zicntr_zicsr_zifencei";
+			 * there are no hpmcounters (no Zihpm). Zba and Zbb since
+			 * 2026-10 (CPU_CORE_SPEC.md 2.1): with them Linux patches in
+			 * its Zbb string functions at boot. riscv,isa stays for
+			 * OpenSBI and older software.
+			 * Use this tree only with a bitstream that has Zba / Zbb. */
+			riscv,isa = "rv64imafdc_zicntr_zicsr_zifencei_zba_zbb";
 			riscv,isa-base = "rv64i";
 			riscv,isa-extensions = "i", "m", "a", "f", "d", "c",
-				"zicntr", "zicsr", "zifencei";
+				"zicntr", "zicsr", "zifencei", "zba", "zbb";
 			riscv,pmpgranularity = <4>;
 			riscv,pmpregions = <8>;
 			status = "okay";

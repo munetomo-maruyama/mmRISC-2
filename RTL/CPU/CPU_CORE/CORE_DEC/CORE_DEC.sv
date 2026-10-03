@@ -26,7 +26,9 @@ module CORE_DEC
 
         // ALU
         output logic [63:0] imm,
-        output logic [3:0]  alu_op,
+        output logic [4:0]  alu_op,
+        output logic        a_uw,         // Zba : rs1's low half, zero extended
+        output logic [1:0]  a_shift,      // Zba : rs1 shifted left (sh1add ..)
         output logic [1:0]  a_sel,        // A_RS1 / A_PC / A_ZERO
         output logic        b_sel,        // B_RS2 / B_IMM
         output logic        word_op,      // 32 bit operation, result sign extended
@@ -89,16 +91,34 @@ module CORE_DEC
     localparam logic [1:0] CSR_RC = 2'd3;
 
     // ALU operations
-    localparam logic [3:0] ALU_ADD  = 4'd0;
-    localparam logic [3:0] ALU_SUB  = 4'd1;
-    localparam logic [3:0] ALU_SLL  = 4'd2;
-    localparam logic [3:0] ALU_SLT  = 4'd3;
-    localparam logic [3:0] ALU_SLTU = 4'd4;
-    localparam logic [3:0] ALU_XOR  = 4'd5;
-    localparam logic [3:0] ALU_SRL  = 4'd6;
-    localparam logic [3:0] ALU_SRA  = 4'd7;
-    localparam logic [3:0] ALU_OR   = 4'd8;
-    localparam logic [3:0] ALU_AND  = 4'd9;
+    localparam logic [4:0] ALU_ADD  = 5'd0;
+    localparam logic [4:0] ALU_SUB  = 5'd1;
+    localparam logic [4:0] ALU_SLL  = 5'd2;
+    localparam logic [4:0] ALU_SLT  = 5'd3;
+    localparam logic [4:0] ALU_SLTU = 5'd4;
+    localparam logic [4:0] ALU_XOR  = 5'd5;
+    localparam logic [4:0] ALU_SRL  = 5'd6;
+    localparam logic [4:0] ALU_SRA  = 5'd7;
+    localparam logic [4:0] ALU_OR   = 5'd8;
+    localparam logic [4:0] ALU_AND  = 5'd9;
+    // Zbb (CORE_EXU)
+    localparam logic [4:0] ALU_ANDN = 5'd10;
+    localparam logic [4:0] ALU_ORN  = 5'd11;
+    localparam logic [4:0] ALU_XNOR = 5'd12;
+    localparam logic [4:0] ALU_MIN  = 5'd13;
+    localparam logic [4:0] ALU_MINU = 5'd14;
+    localparam logic [4:0] ALU_MAX  = 5'd15;
+    localparam logic [4:0] ALU_MAXU = 5'd16;
+    localparam logic [4:0] ALU_ROL  = 5'd17;
+    localparam logic [4:0] ALU_ROR  = 5'd18;
+    localparam logic [4:0] ALU_CLZ  = 5'd19;
+    localparam logic [4:0] ALU_CTZ  = 5'd20;
+    localparam logic [4:0] ALU_CPOP = 5'd21;
+    localparam logic [4:0] ALU_SEXTB= 5'd22;
+    localparam logic [4:0] ALU_SEXTH= 5'd23;
+    localparam logic [4:0] ALU_ZEXTH= 5'd24;
+    localparam logic [4:0] ALU_ORCB = 5'd25;
+    localparam logic [4:0] ALU_REV8 = 5'd26;
 
     // operand A / B select
     localparam logic [1:0] A_RS1  = 2'd0;
@@ -196,6 +216,8 @@ module CORE_DEC
         we_rd      = 1'b0;
         imm        = 64'd0;
         alu_op     = ALU_ADD;
+        a_uw       = 1'b0;
+        a_shift    = 2'd0;
         a_sel      = A_RS1;
         b_sel      = B_IMM;
         word_op    = 1'b0;
@@ -326,15 +348,31 @@ module CORE_DEC
                     3'b100: alu_op = ALU_XOR;                       // XORI
                     3'b110: alu_op = ALU_OR;                        // ORI
                     3'b111: alu_op = ALU_AND;                       // ANDI
-                    3'b001: begin                                   // SLLI
-                        alu_op = ALU_SLL;
-                        imm    = {58'd0, insn[25:20]};
-                        if (insn[31:26] != 6'b000000) illegal = 1'b1;
+                    3'b001: begin
+                        imm = {58'd0, insn[25:20]};
+                        if (insn[31:26] == 6'b000000)
+                            alu_op = ALU_SLL;                       // SLLI
+                        else case (insn[31:20])                     // Zbb, rs1 only
+                            12'h600: alu_op = ALU_CLZ;
+                            12'h601: alu_op = ALU_CTZ;
+                            12'h602: alu_op = ALU_CPOP;
+                            12'h604: alu_op = ALU_SEXTB;
+                            12'h605: alu_op = ALU_SEXTH;
+                            default: illegal = 1'b1;
+                        endcase
                     end
-                    3'b101: begin                                   // SRLI / SRAI
-                        alu_op = insn[30] ? ALU_SRA : ALU_SRL;
-                        imm    = {58'd0, insn[25:20]};
-                        if (!shamt64_ok) illegal = 1'b1;
+                    3'b101: begin
+                        imm = {58'd0, insn[25:20]};
+                        if (shamt64_ok)
+                            alu_op = insn[30] ? ALU_SRA : ALU_SRL;  // SRLI / SRAI
+                        else if (insn[31:26] == 6'b011000)
+                            alu_op = ALU_ROR;                       // RORI
+                        else if (insn[31:20] == 12'h287)
+                            alu_op = ALU_ORCB;                      // ORC.B
+                        else if (insn[31:20] == 12'h6B8)
+                            alu_op = ALU_REV8;                      // REV8 (RV64)
+                        else
+                            illegal = 1'b1;
                     end
                     default: illegal = 1'b1;
                 endcase
@@ -346,15 +384,30 @@ module CORE_DEC
                 imm     = imm_i;
                 case (funct3)
                     3'b000: alu_op = ALU_ADD;                       // ADDIW
-                    3'b001: begin                                   // SLLIW
-                        alu_op = ALU_SLL;
-                        imm    = {59'd0, insn[24:20]};
-                        if (funct7 != 7'b0000000) illegal = 1'b1;
+                    3'b001: begin
+                        imm = {59'd0, insn[24:20]};
+                        if (funct7 == 7'b0000000)
+                            alu_op = ALU_SLL;                       // SLLIW
+                        else if (insn[31:26] == 6'b000010) begin   // SLLI.UW (Zba)
+                            alu_op  = ALU_SLL;
+                            a_uw    = 1'b1;
+                            word_op = 1'b0;                         // a 64 bit result
+                            imm     = {58'd0, insn[25:20]};
+                        end else case (insn[31:20])                 // Zbb, rs1 only
+                            12'h600: alu_op = ALU_CLZ;              // CLZW
+                            12'h601: alu_op = ALU_CTZ;              // CTZW
+                            12'h602: alu_op = ALU_CPOP;             // CPOPW
+                            default: illegal = 1'b1;
+                        endcase
                     end
-                    3'b101: begin                                   // SRLIW / SRAIW
-                        alu_op = insn[30] ? ALU_SRA : ALU_SRL;
-                        imm    = {59'd0, insn[24:20]};
-                        if (!shamt32_ok) illegal = 1'b1;
+                    3'b101: begin
+                        imm = {59'd0, insn[24:20]};
+                        if (shamt32_ok)
+                            alu_op = insn[30] ? ALU_SRA : ALU_SRL;  // SRLIW / SRAIW
+                        else if (funct7 == 7'b0110000)
+                            alu_op = ALU_ROR;                       // RORIW
+                        else
+                            illegal = 1'b1;
                     end
                     default: illegal = 1'b1;
                 endcase
@@ -379,6 +432,20 @@ module CORE_DEC
                     {7'b0100000, 3'b101}: alu_op = ALU_SRA;
                     {7'b0000000, 3'b110}: alu_op = ALU_OR;
                     {7'b0000000, 3'b111}: alu_op = ALU_AND;
+                    // Zbb
+                    {7'b0100000, 3'b111}: alu_op = ALU_ANDN;
+                    {7'b0100000, 3'b110}: alu_op = ALU_ORN;
+                    {7'b0100000, 3'b100}: alu_op = ALU_XNOR;
+                    {7'b0000101, 3'b100}: alu_op = ALU_MIN;
+                    {7'b0000101, 3'b101}: alu_op = ALU_MINU;
+                    {7'b0000101, 3'b110}: alu_op = ALU_MAX;
+                    {7'b0000101, 3'b111}: alu_op = ALU_MAXU;
+                    {7'b0110000, 3'b001}: alu_op = ALU_ROL;
+                    {7'b0110000, 3'b101}: alu_op = ALU_ROR;
+                    // Zba
+                    {7'b0010000, 3'b010}: a_shift = 2'd1;           // SH1ADD
+                    {7'b0010000, 3'b100}: a_shift = 2'd2;           // SH2ADD
+                    {7'b0010000, 3'b110}: a_shift = 2'd3;           // SH3ADD
                     default: illegal = 1'b1;
                 endcase
             end
@@ -399,6 +466,28 @@ module CORE_DEC
                     {7'b0000000, 3'b001}: alu_op = ALU_SLL;         // SLLW
                     {7'b0000000, 3'b101}: alu_op = ALU_SRL;         // SRLW
                     {7'b0100000, 3'b101}: alu_op = ALU_SRA;         // SRAW
+                    // Zbb
+                    {7'b0110000, 3'b001}: alu_op = ALU_ROL;         // ROLW
+                    {7'b0110000, 3'b101}: alu_op = ALU_ROR;         // RORW
+                    {7'b0000100, 3'b100}: begin                     // ZEXT.H (RV64)
+                        alu_op  = ALU_ZEXTH;
+                        word_op = 1'b0;
+                        use_rs2 = 1'b0;
+                        if (rs2 != 5'd0) illegal = 1'b1;            // PACKW (Zbkb)
+                    end
+                    // Zba : 64 bit results from the zero extended low half
+                    {7'b0000100, 3'b000}: begin                     // ADD.UW
+                        a_uw = 1'b1; word_op = 1'b0;
+                    end
+                    {7'b0010000, 3'b010}: begin                     // SH1ADD.UW
+                        a_uw = 1'b1; a_shift = 2'd1; word_op = 1'b0;
+                    end
+                    {7'b0010000, 3'b100}: begin                     // SH2ADD.UW
+                        a_uw = 1'b1; a_shift = 2'd2; word_op = 1'b0;
+                    end
+                    {7'b0010000, 3'b110}: begin                     // SH3ADD.UW
+                        a_uw = 1'b1; a_shift = 2'd3; word_op = 1'b0;
+                    end
                     default: illegal = 1'b1;
                 endcase
             end

@@ -22,9 +22,9 @@ RVTESTS=${RVTESTS:-$HOME/RISCV/riscv-tests}
 ENVN=p
 if [ "$1" = "-v" ]; then ENVN=v; shift; fi
 if [ "$ENVN" = "v" ]; then
-    SETS=${@:-"rv64ui rv64um rv64ua rv64uc rv64uf rv64ud"}
+    SETS=${@:-"rv64ui rv64um rv64ua rv64uc rv64uf rv64ud rv64uzba rv64uzbb"}
 else
-    SETS=${@:-"rv64ui rv64um rv64ua rv64uc rv64uf rv64ud rv64mi rv64si"}
+    SETS=${@:-"rv64ui rv64um rv64ua rv64uc rv64uf rv64ud rv64uzba rv64uzbb rv64mi rv64si"}
 fi
 OUT=rvtests
 PREFIX=/opt/riscv/bin/riscv64-unknown-elf-
@@ -69,7 +69,7 @@ for set in $SETS; do
             BUILD="-I$RVTESTS/isa/macros/scalar -I$RVTESTS/env/p -I$RVTESTS/env \
                    -T$RVTESTS/env/p/link.ld"
         fi
-        if ! ${PREFIX}gcc -march=rv64imafdc_zicsr_zifencei -mabi=lp64 -static \
+        if ! ${PREFIX}gcc -march=rv64imafdc_zba_zbb_zicsr_zifencei -mabi=lp64 -static \
                 -mcmodel=medany -fvisibility=hidden -nostdlib -nostartfiles \
                 -Wl,--no-warn-rwx-segments \
                 $BUILD $src -o $elf 2> $elf.buildlog; then

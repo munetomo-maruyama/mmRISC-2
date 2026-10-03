@@ -248,7 +248,9 @@ module CPU_CORE
     logic [4:0]  dec_rs1, dec_rs2, dec_rd;
     logic        dec_use_rs1, dec_use_rs2, dec_we_rd;
     logic [63:0] dec_imm;
-    logic [3:0]  dec_alu_op;
+    logic [4:0]  dec_alu_op;
+    logic        dec_a_uw;
+    logic [1:0]  dec_a_shift;
     logic [1:0]  dec_a_sel;
     logic        dec_b_sel, dec_word_op;
     logic        dec_is_branch, dec_is_jal, dec_is_jalr;
@@ -282,6 +284,8 @@ module CPU_CORE
             .we_rd       (dec_we_rd),
             .imm         (dec_imm),
             .alu_op      (dec_alu_op),
+            .a_uw        (dec_a_uw),
+            .a_shift     (dec_a_shift),
             .a_sel       (dec_a_sel),
             .b_sel       (dec_b_sel),
             .word_op     (dec_word_op),
@@ -405,7 +409,9 @@ module CPU_CORE
     logic [31:0] ex_insn;
     logic [4:0]  ex_rs1, ex_rs2, ex_rd;
     logic        ex_we_rd, ex_b_sel, ex_word_op;
-    logic [3:0]  ex_alu_op;
+    logic [4:0]  ex_alu_op;
+    logic        ex_a_uw;
+    logic [1:0]  ex_a_shift;
     logic [1:0]  ex_a_sel;
     logic [2:0]  ex_br_op;
     logic        ex_is_branch, ex_is_jal, ex_is_jalr, ex_is_rvc;
@@ -583,6 +589,8 @@ module CPU_CORE
             .pc         (ex_pc),
             .imm        (ex_imm),
             .alu_op     (ex_alu_op),
+            .a_uw       (ex_a_uw),
+            .a_shift    (ex_a_shift),
             .a_sel      (ex_a_sel),
             .b_sel      (ex_b_sel),
             .word_op    (ex_word_op),
@@ -1520,7 +1528,9 @@ module CPU_CORE
             ex_rs2        <= 5'd0;
             ex_rd         <= 5'd0;
             ex_we_rd      <= 1'b0;
-            ex_alu_op     <= 4'd0;
+            ex_alu_op     <= 5'd0;
+            ex_a_uw       <= 1'b0;
+            ex_a_shift    <= 2'd0;
             ex_a_sel      <= 2'd0;
             ex_b_sel      <= 1'b0;
             ex_word_op    <= 1'b0;
@@ -1672,6 +1682,8 @@ module CPU_CORE
                 ex_rd         <= dec_rd;
                 ex_we_rd      <= dec_we_rd;
                 ex_alu_op     <= dec_alu_op;
+                ex_a_uw       <= dec_a_uw;
+                ex_a_shift    <= dec_a_shift;
                 ex_a_sel      <= dec_a_sel;
                 ex_b_sel      <= dec_b_sel;
                 ex_word_op    <= dec_word_op;
