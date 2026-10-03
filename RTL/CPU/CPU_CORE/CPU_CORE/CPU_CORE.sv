@@ -1305,21 +1305,26 @@ module CPU_CORE
     end
 
     // the buffer learns from every control transfer that gets through, the
-    // late branch from MR (EX does nothing in that cycle, see above)
+    // late branch from MR. EX does nothing while a late branch is in MR (see
+    // above), so the source is chosen by mr_late_pend, which comes from
+    // flip flops: chosen by mr_late_go, the answer of the cache (stall_ma)
+    // ran into the address of the buffer's update and through its read and
+    // tag compare to its write enable (LitexSystem/docs/TIMING.md 29). Only
+    // the enable waits for the answer.
     assign btb_upd_valid  = (ex_ctrl_go & ~ex_exc_pre) | mr_late_go;
-    assign btb_upd_pc     = mr_late_go ? mr_pc         : ex_pc;
-    assign btb_upd_is32   = mr_late_go ? ~mr_is_rvc    : ~ex_is_rvc;
-    assign btb_upd_target = mr_late_go ? mr_br_target  : target_pc;
-    assign btb_upd_taken  = mr_late_go ? mr_late_taken : take_branch;
+    assign btb_upd_pc     = mr_late_pend ? mr_pc         : ex_pc;
+    assign btb_upd_is32   = mr_late_pend ? ~mr_is_rvc    : ~ex_is_rvc;
+    assign btb_upd_target = mr_late_pend ? mr_br_target  : target_pc;
+    assign btb_upd_taken  = mr_late_pend ? mr_late_taken : take_branch;
     // calls and returns, as the hint table of the specification has them
     // (JAL / JALR, 2.5): a link register is ra or t0. A JALR that writes a
     // link register is a call even when it also reads one.
     logic ex_rd_link, ex_rs1_link;
     assign ex_rd_link   = (ex_rd  == 5'd1) | (ex_rd  == 5'd5);
     assign ex_rs1_link  = (ex_rs1 == 5'd1) | (ex_rs1 == 5'd5);
-    assign btb_upd_call = ~mr_late_go & (ex_is_jal | ex_is_jalr) & ex_rd_link;
-    assign btb_upd_ret  = ~mr_late_go & ex_is_jalr & (ex_rd == 5'd0) & ex_rs1_link;
-    assign btb_upd_cond = mr_late_go | ex_is_branch;
+    assign btb_upd_call = ~mr_late_pend & (ex_is_jal | ex_is_jalr) & ex_rd_link;
+    assign btb_upd_ret  = ~mr_late_pend & ex_is_jalr & (ex_rd == 5'd0) & ex_rs1_link;
+    assign btb_upd_cond = mr_late_pend | ex_is_branch;
     assign btb_flush      = fencei_taken | sfence_taken;
 
     // a trap and an MRET come from the commit point and win
