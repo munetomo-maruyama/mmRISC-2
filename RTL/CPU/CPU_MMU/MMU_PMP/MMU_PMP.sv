@@ -23,6 +23,12 @@
 //   asked without ever building the index: this check is on the address
 //   path of the execute stage, so a chain as deep as the table would cost
 //   real cycle time.
+//
+//   Nor is the configuration of the winning entry ever selected: whether
+//   each entry would deny the access depends on the registers only and is
+//   known early, so the answer is one OR over the entries of "this one is
+//   the lowest match at the low end, and it denies, or it is not the lowest
+//   match at the high end" (LitexSystem/docs/TIMING.md 28).
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -131,38 +137,39 @@ module MMU_PMP
     end
 
     //-----------------------------------------------------------------
-    // the lowest match at each end
+    // the lowest match at each end, and the answer
+    //
+    //   Without a match at the low end the access fails when the high end
+    //   matches (half in, half out) or the level is not machine mode. With
+    //   one, at entry k, it fails when k denies or k is not the lowest match
+    //   at the high end as well (the two ends in different regions).
     //-----------------------------------------------------------------
-    logic [N-1:0] sel_lo, sel_hi;
+    logic [N-1:0] first_lo, first_hi, deny;
     logic         hit_lo, hit_hi;
-    logic [7:0]   win_cfg;
-    logic         perm_ok;
 
-    assign sel_lo = m_lo & (~m_lo + N'(1));
-    assign sel_hi = m_hi & (~m_hi + N'(1));
+    always @(*) begin
+        for (int i = 0; i < N; i++) begin
+            first_lo[i] = m_lo[i];
+            first_hi[i] = m_hi[i];
+            for (int j = 0; j < i; j++) begin
+                first_lo[i] = first_lo[i] & ~m_lo[j];
+                first_hi[i] = first_hi[i] & ~m_hi[j];
+            end
+            // machine mode ignores an entry that is not locked
+            deny[i] = !(((priv == PRIV_M) && !cfg[8*i+7])
+                        || (!(is_read  && !cfg[8*i+0]) &&
+                            !(is_write && !cfg[8*i+1]) &&
+                            !(is_exec  && !cfg[8*i+2])));
+        end
+    end
+
     assign hit_lo = |m_lo;
     assign hit_hi = |m_hi;
 
     always @(*) begin
-        win_cfg = 8'd0;
-        for (int i = 0; i < ENTRIES; i++)
-            win_cfg |= {8{sel_lo[i]}} & cfg[8*i +: 8];
-    end
-
-    always @(*) begin
-        // machine mode ignores an entry that is not locked
-        perm_ok = ((priv == PRIV_M) && !win_cfg[7])
-                || (!(is_read  && !win_cfg[0]) &&
-                    !(is_write && !win_cfg[1]) &&
-                    !(is_exec  && !win_cfg[2]));
-
-        // one end matching and the other not leaves one select at zero and
-        // the other not, so "half in, half out" is the same comparison as
-        // "across two regions" and does not need a test of its own
-        if (ENTRIES == 0)                  fail = 1'b0;
-        else if (!hit_lo && !hit_hi)       fail = (priv != PRIV_M);
-        else if (sel_lo != sel_hi)         fail = 1'b1;   // not one region
-        else                               fail = ~perm_ok;
+        if (ENTRIES == 0)  fail = 1'b0;
+        else               fail = (!hit_lo && (hit_hi || (priv != PRIV_M))) ||
+                                  (|(first_lo & (deny | ~first_hi)));
     end
 
 endmodule : MMU_PMP
