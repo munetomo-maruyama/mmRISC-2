@@ -384,6 +384,7 @@ module CPU_CORE
     //=================================================================
     logic ex_mem, stall_ma, stall_ex, ex_advance, ex_mmu_wait;
     logic mr_is_mem, stall_mr, mr_advance, lu_hazard;
+    logic kill_ex, ctrl_behind_late;          // late branch (see there)
     logic id_ready, id_advance, pipe_busy, serial_busy, wfi_wait, flush;
     logic ma_exc, trap_taken, mret_taken, sret_taken, fencei_taken, fencei_busy;
     logic refetch_taken;
@@ -447,6 +448,10 @@ module CPU_CORE
     logic        mr_is_mret, mr_is_sret, mr_is_sfence, mr_is_fencei;
     logic        mr_refetch;
     logic        mr_is_rvc, mr_serial;
+    // a branch resolved in MR (see "late branch")
+    logic        mr_late, mr_late_a, mr_late_b, mr_pred_taken;
+    logic [2:0]  mr_br_op;
+    logic [63:0] mr_br_a, mr_br_target, mr_pred_target;
     logic [63:0] mr_sfence_vaddr, mr_sfence_asid;
     logic        mr_is_fp, mr_fp_arith, mr_fp_we, mr_fp_box;
     logic [4:0]  mr_fp_flags;
@@ -604,7 +609,7 @@ module CPU_CORE
             .clk      (clk),
             .rst_n    (rst_n),
             .start    (mdu_start),
-            .kill     (flush),
+            .kill     (flush | kill_ex),
             .op       (ex_mdu_op),
             .word_op  (ex_word_op),
             .rs1_data (ex_a_fwd),
@@ -644,7 +649,7 @@ module CPU_CORE
             .clk           (clk),
             .rst_n         (rst_n),
             .start         (fpu_start),
-            .kill          (flush),
+            .kill          (flush | kill_ex),
             .op            (ex_fp_op),
             .fmt           (ex_fp_fmt),
             .rm            (ex_rm_eff),
@@ -1035,7 +1040,7 @@ module CPU_CORE
         end else begin
             // EX issued but did not go on (it waits for the page table
             // walker): no more tries from EX, MA will do it
-            if (flush || ex_advance)  ex_e_blocked <= 1'b0;
+            if (flush || kill_ex || ex_advance)  ex_e_blocked <= 1'b0;
             else if (lsu_e_accept)    ex_e_blocked <= 1'b1;
 
             if (flush) begin
@@ -1161,15 +1166,22 @@ module CPU_CORE
     // all write their register from the cache; a store and fence.i write
     // none.
     logic lu_int, lu_fp;
+    logic ex_late;
     assign lu_int = mr_valid & mr_mem & mr_we_rd & (mr_rd != 5'd0) &
                     ((mr_rd == ex_rs1) | (mr_rd == ex_rs2));
     assign lu_fp  = mr_valid & mr_mem & mr_fp_we &
                     ((ex_use_fs1 & (mr_rd == ex_fs1)) |
                      (ex_use_fs2 & (mr_rd == ex_fs2)) |
                      (ex_use_fs3 & (mr_rd == ex_fs3)));
-    assign lu_hazard = ex_valid & (lu_int | lu_fp) & ~flush;
+    // A conditional branch on the value of the load does not wait: it goes
+    // on to MR with its prediction and is resolved there, where the answer
+    // of the load (then in MA) is on the cache port (ex_late, "late
+    // branch"). Two thirds of the waits of CoreMark and nine tenths of those
+    // of Dhrystone were such branches (LitexSystem/docs/BENCH.md 10).
+    assign ex_late   = ex_valid & ex_is_branch & lu_int & ~lu_fp & ~ex_exc_pre & ~flush;
+    assign lu_hazard = ex_valid & (lu_int | lu_fp) & ~flush & ~ex_late;
 
-    assign stall_ex      = stall_mr | ex_mmu_wait | lu_hazard
+    assign stall_ex      = stall_mr | ex_mmu_wait | lu_hazard | ctrl_behind_late
                                     | (mdu_active & ~mdu_done & ~flush)
                                     | (fpu_active & ~fpu_done & ~flush);
     assign ex_advance    = ~stall_ex;
@@ -1244,35 +1256,74 @@ module CPU_CORE
                            ((take_branch != ex_pred_taken) |
                             (take_branch & (target_pc != ex_pred_target)));
 
+    //-----------------------------------------------------------------
+    // late branch: resolved in MR
+    //
+    //   The load it waits for is in MA, and its answer arrives in the cycle
+    //   MA stops waiting (~stall_ma), which is also the cycle MR moves on:
+    //   the branch is resolved then, once, with the same comparison as in
+    //   EX. A wrong guess redirects from MR (kill_ex): what is in EX is
+    //   younger and is thrown away (EX, ID and the fetch queue). A control
+    //   transfer in EX waits while a late branch is in MR, so that the
+    //   buffer, the history and the redirects keep program order.
+    //-----------------------------------------------------------------
+    logic        mr_late_pend, mr_late_go, mr_late_taken, mr_late_miss;
+    logic [63:0] late_a, late_b;
+    logic        late_eq, late_lt, late_ltu;
+
+    assign mr_late_pend = mr_valid & mr_late;
+    assign late_a   = mr_late_a ? ma_fwd_data : mr_br_a;
+    assign late_b   = mr_late_b ? ma_fwd_data : mr_wdata;
+    assign late_eq  = (late_a == late_b);
+    assign late_lt  = ($signed(late_a) < $signed(late_b));
+    assign late_ltu = (late_a < late_b);
+    always @(*) begin
+        case (mr_br_op)
+            3'b000:  mr_late_taken =  late_eq;
+            3'b001:  mr_late_taken = ~late_eq;
+            3'b100:  mr_late_taken =  late_lt;
+            3'b101:  mr_late_taken = ~late_lt;
+            3'b110:  mr_late_taken =  late_ltu;
+            3'b111:  mr_late_taken = ~late_ltu;
+            default: mr_late_taken = 1'b0;
+        endcase
+    end
+    assign mr_late_go   = mr_late_pend & ~stall_ma & ~flush;
+    assign mr_late_miss = (mr_late_taken != mr_pred_taken) |
+                          (mr_late_taken & (mr_br_target != mr_pred_target));
+    assign kill_ex      = mr_late_go & mr_late_miss;
+    assign ctrl_behind_late = ex_valid & ex_is_ctrl & ~ex_ctrl_done & mr_late_pend;
+
     logic ex_ctrl_go, ex_ctrl_done;
     assign ex_ctrl_go = ex_valid & ex_is_ctrl & ~stall_ma & ~lu_hazard &
-                        ~ex_ctrl_done & ~flush;
+                        ~ex_ctrl_done & ~flush & ~ex_late & ~mr_late_pend;
 
     always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n)                     ex_ctrl_done <= 1'b0;
-        else if (flush || ex_advance)   ex_ctrl_done <= 1'b0;
-        else if (ex_ctrl_go)            ex_ctrl_done <= 1'b1;
+        if (!rst_n)                              ex_ctrl_done <= 1'b0;
+        else if (flush || kill_ex || ex_advance) ex_ctrl_done <= 1'b0;
+        else if (ex_ctrl_go)                     ex_ctrl_done <= 1'b1;
     end
 
-    // the buffer learns from every control transfer that gets through
-    assign btb_upd_valid  = ex_ctrl_go & ~ex_exc_pre;
-    assign btb_upd_pc     = ex_pc;
-    assign btb_upd_is32   = ~ex_is_rvc;
-    assign btb_upd_target = target_pc;
-    assign btb_upd_taken  = take_branch;
+    // the buffer learns from every control transfer that gets through, the
+    // late branch from MR (EX does nothing in that cycle, see above)
+    assign btb_upd_valid  = (ex_ctrl_go & ~ex_exc_pre) | mr_late_go;
+    assign btb_upd_pc     = mr_late_go ? mr_pc         : ex_pc;
+    assign btb_upd_is32   = mr_late_go ? ~mr_is_rvc    : ~ex_is_rvc;
+    assign btb_upd_target = mr_late_go ? mr_br_target  : target_pc;
+    assign btb_upd_taken  = mr_late_go ? mr_late_taken : take_branch;
     // calls and returns, as the hint table of the specification has them
     // (JAL / JALR, 2.5): a link register is ra or t0. A JALR that writes a
     // link register is a call even when it also reads one.
     logic ex_rd_link, ex_rs1_link;
     assign ex_rd_link   = (ex_rd  == 5'd1) | (ex_rd  == 5'd5);
     assign ex_rs1_link  = (ex_rs1 == 5'd1) | (ex_rs1 == 5'd5);
-    assign btb_upd_call = (ex_is_jal | ex_is_jalr) & ex_rd_link;
-    assign btb_upd_ret  = ex_is_jalr & (ex_rd == 5'd0) & ex_rs1_link;
-    assign btb_upd_cond = ex_is_branch;
+    assign btb_upd_call = ~mr_late_go & (ex_is_jal | ex_is_jalr) & ex_rd_link;
+    assign btb_upd_ret  = ~mr_late_go & ex_is_jalr & (ex_rd == 5'd0) & ex_rs1_link;
+    assign btb_upd_cond = mr_late_go | ex_is_branch;
     assign btb_flush      = fencei_taken | sfence_taken;
 
     // a trap and an MRET come from the commit point and win
-    assign redirect_valid = flush | (ex_mispredict & ex_ctrl_go) | dbg_resume_now;
+    assign redirect_valid = flush | kill_ex | (ex_mispredict & ex_ctrl_go) | dbg_resume_now;
     always @(*) begin
         // leaving debug mode goes to dpc; entering it fetches from the
         // instruction it halted in front of, which waits in the fetch queue
@@ -1284,6 +1335,8 @@ module CPU_CORE
         else if (sret_taken)   redirect_pc = sret_target;
         else if (fencei_taken || sfence_taken || refetch_taken)
                                redirect_pc = ma_pc + (ma_is_rvc ? 64'd2 : 64'd4);
+        else if (kill_ex)      redirect_pc = mr_late_taken ? mr_br_target
+                                                           : mr_pc + (mr_is_rvc ? 64'd2 : 64'd4);
         else                   redirect_pc = take_branch ? target_pc : ex_seq_pc;
     end
 
@@ -1409,7 +1462,7 @@ module CPU_CORE
     assign nx_ma_rd = mr_advance ? mr_rd : ma_rd;
 
     always @(*) begin
-        if      (flush)      nx_mr_wr = 1'b0;
+        if      (flush || kill_ex) nx_mr_wr = 1'b0;
         else if (ex_advance) nx_mr_wr = ex_valid & ex_we_rd & ~ex_exc & ~ex_mem;
         else if (mr_advance) nx_mr_wr = 1'b0;
         else                 nx_mr_wr = mr_valid & mr_we_rd & ~mr_mem;
@@ -1521,6 +1574,14 @@ module CPU_CORE
             mr_is_sfence  <= 1'b0;
             mr_is_fencei  <= 1'b0;
             mr_refetch    <= 1'b0;
+            mr_late       <= 1'b0;
+            mr_late_a     <= 1'b0;
+            mr_late_b     <= 1'b0;
+            mr_br_op      <= 3'd0;
+            mr_br_a       <= 64'd0;
+            mr_br_target  <= 64'd0;
+            mr_pred_taken <= 1'b0;
+            mr_pred_target<= 64'd0;
             mr_sfence_vaddr <= 64'd0;
             mr_sfence_asid  <= 64'd0;
             mr_serial     <= 1'b0;
@@ -1683,6 +1744,14 @@ module CPU_CORE
                 mr_is_sfence  <= ex_is_sfence;
                 mr_is_fencei  <= ex_is_fencei;
                 mr_refetch    <= (ex_pred_taken & ~ex_is_ctrl) | ex_csr_fetch;
+                mr_late       <= ex_late;
+                mr_late_a     <= ex_late & (mr_rd == ex_rs1);
+                mr_late_b     <= ex_late & (mr_rd == ex_rs2);
+                mr_br_op      <= ex_br_op;
+                mr_br_a       <= ex_a_fwd;
+                mr_br_target  <= target_pc;
+                mr_pred_taken <= ex_pred_taken;
+                mr_pred_target<= ex_pred_target;
                 // SFENCE.VMA rs2, rs1 : rs1 selects the address and rs2 the
                 // ASID, a zero register meaning "every one of them"
                 mr_sfence_vaddr <= (ex_rs1 == 5'd0) ? 64'd0 : ex_a_fwd;
@@ -1726,6 +1795,7 @@ module CPU_CORE
                 mr_is_sfence <= 1'b0;
                 mr_is_fencei <= 1'b0;
                 mr_refetch   <= 1'b0;
+                mr_late      <= 1'b0;
                 mr_serial  <= 1'b0;
                 mr_csr_wr  <= 1'b0;
                 mr_exc_r   <= 1'b0;
@@ -1770,8 +1840,10 @@ module CPU_CORE
                 ma_exc_tval_r <= mr_exc_tval;
                 ma_result     <= mr_result;
             end else if (!stall_ma) begin
-                // MA handed its instruction over but MR has nothing to give
-                // (the cache did not take the next access yet) : bubble
+                // MA handed its instruction over but MR has nothing to give.
+                // Not reached since MR stalls exactly when MA does
+                // (stall_mr = stall_ma, CPU_CORE_SPEC.md 5.4); kept as the
+                // safe answer should that change again.
                 ma_valid   <= 1'b0;
                 ma_we_rd   <= 1'b0;
                 ma_mem     <= 1'b0;
@@ -1814,6 +1886,34 @@ module CPU_CORE
             end
 
             //---------------------------------------------------------
+            // a late branch that guessed wrong empties EX, and MR behind
+            // it (what EX handed over in this cycle)
+            //---------------------------------------------------------
+            if (kill_ex) begin
+                ex_valid   <= 1'b0;
+                ex_exc_r   <= 1'b0;
+                ex_serial  <= 1'b0;
+                ex_pred_taken <= 1'b0;
+                mr_valid   <= 1'b0;
+                mr_we_rd   <= 1'b0;
+                mr_mem     <= 1'b0;
+                mr_is_load <= 1'b0;
+                mr_is_store<= 1'b0;
+                mr_is_mret <= 1'b0;
+                mr_is_sret <= 1'b0;
+                mr_is_sfence <= 1'b0;
+                mr_is_fencei <= 1'b0;
+                mr_refetch   <= 1'b0;
+                mr_late      <= 1'b0;
+                mr_serial  <= 1'b0;
+                mr_csr_wr  <= 1'b0;
+                mr_exc_r   <= 1'b0;
+                mr_is_fp   <= 1'b0;
+                mr_fp_arith<= 1'b0;
+                mr_fp_we   <= 1'b0;
+            end
+
+            //---------------------------------------------------------
             // a trap or an MRET empties EX, MR and MA
             //---------------------------------------------------------
             if (flush) begin
@@ -1829,6 +1929,7 @@ module CPU_CORE
                 mr_is_sfence <= 1'b0;
                 mr_is_fencei <= 1'b0;
                 mr_refetch   <= 1'b0;
+                mr_late      <= 1'b0;
                 mr_serial  <= 1'b0;
                 mr_csr_wr  <= 1'b0;
                 mr_exc_r   <= 1'b0;

@@ -127,6 +127,19 @@ _start:
     TEST_EQ(30, x28, 1)                  // instruction access fault
     TEST_EQ_REG(31, x26, x10)            // mepc is the address that was fetched
 
+    // ---- minstret counts exactly what retired around a trap ----
+    // The ECALL does not retire (it raises an exception), the handler
+    // retires twelve instructions on the path that steps over it (four
+    // csrr, srli, andi, li, bne, csrr, addi, csrw, mret), and the first
+    // csrr counts itself: 13. An instruction that the trap or the MRET
+    // threw away must not retire as well.
+    li   x24, 0
+    csrr x20, minstret
+    ecall
+    csrr x21, minstret
+    sub  x22, x21, x20
+    TEST_EQ(32, x22, 13)
+
     la   x10, default_trap
     csrw mtvec, x10
     TEST_DONE

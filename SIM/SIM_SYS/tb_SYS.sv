@@ -451,6 +451,8 @@ module tb_SYS
     // the issue point every cycle either issues or has a reason not to.
     //-----------------------------------------------------------------
     int  prof_cycles, prof_retired;
+    int  q_late, q_late_miss;
+    int  q_lu_st, q_lu_addr, q_lu_br, q_lu_jalr, q_lu_mdu, q_lu_fp, q_lu_alu;
     int  q_issue, q_redirect, q_ma, q_mr, q_unit, q_lu, q_mmu,
          q_refill, q_fetch, q_serial, q_other;
     int  e_br, e_jal, e_jalr, e_mp_br, e_mp_jal, e_mp_jalr, e_mdu, e_trap;
@@ -460,6 +462,8 @@ module tb_SYS
     task automatic prof_clear;
         prof_cycles = 0; prof_retired = 0;
         q_issue = 0; q_redirect = 0; q_ma = 0; q_mr = 0; q_unit = 0;
+        q_late = 0; q_late_miss = 0;
+        q_lu_st = 0; q_lu_addr = 0; q_lu_br = 0; q_lu_jalr = 0; q_lu_mdu = 0; q_lu_fp = 0; q_lu_alu = 0;
         q_lu = 0; q_mmu = 0; q_refill = 0; q_fetch = 0; q_serial = 0;
         q_other = 0;
         e_br = 0; e_jal = 0; e_jalr = 0; e_mp_br = 0; e_mp_jal = 0;
@@ -492,6 +496,8 @@ module tb_SYS
             if (prof_on) begin
                 prof_cycles++;
                 if (`CORE.trace_valid) prof_retired++;
+                if (`CORE.mr_late_go) q_late++;
+                if (`CORE.kill_ex)    q_late_miss++;
                 if (`CORE.id_issue)                    q_issue++;
                 else if (`CORE.redirect_valid)         q_redirect++;
                 else if (`CORE.stall_ex) begin
@@ -499,7 +505,23 @@ module tb_SYS
                     else if ((`CORE.mdu_active & ~`CORE.mdu_done) |
                              (`CORE.fpu_active & ~`CORE.fpu_done))
                                                        q_unit++;
-                    else if (`CORE.lu_hazard)          q_lu++;
+                    else if (`CORE.lu_hazard) begin
+                        q_lu++;
+                        // what waits: the data of a store only, an address,
+                        // a branch or jump, a multiply / divide, FP, or the
+                        // rest (integer ALU, CSR)
+                        if (`CORE.lu_fp | `CORE.ex_is_fp)          q_lu_fp++;
+                        else if (`CORE.ex_is_store &&
+                                 (`CORE.mr_rd != `CORE.ex_rs1))    q_lu_st++;
+                        else if (`CORE.ex_is_load | `CORE.ex_is_store)
+                                                                   q_lu_addr++;
+                        else if (`CORE.ex_is_ctrl) begin
+                            q_lu_br++;
+                            if (`CORE.ex_is_jalr) q_lu_jalr++;
+                        end
+                        else if (`CORE.ex_is_mdu)                  q_lu_mdu++;
+                        else                                       q_lu_alu++;
+                    end
                     else if (`CORE.ex_mmu_wait)        q_mmu++;
                     else                               q_mr++;
                 end
@@ -597,6 +619,10 @@ module tb_SYS
         $display("   EX held: MA waits for D$     : %s", pct(q_ma));
         $display("   EX held: MR waits for D$     : %s", pct(q_mr));
         $display("   EX held: load-use            : %s", pct(q_lu));
+        $display("   branches resolved in MR (on a load): %0d, %0d of them guessed wrong",
+                 q_late, q_late_miss);
+        $display("     waiting: store data %0d, address %0d, branch/jump %0d (jalr %0d), ALU %0d, MDU %0d, FP %0d",
+                 q_lu_st, q_lu_addr, q_lu_br, q_lu_jalr, q_lu_alu, q_lu_mdu, q_lu_fp);
         $display("   EX held: MDU or FPU          : %s", pct(q_unit));
         $display("   EX held: translation         : %s", pct(q_mmu));
         $display("   serialising (CSR, fence)     : %s", pct(q_serial));
