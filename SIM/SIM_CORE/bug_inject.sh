@@ -170,6 +170,7 @@ MUTATIONS=(
 "269#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/mr_late_a     <= ex_late \& (mr_rd == ex_rs1);/mr_late_a     <= ex_late \& (mr_rd == ex_rs2);/#core: a late branch takes the load for the wrong operand"
 "270#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/            .kill     (flush | kill_ex),/            .kill     (flush),/#core: a divide behind a late branch that guessed wrong goes on"
 "271#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/~ex_ctrl_done \& ~flush \& ~ex_late \& ~mr_late_pend;/~ex_ctrl_done \& ~flush \& ~ex_late;/; s/assign ctrl_behind_late = ex_valid \& ex_is_ctrl \& ~ex_ctrl_done \& mr_late_pend;/assign ctrl_behind_late = 1'b0;/#core: a branch in EX does not wait for a late branch in MR"
+"272#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                                       dec_is_sfence | dec_is_fence |/                                       dec_is_sfence |/#core: a FENCE does not wait for the accesses in front of it"
 "253#CPU_CORE/CORE_BTB/CORE_BTB.sv#s/assign hit_taken  = look_d\[F_COND\] ? pht_look : look_d\[F_CNT + 1\];/assign hit_taken  = look_d[F_CNT + 1];/#BTB: no gshare, the counter of the entry decides"
 "254#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/hist_s <= {hist_s\[HIST_BITS-2:0\], btb_taken};/hist_s <= hist_s;/#IFU: the fetch side keeps no history"
 "255#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/(btb_upd_valid \&\& btb_upd_cond \&\& btb_known)/(btb_upd_valid \&\& btb_upd_cond)/#IFU: the execute side also counts branches without an entry"

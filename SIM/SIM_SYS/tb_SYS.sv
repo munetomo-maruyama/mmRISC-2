@@ -443,6 +443,19 @@ module tb_SYS
 
 `define CORE u_cpu_top.g_core.u_cpu_core
 
+    // A FENCE goes on only when every access in front of it has been
+    // answered (CPU_CORE_SPEC.md 5.3); here the answers come from the real
+    // caches and the bus, an uncached store when the bus has taken it.
+    logic fence_error_tb = 1'b0;
+    always @(posedge clk) begin
+        if (rst_n && `CORE.id_issue && `CORE.dec_is_fence &&
+            (`CORE.u_lsu.os != `CORE.u_lsu.drop)) begin
+            fence_error_tb <= 1'b1;
+            $display("[%0t] tb_SYS: a FENCE issued with %0d accesses in front of it unanswered",
+                     $time, `CORE.u_lsu.os - `CORE.u_lsu.drop);
+        end
+    end
+
     //-----------------------------------------------------------------
     // The same cycles once more, counted where an instruction is issued
     // (ID -> EX) instead of where one retires. A cycle at the end of the
@@ -654,7 +667,10 @@ module tb_SYS
 
         $display("");
         $display("==========================================================");
-        if (tohost === 64'd0)
+        if (fence_error_tb)
+            $display(" %s : FAIL   (a FENCE went ahead of an access in front of it)",
+                     test_name);
+        else if (tohost === 64'd0)
             $display(" %s : FAIL   (watchdog after %0d cycles, %0d retired)",
                      test_name, cycle_count, n_retired);
         else if (tohost == 64'd1)

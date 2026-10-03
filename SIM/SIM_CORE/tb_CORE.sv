@@ -290,6 +290,7 @@ module tb_CORE;
     logic [63:0] last_trace_pc;
     logic        retire_error;
     logic        resp_error_tb;     // an answer of the data port nobody waits for
+    logic        fence_error_tb;    // a FENCE went ahead of an older access
 
     logic        seen_trap;
     logic        last_trap_int;
@@ -319,6 +320,7 @@ module tb_CORE;
         last_trace_pc    = 64'd0;
         retire_error     = 1'b0;
         resp_error_tb    = 1'b0;
+        fence_error_tb   = 1'b0;
         seen_trap        = 1'b0;
     end
 
@@ -375,6 +377,16 @@ module tb_CORE;
             if (u_core.lsu_resp_valid && !(u_core.ma_valid && u_core.ma_mem)) begin
                 resp_error_tb <= 1'b1;
                 $display("[%0t] tb_CORE: an answer of the data port that no access in MA waits for", $time);
+            end
+            // A FENCE goes on only when every access in front of it has
+            // been answered (CPU_CORE_SPEC.md 5.3): in the cycle it leaves
+            // ID, the LSU has nothing in flight but answers it will throw
+            // away (those of a flushed path, which are no accesses at all).
+            if (u_core.id_issue && u_core.dec_is_fence &&
+                (u_core.u_lsu.os != u_core.u_lsu.drop)) begin
+                fence_error_tb <= 1'b1;
+                $display("[%0t] tb_CORE: a FENCE issued with %0d accesses in front of it unanswered",
+                         $time, u_core.u_lsu.os - u_core.u_lsu.drop);
             end
             last_trace_valid <= trace_valid;
             last_trace_pc    <= trace_pc;
@@ -763,6 +775,8 @@ module tb_CORE;
             $display(" %s : FAIL   (an instruction was retired twice)", test_name);
         end else if (resp_error_tb) begin
             $display(" %s : FAIL   (an answer of the data port that nothing waited for)", test_name);
+        end else if (fence_error_tb) begin
+            $display(" %s : FAIL   (a FENCE went ahead of an access in front of it)", test_name);
         end else if (dbg_fail != 0) begin
             $display(" %s : FAIL   (debugger check %0d)", test_name, dbg_fail);
         end else if (tohost == 64'd1) begin
