@@ -306,7 +306,7 @@ module tb_BIOS
     // what happens
     //=================================================================
     `define CORE u_cpu_top.g_core.u_cpu_core
-    int  cycle_count, max_cycles, n_retired, n_traps, n_uart_int;
+    int  cycle_count, max_cycles, n_retired, n_traps, n_uart_int, n_orcb;
     string bios_file, fw_file, image_file, initrd_file;
     int    pcmon;
     bit    linux_mode;
@@ -342,6 +342,10 @@ module tb_BIOS
             end
             if (`CORE.trace_valid) begin
                 n_retired <= n_retired + 1;
+                // ORC.B: only the Zbb string functions of Linux use it, so
+                // a count above zero says the kernel took the Zbb paths
+                if ((`CORE.trace_insn & 32'hFFF0707F) == 32'h28705013)
+                    n_orcb <= n_orcb + 1;
                 if ($test$plusargs("trace"))
                     $display("[%0d] %010h : %08h", cycle_count, `CORE.trace_pc, `CORE.trace_insn);
                 if ((utrace > 0) && (`CORE.trace_priv == 2'd0)) begin
@@ -416,6 +420,7 @@ module tb_BIOS
         rst_dbg_n   = 1'b0;
         cycle_count = 0;
         n_retired   = 0;
+        n_orcb      = 0;
         n_traps     = 0;
         n_uart_int  = 0;
         repeat (20) @(posedge clk);
@@ -436,6 +441,8 @@ module tb_BIOS
         end
         $display("");
         $display("==========================================================");
+        if (linux_mode)
+            $display(" ORC.B retired (Zbb string functions of Linux) : %0d", n_orcb);
         if (linux_mode && (u_per.tx_tail[8*3-1:0] == "\n# "))
             $display(" LINUX RUN ENDED : the shell prompt");
         else if (linux_mode)
