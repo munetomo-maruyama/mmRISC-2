@@ -30,24 +30,33 @@ TFTP_DIR ?= /srv/tftp
 ARCH     := -march=rv64imafdc -mabi=lp64d
 OPT      := -O2
 CFLAGS   := $(ARCH) $(OPT) -static
+# the same with the bit manipulation of Zba / Zbb (CPU_CORE_SPEC.md decision
+# 65): coremark_zb and dhrystone_zb. The C library stays rv64gc.
+ARCH_ZB  := -march=rv64imafdc_zba_zbb -mabi=lp64d
 
 DHRY_SRC := $(RVTESTS)/benchmarks/dhrystone
 
 .PHONY: all tftp clean
-all: out/coremark out/dhrystone out/micro
+all: out/coremark out/dhrystone out/micro out/coremark_zb out/dhrystone_zb
 
 out:
 	mkdir -p out out/dhry
 
 # CoreMark: the posix port as it is, ITERATIONS=0 lets it choose a count that
 # runs for at least 10 seconds, which is what a valid result needs
+CM_SRCS  = $(COREMARK)/core_list_join.c $(COREMARK)/core_main.c \
+	   $(COREMARK)/core_matrix.c $(COREMARK)/core_state.c \
+	   $(COREMARK)/core_util.c $(COREMARK)/posix/core_portme.c
+
 out/coremark: | out
 	$(CC) $(CFLAGS) -I$(COREMARK)/posix -I$(COREMARK) \
 	    -DFLAGS_STR='"$(ARCH) $(OPT) -static"' -DITERATIONS=0 -DPERFORMANCE_RUN=1 \
-	    $(COREMARK)/core_list_join.c $(COREMARK)/core_main.c \
-	    $(COREMARK)/core_matrix.c $(COREMARK)/core_state.c \
-	    $(COREMARK)/core_util.c $(COREMARK)/posix/core_portme.c \
-	    -lrt -o $@
+	    $(CM_SRCS) -lrt -o $@
+
+out/coremark_zb: | out
+	$(CC) $(ARCH_ZB) $(OPT) -static -I$(COREMARK)/posix -I$(COREMARK) \
+	    -DFLAGS_STR='"$(ARCH_ZB) $(OPT) -static"' -DITERATIONS=0 -DPERFORMANCE_RUN=1 \
+	    $(CM_SRCS) -lrt -o $@
 
 # Dhrystone 2.2 of riscv-tests. In the copy of dhrystone.h the timer is
 # bench_usec() (microseconds, HZ is 1000000 there already), and a run that
@@ -75,12 +84,19 @@ out/dhrystone: out/dhry/dhrystone.h out/dhry/util.h dhry_shim.c
 	$(CC) $(CFLAGS) -std=gnu89 -fno-common -fno-builtin-printf -w -Iout/dhry \
 	    out/dhry/dhrystone.c out/dhry/dhrystone_main.c dhry_shim.c -o $@
 
+# the same sources as out/dhrystone, which made out/dhry/*.c
+out/dhrystone_zb: out/dhrystone
+	$(CC) $(ARCH_ZB) $(OPT) -static -std=gnu89 -fno-common -fno-builtin-printf -w -Iout/dhry \
+	    out/dhry/dhrystone.c out/dhry/dhrystone_main.c dhry_shim.c -o $@
+
 out/micro: micro.c loops.h | out
 	$(CC) $(CFLAGS) -Wall -o $@ $<
 
 tftp: all
-	sudo cp out/coremark out/dhrystone out/micro bench.sh $(TFTP_DIR)/
-	sudo chmod 644 $(TFTP_DIR)/coremark $(TFTP_DIR)/dhrystone $(TFTP_DIR)/micro $(TFTP_DIR)/bench.sh
+	sudo cp out/coremark out/dhrystone out/micro out/coremark_zb out/dhrystone_zb \
+	    bench.sh $(TFTP_DIR)/
+	sudo chmod 644 $(TFTP_DIR)/coremark $(TFTP_DIR)/dhrystone $(TFTP_DIR)/micro \
+	    $(TFTP_DIR)/coremark_zb $(TFTP_DIR)/dhrystone_zb $(TFTP_DIR)/bench.sh
 	ls -l $(TFTP_DIR)
 
 clean:

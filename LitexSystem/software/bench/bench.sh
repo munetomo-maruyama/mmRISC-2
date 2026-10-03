@@ -44,6 +44,26 @@ DPS=$(grep "^Dhrystones per Second" dhrystone.out | awk '{ print $4 }')
 echo "=== micro" | tee -a "$LOG"
 ./micro "$MHZ" 2>&1 | tee -a "$LOG"
 
+# The same two built with Zba / Zbb, when the server has them (a core
+# without those extensions would trap on them: /proc/cpuinfo must list zba
+# and zbb)
+ZB=no
+if grep -q "zba_zbb" /proc/cpuinfo &&
+   tftp -g -r coremark_zb -l coremark_zb "$SERVER" 2> /dev/null &&
+   tftp -g -r dhrystone_zb -l dhrystone_zb "$SERVER" 2> /dev/null; then
+    ZB=yes
+    chmod 755 coremark_zb dhrystone_zb
+    echo "=== coremark, Zba / Zbb (10 s or more)" | tee -a "$LOG"
+    ./coremark_zb > coremark_zb.out 2>&1
+    cat coremark_zb.out >> "$LOG"
+    CMZ=$(grep "^Iterations/Sec" coremark_zb.out | awk '{ print $3 }')
+    grep -q "Correct operation validated" coremark_zb.out && CMZ_OK=ok || CMZ_OK=NG
+    echo "=== dhrystone, Zba / Zbb" | tee -a "$LOG"
+    ./dhrystone_zb > dhrystone_zb.out 2>&1
+    cat dhrystone_zb.out >> "$LOG"
+    DPSZ=$(grep "^Dhrystones per Second" dhrystone_zb.out | awk '{ print $4 }')
+fi
+
 echo "" | tee -a "$LOG"
 echo "=== summary" | tee -a "$LOG"
 awk -v cm="$CM" -v ok="$CM_OK" -v dps="$DPS" -v mhz="$MHZ" 'BEGIN {
@@ -51,3 +71,9 @@ awk -v cm="$CM" -v ok="$CM_OK" -v dps="$DPS" -v mhz="$MHZ" 'BEGIN {
     # 1 DMIPS = 1757 Dhrystones per second (VAX 11/780)
     printf "Dhrystone  %10d per second     %6.3f DMIPS/MHz\n", dps, dps / 1757 / mhz
 }' | tee -a "$LOG"
+if [ "$ZB" = yes ]; then
+    awk -v cm="$CMZ" -v ok="$CMZ_OK" -v dps="$DPSZ" -v mhz="$MHZ" 'BEGIN {
+        printf "CoreMark   %10.2f iterations/s  %6.3f CoreMark/MHz  (%s, Zba/Zbb)\n", cm, cm / mhz, ok
+        printf "Dhrystone  %10d per second     %6.3f DMIPS/MHz  (Zba/Zbb)\n", dps, dps / 1757 / mhz
+    }' | tee -a "$LOG"
+fi
