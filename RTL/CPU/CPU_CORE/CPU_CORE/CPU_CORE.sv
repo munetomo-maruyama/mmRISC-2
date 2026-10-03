@@ -830,10 +830,14 @@ module CPU_CORE
                 ex_exc_cause_pre = EXC_ILLEGAL;
                 ex_exc_tval_pre  = ex_is_rvc ? {48'd0, ex_insn[15:0]}
                                              : {32'd0, ex_insn};
-            end else if (take_branch && target_pc[0]) begin
-                ex_exc_pre       = 1'b1;
-                ex_exc_cause_pre = EXC_IADDR;
-                ex_exc_tval_pre  = target_pc;
+            // No instruction address misaligned exception from a branch or
+            // a jump: with the C extension instructions are two byte
+            // aligned, and no target can be odd (JALR clears bit 0, the
+            // offsets of branches and JAL are even, and so is the PC). The
+            // test of target_pc[0] that stood here could never fire, but
+            // synthesis does not know the PC is even and ran the branch
+            // comparison into ex_exc_pre, and from there into the DTLB, the
+            // walker and the request to the D$ (LitexSystem/docs/TIMING.md 30).
             end else if ((ex_is_load || ex_is_store) && misaligned) begin
                 ex_exc_pre       = 1'b1;
                 ex_exc_cause_pre = ex_is_store ? EXC_SADDR : EXC_LADDR;
