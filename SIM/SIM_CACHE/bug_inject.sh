@@ -22,7 +22,7 @@ MUTATIONS=(
 "1#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/.inv_all(i_flush_valid)/.inv_all(1'b0)/#6#6#I\$: fence.i does not invalidate the array"
 "2#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/!(s1_valid \&\& !hit);/1'b1;/#10#11#I\$: accepts a new request while the current one misses"
 "3#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/!fill_flushed \&\& !i_flush_valid/1'b1/#6#6#I\$: fill validates a line invalidated by fence.i"
-"4#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/tag_wr_dirty = 1'b1;\$/tag_wr_dirty = 1'b0;/#11#12#D\$: store hit does not set the dirty bit"
+"4#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/tag_wr_dirty = s1_kill ? eff_dirty\[hit_way\] : 1'b1;/tag_wr_dirty = s1_kill ? eff_dirty[hit_way] : 1'b0;/#11#12#D\$: store hit does not set the dirty bit"
 "5#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/ms_wb_needed\[ms_tail\]  <= victim_dirty;/ms_wb_needed[ms_tail]  <= 1'b0;/#3#3#D\$: dirty victim is not written back"
 "6#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_wr_strb   = size_strb(s1_addr\[2:0\], s1_size);/s1_wr_strb   = 8'hFF;/#2#2#D\$: store ignores the byte strobe"
 "7#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/assign sc_ok         = res_valid \&\&/assign sc_ok         = 1'b1 \&\&/#5#5#D\$: SC succeeds without a valid reservation"
@@ -31,7 +31,7 @@ MUTATIONS=(
 "10#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/4'd9:    return (so < ss) ? o : s;/4'd9:    return (o < s) ? o : s;/#4#4#D\$: AMOMIN compares unsigned"
 "11#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/4'd5:    return o + s;/4'd5:    return o - s;/#4#4#D\$: AMOADD subtracts"
 "12#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/if (res_valid \&\& (res_line == s1_line)) res_valid <= 1'b0;/;/g#5#5#D\$: a store does not clear the reservation"
-"13#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_can_go = !ms_locked\[ms_match_id\] \&\& ms_attach_ok;/s1_can_go = ms_attach_ok;/#9#12#D\$: ignores the MSHR lock of a pending store"
+"13#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_can_go = !ms_locked\[ms_match_id\] \&\& ms_attach_ok \&\& !s1_first;/s1_can_go = ms_attach_ok \&\& !s1_first;/#9#12#D\$: ignores the MSHR lock of a pending store"
 "14#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/m_axil_wstrb   <= size_strb(s1_addr\[2:0\], s1_size);/m_axil_wstrb   <= 8'hFF;/#7#7#D\$: uncached store ignores the byte strobe"
 "15#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/rob_err\[i\]  <= f_err | (m_axi4_rresp != 2'b00);/rob_err[i]  <= 1'b0;/#8#8#D\$: bus error of a store fill is not reported"
 "16#CPU/CPU_CACHE/CACHE_DATA_ARRAY/CACHE_DATA_ARRAY.sv#s/(int'(wr_way) == gw)/(gw == 0)/#1#3#data array: writes always go to way 0"
@@ -47,7 +47,7 @@ MUTATIONS=(
 "26#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                    sw_rob  <= s1_rob;/                    sw_rob  <= s1_rob; rob_wait[s1_rob] <= 1'b1;/#16#16#D\$: a fill answers a write through that is still on the bus"
 "27#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/if (array_rd_busy || fl_busy || (fill_beat_now/if (array_rd_busy || (fill_beat_now/#17#17#D\$: a request held during the flush walk looks at the tags of other sets"
 "28#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/(tfwd_en   \&\& (tfwd_index == addr_index(s1_addr))) ||/1'b0 ||/; s/(fwd_valid \&\& (fwd_addr\[DADDR_BITS-1 -: IDX_BITS\] == addr_index(s1_addr))))/1'b0)/#17#18#D\$: a held request forgets the writes forwarded to it (a store hit writes tag and data together, so the two conditions are one)"
-"29#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_fast      = (s1_rob == rob_head);/s1_fast      = 1'b1;/#1#18#D\$: a hit answers from stage 1 even when an older request is still waiting"
+"29#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_fast      = (s1_rob == rob_head) \&\& !s1_kill;/s1_fast      = !s1_kill;/#1#18#D\$: a hit answers from stage 1 even when an older request is still waiting"
 "30#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_fast_data = s1_is_sc ? (sc_ok ? 64'd0 : 64'd1)/s1_fast_data = s1_is_sc ? (sc_ok ? 64'd1 : 64'd0)/#1#18#D\$: an SC answered from stage 1 reports the opposite"
 "31#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/? extract(hit_word, s1_addr\[2:0\], s1_size) : 64'd0;/? hit_word : 64'd0;/#1#18#D\$: a load answered from stage 1 is not shifted to its byte"
 "32#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/assign s1_kill     = s1_valid \& ~s1_ptag_v \& d_req_cancel;/assign s1_kill     = 1'b0;/#19#19#D\$: a request taken back is executed all the same"
@@ -56,6 +56,9 @@ MUTATIONS=(
 "35#CPU/CPU_CACHE/CACHE_PORT_ARB/CACHE_PORT_ARB.sv#s/assign s0_resp_valid = m_resp_valid \& ~m_resp_drop \& ~owner\[head\];/assign s0_resp_valid = m_resp_valid \& ~owner[head];/#19#19#arbiter: the turn of a request taken back is passed on as an answer"
 "36#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                rob_silent\[s1_rob\] <= 1'b1;/                rob_silent[s1_rob] <= 1'b0;/#19#19#D\$: a request taken back leaves the buffer as an answer"
 "37#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/!(s1_is_amo \&\& !s1_amo_rd);/1'b1;/#4#4#D\$: an atomic writes in its first cycle, with the old value of the one before"
+"38#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                            !fl_busy \&\& !s1_first;/                            !fl_busy;/#19#19#D\$: a miss starts its fill in the first cycle, taken back or not"
+"39#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/tag_wr_dirty = s1_kill ? eff_dirty\[hit_way\] : 1'b1;/tag_wr_dirty = 1'b1;/#19#19#D\$: a store hit taken back makes the line dirty"
+"40#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/^                    if (s1_kill) begin/                    if (1'b0) begin/#19#19#D\$: an LR or SC taken back changes the reservation"
 )
 
 # Not listed, equivalent to the design:

@@ -292,6 +292,7 @@ module DCACHE
     logic                    s1_ptag_v;                 // the tag has been captured
     logic [TAG_BITS-1:0]     s1_ptag_r;
     logic                    s1_kill;                   // taken back by the CPU
+    logic                    s1_first;                  // first stage 1 cycle
     logic [TAG_BITS-1:0]     s1_ptag;                   // tag of stage 1 (live or captured)
     logic [PADDR_WIDTH-1:0]  s1_paddr;                  // full physical address of stage 1
     logic [LINE_BITS-1:0]    s1_line;                   // physical line of stage 1
@@ -610,7 +611,6 @@ module DCACHE
     // the victim line while its data is being copied out and overwritten, so
     // an access that "hits" such a way has to wait for the fill
     logic [WAYS-1:0] busy_way;
-    logic            hit_busy;
     always @(*) begin
         busy_way = '0;
         for (int m = 0; m < NUM_MSHR; m++)
@@ -618,7 +618,6 @@ module DCACHE
                 busy_way[ms_way[m]] = 1'b1;
     end
 
-    assign hit_busy = hit && busy_way[hit_way];
 
     // victim : an invalid way first, otherwise a free way chosen by the LFSR
     logic [WAY_BITS-1:0] victim_way;
@@ -702,23 +701,33 @@ module DCACHE
     // for (d_req_ready). A request taken back leaves stage 1 all the same
     // (s1_can_retire); the one behind it waits for one cycle more only when
     // the one taken back could not have gone on either.
+    //
+    // The take back only comes in the first stage 1 cycle (s1_first, the
+    // physical tag arrives then). Everything but a hit therefore waits for
+    // the second cycle: a fence, a flush, an uncached access, a write
+    // through, joining a fill or starting one. In that cycle the request is
+    // known to stay, so none of those engines and none of the MSHR look at
+    // s1_kill at all, and the path from the PMP of the core ends at a few
+    // flip flops instead (LitexSystem/docs/TIMING.md 28). A miss costs one
+    // cycle more for it, against the thirty or so of the fill.
     logic hit_busy_nk;
     assign hit_busy_nk = hit_nk && busy_way[hit_way];
+    assign s1_first    = ~s1_ptag_v;
 
     always @(*) begin
         s1_can_go = 1'b0;
         if (s1_valid && s1_data_ok) begin
             if (s1_is_fence) begin
-                s1_can_go = all_idle;
+                s1_can_go = all_idle && !s1_first;
             end else if (s1_is_flush) begin
-                s1_can_go = (fl_state == FL_IDLE) && all_idle;
+                s1_can_go = (fl_state == FL_IDLE) && all_idle && !s1_first;
             end else if (!s1_cacheable) begin
-                s1_can_go = (u_state == U_IDLE);
+                s1_can_go = (u_state == U_IDLE) && !s1_first;
             end else if (s1_is_stwthr) begin
                 // write through: the bus write slot must be free. A line that
                 // is being filled has to be waited for, otherwise the fill
                 // would overwrite the new value with the old memory word.
-                s1_can_go = !sw_busy && !fl_busy &&
+                s1_can_go = !sw_busy && !fl_busy && !s1_first &&
                             (hit_nk ? (!hit_busy_nk && !fill_beat_now) : !ms_match);
             end else if (hit_nk) begin
                 // writing accesses need the array and the tag write port;
@@ -728,10 +737,10 @@ module DCACHE
             end else if (s1_needs_line) begin
                 s1_can_go = 1'b0;                     // wait for the fill, then retry
             end else if (ms_match) begin
-                s1_can_go = !ms_locked[ms_match_id] && ms_attach_ok;
+                s1_can_go = !ms_locked[ms_match_id] && ms_attach_ok && !s1_first;
             end else begin
                 s1_can_go = !ms_full && victim_avail && !(victim_dirty && wb_full) &&
-                            !fl_busy;
+                            !fl_busy && !s1_first;
             end
         end
     end
@@ -744,6 +753,7 @@ module DCACHE
     // Stage 1 array write (store / AMO / SC hit)
     //=================================================================
     logic                  s1_store_hit, s1_thr_hit;
+    logic                  s1_store_hit_nk;      // as if not taken back
     logic [63:0]           s1_wr_data, amo_result;
     logic [7:0]            s1_wr_strb;
     logic [WAY_BITS-1:0]   s1_wr_way;
@@ -778,7 +788,7 @@ module DCACHE
             amo_old_r <= 64'd0;
         end else if ((d_req_valid && d_req_ready) || !s1_data_ok) begin
             s1_amo_rd <= 1'b0;
-        end else if (s1_valid && s1_cacheable && s1_is_amo && hit && !s1_amo_rd) begin
+        end else if (s1_valid && s1_cacheable && s1_is_amo && hit_nk && !s1_amo_rd) begin
             s1_amo_rd <= 1'b1;
             amo_old_r <= amo_old;
         end
@@ -786,17 +796,19 @@ module DCACHE
 
     always @(*) begin
         s1_store_hit = 1'b0;
+        s1_store_hit_nk = s1_valid && s1_data_ok && s1_cacheable && hit_nk && s1_can_go &&
+                          s1_writes;
         s1_thr_hit   = 1'b0;
         s1_wr_way    = hit_way;
         s1_wr_addr   = {addr_index(s1_addr), addr_woff(s1_addr)};
         s1_wr_strb   = size_strb(s1_addr[2:0], s1_size);
-        s1_wr_data   = align_wdata(s1_addr[2:0], s1_wdata);
-        if (s1_valid && s1_data_ok && s1_cacheable && hit && s1_can_retire && s1_writes) begin
+        // the data does not depend on the take back, only the enable does
+        s1_wr_data   = s1_is_amo ? amo_wr : align_wdata(s1_addr[2:0], s1_wdata);
+        if (s1_valid && s1_data_ok && s1_cacheable && hit && s1_can_go && s1_writes)
             s1_store_hit = 1'b1;
-            if (s1_is_amo) s1_wr_data = amo_wr;
-        end
-        // write through hit: update the data array, leave valid / dirty alone
-        if (s1_valid && s1_data_ok && s1_cacheable && hit && s1_can_retire && s1_is_stwthr)
+        // write through hit (never in the first cycle, so never taken back):
+        // update the data array, leave valid / dirty alone
+        if (s1_valid && s1_data_ok && s1_cacheable && hit_nk && s1_can_go && s1_is_stwthr)
             s1_thr_hit = 1'b1;
     end
 
@@ -837,6 +849,11 @@ module DCACHE
     //   3          flush invalidate    valid = 0
     //   4          store hit           dirty = 1
     //
+    // A store hit writes the port whether or not it was taken back: the tag
+    // and the valid bit it writes are the ones already there, and a store
+    // taken back writes the dirty bit it found (so only the value depends on
+    // the take back, not the enable of the port and its flip flops).
+    //
     // A copy of the tag array for the probe hit test (6.4.3) is written from
     // exactly this bundle, so it stays in step without any further logic.
     //=================================================================
@@ -861,8 +878,9 @@ module DCACHE
             tag_wr_tag   = '0;
             tag_wr_valid = 1'b0;
             tag_wr_dirty = 1'b0;
-        end else if (s1_store_hit) begin
+        end else if (s1_store_hit_nk) begin
             tag_wr_en    = 1'b1;
+            tag_wr_dirty = s1_kill ? eff_dirty[hit_way] : 1'b1;
         end
     end
 
@@ -1081,12 +1099,16 @@ module DCACHE
             //---------------------------------------------------------
             // stage 1 : execute
             //---------------------------------------------------------
+            // Taken back by the CPU (first cycle only): it only has to leave
+            // the buffer. A hit goes through the branch below as well, but
+            // whatever it would change outside the buffer and its data is
+            // held back by s1_kill there; nothing else runs in that cycle
+            // (s1_can_go).
             if (s1_kill) begin
-                // taken back by the CPU: it only has to leave the buffer
                 rob_done[s1_rob]   <= 1'b1;
                 rob_silent[s1_rob] <= 1'b1;
             end
-            else if (s1_valid && s1_data_ok && s1_can_retire) begin
+            if (s1_valid && s1_data_ok && s1_can_go) begin
                 if (s1_is_fence) begin
                     rob_done[s1_rob] <= 1'b1;
                 end
@@ -1142,16 +1164,18 @@ module DCACHE
                     // to whatever request had the entry by then.
                     if (res_valid && (res_line == s1_line)) res_valid <= 1'b0;
                 end
-                else if (hit) begin
+                else if (hit_nk) begin
                     rob_done[s1_rob] <= 1'b1;
                     if (s1_is_load | s1_is_lr | s1_is_amo)
                         rob_data[s1_rob] <= extract(hit_word, s1_addr[2:0], s1_size);
                     // nothing older is waiting: answer now (see "response")
-                    s1_fast      = (s1_rob == rob_head);
+                    s1_fast      = (s1_rob == rob_head) && !s1_kill;
                     s1_fast_data = s1_is_sc ? (sc_ok ? 64'd0 : 64'd1)
                                  : (s1_is_load | s1_is_lr | s1_is_amo)
                                    ? extract(hit_word, s1_addr[2:0], s1_size) : 64'd0;
-                    if (s1_is_lr) begin
+                    if (s1_kill) begin
+                        // nothing on the reservation
+                    end else if (s1_is_lr) begin
                         res_valid <= 1'b1;
                         res_line  <= s1_line;
                     end else if (s1_is_sc) begin
@@ -1214,10 +1238,11 @@ module DCACHE
             //   - AMO / LR / SC always (they are executed again as a hit)
             //   - load / store when the line is already being filled but its
             //     beat has passed, or the MSHR is locked by another store
-            if (s1_valid && s1_data_ok && !s1_can_retire && s1_cacheable &&
+            // (from the second cycle, like everything that is not a hit)
+            if (s1_valid && s1_data_ok && !s1_can_go && !s1_first && s1_cacheable &&
                 !s1_wait_fill && !fl_busy &&
-                (hit_busy || (!hit && (s1_needs_line || ms_match)))) begin
-                if (hit_busy) begin
+                (hit_busy_nk || (!hit_nk && (s1_needs_line || ms_match)))) begin
+                if (hit_busy_nk) begin
                     s1_wait_fill <= 1'b1;         // the way is being replaced
                 end else
                 if (ms_match) begin

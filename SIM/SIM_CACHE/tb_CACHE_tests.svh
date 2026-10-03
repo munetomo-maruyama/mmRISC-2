@@ -1059,11 +1059,33 @@
             repeat (4) @(posedge clk);
             check("(d) no reservation from an LR taken back",
                   u_cache.u_dcache.res_valid === 1'b0);
-            // an SC taken back does not write
+            // the same with the line in the cache: the LR is a hit, executed
+            // in the very cycle it is taken back
+            d_load ("(d) bring the line in", a_mem(44), 2'd3);
+            d_drain();
+            d_ghost(CMD_LR, a_mem(44), 2'd3, 64'd0);
+            d_drain();
+            repeat (4) @(posedge clk);
+            check("(d) no reservation from an LR hit taken back",
+                  u_cache.u_dcache.res_valid === 1'b0);
+            // an SC taken back does not write, and leaves the reservation
             d_push("(d) LR", CMD_LR, a_mem(44), 2'd3, 64'd0);
             d_ghost(CMD_SC, a_mem(44), 2'd3, 64'hDEAD_0000_0000_00D1);
             d_load ("(d) load after an SC taken back", a_mem(44), 2'd3);
             d_drain();
+            repeat (4) @(posedge clk);
+            check("(d) the reservation outlives an SC taken back",
+                  u_cache.u_dcache.res_valid === 1'b1);
+            // a store hit taken back on a clean line leaves it clean
+            d_flush("(d) clean everything");
+            d_drain();                    // the load would hit before the walk
+            d_load ("(d) a clean line", a_mem(46), 2'd3);
+            d_drain();
+            d_ghost(CMD_STORE, a_mem(46), 2'd3, 64'hDEAD_0000_0000_00D2);
+            d_drain();
+            repeat (4) @(posedge clk);
+            check("(d) no dirty line after a store taken back",
+                  u_cache.u_dcache.u_tag.dirty_bit === '0);
             // (e) uncached accesses taken back never reach the bus
             d_store("(e) uncached store", a_peri(5), 2'd3, 64'h1900_0000_0000_00E1);
             d_ghost(CMD_STORE, a_peri(5), 2'd3, 64'hDEAD_0000_0000_00E2);
