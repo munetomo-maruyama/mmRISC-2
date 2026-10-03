@@ -85,11 +85,12 @@ print(f"  {n} absolute paths in the tcl made relative ({rel})")
 PY
 fi
 
-# The SD card's PHY registers in the I/O blocks. LiteX leaves them in the
-# fabric and the pins carry no timing constraint, so where the placer puts
-# them -- and with it when the card's data is sampled -- changed from build
-# to build; one build read the card in the BIOS (slow clock) but got CRC
-# errors on every block in Linux (LitexSystem/docs/BRINGUP.md 13).
+# The SD card's output registers in the I/O blocks (the inputs are IDDRs,
+# which are there anyway). LiteX leaves the outputs in the fabric and the
+# pins carry no timing constraint, so where the placer put them -- and with
+# it the clock and the data the card sees -- changed from build to build;
+# one build read the card in the BIOS (slow clock) but got CRC errors on
+# every block in Linux (LitexSystem/docs/BRINGUP.md 13).
 XDC="$BUILD/gateware/digilent_arty.xdc"
 if [ -f "$XDC" ] && grep -q "sdcard_clk" "$XDC" && ! grep -q "IOB TRUE.*sdcard" "$XDC"; then
     cat >> "$XDC" <<'EOF2'
