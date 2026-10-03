@@ -158,7 +158,7 @@ module CPU_CORE
     // addresses.
     logic [63:0] btb_upd_pc, btb_upd_target;
     logic        btb_upd_is32, btb_upd_taken, btb_flush;
-    logic        btb_upd_call, btb_upd_ret;
+    logic        btb_upd_call, btb_upd_ret, btb_upd_cond;
     logic [63:0] fq_pc;
 
     // to and from the MMU
@@ -225,6 +225,7 @@ module CPU_CORE
             .btb_upd_taken  (btb_upd_taken),
             .btb_upd_call   (btb_upd_call),
             .btb_upd_ret    (btb_upd_ret),
+            .btb_upd_cond   (btb_upd_cond),
             .btb_flush      (btb_flush)
         );
 
@@ -1267,6 +1268,7 @@ module CPU_CORE
     assign ex_rs1_link  = (ex_rs1 == 5'd1) | (ex_rs1 == 5'd5);
     assign btb_upd_call = (ex_is_jal | ex_is_jalr) & ex_rd_link;
     assign btb_upd_ret  = ex_is_jalr & (ex_rd == 5'd0) & ex_rs1_link;
+    assign btb_upd_cond = ex_is_branch;
     assign btb_flush      = fencei_taken | sfence_taken;
 
     // a trap and an MRET come from the commit point and win
