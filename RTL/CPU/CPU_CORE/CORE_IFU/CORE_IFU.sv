@@ -39,6 +39,17 @@
 //   copies that one over the other, so a wrong path never leaves the stack
 //   behind it wrong for longer than until the redirect that ends it.
 //
+//   The global history of the gshare table (CORE_BTB) is kept the same way:
+//   hist_s for the predictions, hist_a for the updates. It records the
+//   direction of the conditional branches that have an entry of their own
+//   in the buffer, one bit each: the fetch side shifts in its prediction
+//   when it uses such an entry, the execute stage the outcome when the
+//   buffer says the entry is that branch's (upd_known). A branch without an
+//   entry is invisible to both. An entry only appears, or changes hands,
+//   for a taken branch that had none, which the fetch side cannot have
+//   predicted: the redirect that follows throws away everything fetched
+//   behind it and copies hist_a over hist_s, so the two agree again.
+//
 //   A prediction is never trusted to be about a real instruction boundary.
 //   The entry was written from a branch that really executed, but the same
 //   bytes can be decoded at another alignment if the program jumps into the
@@ -73,7 +84,9 @@ module CORE_IFU
         parameter int          PADDR_WIDTH  = 40,
         parameter logic [63:0] RESET_VECTOR = 64'h0000_0000_8000_0000,
         parameter int          PQ_DEPTH     = 16,     // parcels, power of two
-        parameter int          BTB_ENTRIES  = 256
+        parameter int          BTB_ENTRIES  = 256,
+        parameter int          PHT_ENTRIES  = 8192,
+        parameter int          HIST_BITS    = 12
     )
     (
         input  logic                    clk,
@@ -121,6 +134,7 @@ module CORE_IFU
         input  logic                    btb_upd_taken,
         input  logic                    btb_upd_call,  // jal / jalr writing ra or t0
         input  logic                    btb_upd_ret,   // jalr x0 through ra or t0
+        input  logic                    btb_upd_cond,  // a conditional branch
         input  logic                    btb_flush    // fence.i, sfence.vma
     );
 
@@ -177,6 +191,12 @@ module CORE_IFU
     logic                a_push, a_pop;
     logic [63:0]         a_link;
 
+    //-----------------------------------------------------------------
+    // global history of the gshare table (taken transfers only)
+    //-----------------------------------------------------------------
+    logic [HIST_BITS-1:0] hist_s, hist_a, hist_a_next;
+    logic                 btb_cond, btb_known, pred_ok;
+
     // one record per request that is in the cache
     logic        pr_valid  [0:OS_DEPTH-1];
     logic        pr_cancel [0:OS_DEPTH-1];   // refused by the PMP : no answer comes
@@ -211,11 +231,12 @@ module CORE_IFU
     //   predicted, and the parcels of the instruction that is really there
     //   would be thrown away.
     //-----------------------------------------------------------------
-    CORE_BTB #(.ENTRIES(BTB_ENTRIES)) u_btb
+    CORE_BTB #(.ENTRIES(BTB_ENTRIES), .PHT_ENTRIES(PHT_ENTRIES), .HIST_BITS(HIST_BITS)) u_btb
         (
             .clk        (clk),
             .rst_n      (rst_n),
             .look_pc    (fetch_pc),
+            .look_hist  (hist_s),
             .hit        (btb_hit),
             .hit_off    (btb_off),
             .hit_is32   (btb_is32),
@@ -228,6 +249,10 @@ module CORE_IFU
             .upd_taken  (btb_upd_taken),
             .upd_call   (btb_upd_call),
             .upd_ret    (btb_upd_ret),
+            .upd_cond   (btb_upd_cond),
+            .upd_hist   (hist_a),
+            .hit_cond   (btb_cond),
+            .upd_known  (btb_known),
             .hit_tail   (btb_tail),
             .hit_call   (btb_call),
             .hit_ret    (btb_ret),
@@ -236,10 +261,12 @@ module CORE_IFU
 
     // A tail belongs to a branch that began in the word before; it means
     // nothing when this word was jumped into, even at parcel 0.
-    assign use_pred = req_want & tr_ready & (tr_fault == 2'd0) &
-                      btb_hit & btb_taken & ~no_pred &
+    // pred_ok : the entry is about an instruction this fetch delivers
+    assign pred_ok  = req_want & tr_ready & (tr_fault == 2'd0) &
+                      btb_hit & ~no_pred &
                       (btb_tail ? (seq_fetch & (next_start == 2'd0))
                                 : (btb_off >= next_start));
+    assign use_pred = pred_ok & btb_taken;
 
     assign pred_target = btb_ret ? ras_s[sp_s - RAS_BITS'(1)] : btb_target;
     assign pred_last   = btb_tail ? 2'd0 : (btb_off + {1'b0, btb_is32});
@@ -250,6 +277,8 @@ module CORE_IFU
     assign a_push    = btb_upd_valid & btb_upd_call;
     assign a_pop     = btb_upd_valid & btb_upd_ret;
     assign a_link    = btb_upd_pc + (btb_upd_is32 ? 64'd4 : 64'd2);
+    assign hist_a_next = (btb_upd_valid && btb_upd_cond && btb_known)
+                         ? {hist_a[HIST_BITS-2:0], btb_upd_taken} : hist_a;
     assign sp_a_next = sp_a + (a_push ? RAS_BITS'(1) : RAS_BITS'(0))
                             - (a_pop  ? RAS_BITS'(1) : RAS_BITS'(0));
 
@@ -351,6 +380,8 @@ module CORE_IFU
             seq_fetch   <= 1'b0;
             sp_s        <= '0;
             sp_a        <= '0;
+            hist_s      <= '0;
+            hist_a      <= '0;
             for (int i = 0; i < RAS_DEPTH; i++) ras_s[i] <= 64'd0;
             for (int i = 0; i < RAS_DEPTH; i++) ras_a[i] <= 64'd0;
             for (int i = 0; i < OS_DEPTH; i++) pr_valid[i] <= 1'b0;
@@ -364,6 +395,7 @@ module CORE_IFU
             // the return address stack of the execute stage
             if (a_push) ras_a[sp_a] <= a_link;
             sp_a <= sp_a_next;
+            hist_a <= hist_a_next;
 
             if (redirect_valid || self_redirect) begin
                 // a misfetch keeps the address it was trying to reach and
@@ -380,6 +412,7 @@ module CORE_IFU
                 for (int i = 0; i < RAS_DEPTH; i++)
                     ras_s[i] <= (a_push && (RAS_BITS'(i) == sp_a)) ? a_link : ras_a[i];
                 sp_s     <= sp_a_next;
+                hist_s   <= hist_a_next;
                 pq_head  <= '0;
                 pq_tail  <= '0;
                 pq_count <= '0;
@@ -397,6 +430,8 @@ module CORE_IFU
                     no_pred    <= 1'b0;
                     seq_fetch  <= ~use_pred;
                 end
+                if (push_req && pred_ok && btb_cond)
+                    hist_s <= {hist_s[HIST_BITS-2:0], btb_taken};
                 if (push_req && use_pred) begin
                     if (btb_call) begin
                         ras_s[sp_s] <= pred_link;

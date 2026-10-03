@@ -23,12 +23,26 @@
 //     addresses, which only the return address stack gets right.
 //     Reference: each caller has a function of its own, called through t1
 //     (not a link register, so the stack has no part in it)
-//   4 g calls h, and after h has returned, a branch in g goes the other way
-//     every time: the misprediction restores the fetch side's stack from the
-//     execute stage's, which must still hold g's return. Reference: the same
-//     through t1 / t2
+//   4 g calls h, and after h has returned, a branch in g goes one way or
+//     the other after the bits of a constant, which no history predicts:
+//     the mispredictions restore the fetch side's stack from the execute
+//     stage's, which must still hold g's return. (It went the other way
+//     every time until the gshare table learned that pattern, 2026-10.)
+//     Reference: the same through t1 / t2
 //   5 recursion twelve deep, deeper than the stack: the result must still
 //     be right
+//   6 a branch that is taken every other time, which only the global
+//     history of the gshare table (CPU_CORE_SPEC.md 4.2) gets right: a
+//     counter of its own is wrong half the time. A branch that is never
+//     taken, and so never has an entry, sits in the loop too: neither side
+//     of the history may count it. Reference: the same instructions without
+//     the branches, written out 200 times, which no prediction can slow
+//     down (the loop's own reference would suffer from a broken history as
+//     much as the loop itself)
+//   7 one jalr (not a call, not a return) that goes to A ten times and
+//     then to B ninety times: the entry must follow the new target.
+//     Reference: two jalr, each always to the same place, and callees of
+//     its own (their returns would otherwise have learned part 7's)
 //
 // Built with the C extension (MARCH_t24_predict); .option norvc keeps the
 // assembler from compressing, and the c.nop are written out as halfwords so
@@ -41,6 +55,13 @@
 // fail with check n unless part <= reference * 5 / 4
 #define WITHIN(n, part, ref)        \
     srli x22, ref, 2;               \
+    add  x22, x22, ref;             \
+    li   gp, n;                     \
+    bgtu part, x22, fail;
+
+// the same, unless part <= reference * 9 / 8
+#define WITHIN8(n, part, ref)       \
+    srli x22, ref, 3;               \
     add  x22, x22, ref;             \
     li   gp, n;                     \
     bgtu part, x22, fail;
@@ -165,6 +186,7 @@ _start:
     //--------------------------------------------------------------
     li   x18, 0
     li   x16, 100
+    li   x29, 0x9E3779B97F4A7C15
     csrr x20, mcycle
     j    5f
     .balign 8
@@ -174,11 +196,12 @@ _start:
     csrr x21, mcycle
     sub  x24, x21, x20
     BENCH_MARK(6, x24)
-    TEST_EQ(12, x18, 150)             // h: 100, g's branch: 50
+    TEST_EQ(12, x18, 158)             // h: 100, g's branch: 58 ones
 
     // reference: the same through t1 / t2
     li   x18, 0
     li   x16, 100
+    li   x29, 0x9E3779B97F4A7C15
     csrr x20, mcycle
     j    5f
     .balign 8
@@ -188,8 +211,10 @@ _start:
     csrr x21, mcycle
     sub  x25, x21, x20
     BENCH_MARK(7, x25)
-    TEST_EQ(13, x18, 150)
-    WITHIN(14, x24, x25)
+    TEST_EQ(13, x18, 158)
+    // a stack that the mispredictions leave wrong costs some 16 % here
+    // (with or without back pressure); right, part and reference are equal
+    WITHIN8(14, x24, x25)
 
     //--------------------------------------------------------------
     // 5 deeper than the stack
@@ -198,7 +223,128 @@ _start:
     jal  ra, rec
     TEST_EQ(15, a0, 78)               // 12 + 11 + ... + 1
 
+    //--------------------------------------------------------------
+    // 6 taken every other time
+    //--------------------------------------------------------------
+    li   x26, 1
+    jal  ra, alt6
+    BENCH_MARK(8, x25)
+    mv   x24, x25
+    TEST_EQ(16, x19, 100)
+    // reference: written out, no branch at all
+    li   x10, 0
+    li   x19, 0
+    csrr x20, mcycle
+    .rept 200
+    and  x23, x10, x26
+    nop
+    nop
+    nop
+    addi x19, x19, 1
+    nop
+    addi x10, x10, 1
+    .endr
+    csrr x21, mcycle
+    sub  x25, x21, x20
+    BENCH_MARK(9, x25)
+    TEST_EQ(17, x19, 200)
+    WITHIN(18, x24, x25)
+
+    //--------------------------------------------------------------
+    // 7 one jalr, a new target
+    //--------------------------------------------------------------
+    li   x17, 0
+    csrr x20, mcycle
+    la   x28, f7a
+    li   x16, 10
+    jal  ra, call7
+    la   x28, f7b
+    li   x16, 90
+    jal  ra, call7
+    csrr x21, mcycle
+    sub  x24, x21, x20
+    BENCH_MARK(10, x24)
+    TEST_EQ(19, x17, 10 + 90 * 16)
+    // reference: each target its own jalr
+    li   x17, 0
+    csrr x20, mcycle
+    la   x28, f7ra
+    li   x16, 10
+    jal  ra, call7a
+    la   x28, f7rb
+    li   x16, 90
+    jal  ra, call7b
+    csrr x21, mcycle
+    sub  x25, x21, x20
+    BENCH_MARK(11, x25)
+    TEST_EQ(20, x17, 10 + 90 * 16)
+    WITHIN(21, x24, x25)
+
     TEST_DONE
+
+    // 200 rounds; the branch is taken when x10 & x26 is 0. Out: x25 the
+    // cycles, x19 the rounds that fell through. The branches are in words
+    // of their own (one entry per word).
+    .balign 8
+alt6:
+    li   x10, 0
+    li   x11, 200
+    li   x19, 0
+    csrr x20, mcycle
+    j    1f
+    .balign 8
+1:  and  x23, x10, x26                // word A
+    bltz x10, fail                    // word A + 4 : never taken
+    beqz x23, 2f                      // word B
+    nop
+    addi x19, x19, 1                  // word C, the fall through
+    nop
+2:  addi x10, x10, 1                  // word D
+    bne  x10, x11, 1b
+    csrr x21, mcycle
+    sub  x25, x21, x20
+    ret
+
+    // part 7: x16 calls through x28 from one jalr (t1 is not a link
+    // register, so neither the call nor the return is one for the stack)
+    .balign 8
+call7:
+    .balign 8
+1:  jalr t1, 0(x28)
+    addi x16, x16, -1
+    bnez x16, 1b
+    ret
+    .balign 8
+call7a:
+    .balign 8
+1:  jalr t1, 0(x28)
+    addi x16, x16, -1
+    bnez x16, 1b
+    ret
+    .balign 8
+call7b:
+    .balign 8
+1:  jalr t1, 0(x28)
+    addi x16, x16, -1
+    bnez x16, 1b
+    ret
+    .balign 8
+f7a:
+    addi x17, x17, 1
+    jalr x0, 0(t1)
+    .balign 8
+f7b:
+    addi x17, x17, 16
+    jalr x0, 0(t1)
+    // the reference's own, so that their returns always go to one place
+    .balign 8
+f7ra:
+    addi x17, x17, 1
+    jalr x0, 0(t1)
+    .balign 8
+f7rb:
+    addi x17, x17, 16
+    jalr x0, 0(t1)
 
     //--------------------------------------------------------------
     // part 2: the word with the branch across it, and its copy
@@ -239,8 +385,9 @@ f3b:addi x17, x17, 1
 g4: addi sp, sp, -16
     sd   ra, 0(sp)
     jal  ra, h4
-    andi x19, x16, 1
-    beqz x19, 1f                      // taken every other time
+    srl  x19, x29, x16                // bit x16 of the constant
+    andi x19, x19, 1
+    beqz x19, 1f
     addi x18, x18, 1
 1:  ld   ra, 0(sp)
     addi sp, sp, 16
@@ -253,7 +400,8 @@ h4: addi x18, x18, 1
 g4r:addi sp, sp, -16
     sd   t1, 0(sp)
     jal  t2, h4r
-    andi x19, x16, 1
+    srl  x19, x29, x16
+    andi x19, x19, 1
     beqz x19, 1f
     addi x18, x18, 1
 1:  ld   t1, 0(sp)
