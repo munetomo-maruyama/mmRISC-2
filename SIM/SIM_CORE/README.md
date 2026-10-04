@@ -29,7 +29,7 @@
 | `make mdu` | `CORE_MDU` を参照モデルと突き合わせる(`tb_MDU.sv`、既定 20 万演算)。境界値のオペランド、サイクル数(MUL / MULW は 1、MULH 系は 2)、答えを遅れて受け取る場合、途中の kill。プログラムからは選べないものを見る |
 | `make clint` | `CPU_CLINT` を 4 ハート構成で直接叩く(`tb_CLINT.sv`)。単一コアのプログラムからは届かないレジスタマップの検査 |
 | `make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / uzba / uzbb / mi)。`RVTESTS` でリポジトリの場所を指定 |
-| `make bugs` / `./bug_inject.sh` | バグ注入 254 種(背圧あり/なしの両方で判定。M211〜M231 はデバッグモード、M240 以降は EX からの早出し。`CORE_MDU` の変異は `tb_MDU` でも判定) |
+| `make bugs` / `./bug_inject.sh` | バグ注入 271 種(背圧あり/なしの両方で判定。M211〜M231 はデバッグモード、M298〜M314 はトリガ、M240 以降は EX からの早出し。`CORE_MDU` の変異は `tb_MDU` でも判定) |
 | `make lint` | Verilator lint |
 
 プラスアーグ:
@@ -74,13 +74,14 @@ x10〜x30 だけを使うこと。`TEST_INIT` が既定のトラップハンド�
 | `t09_muldiv` | 乗除算の符号、ゼロ除算、オーバーフロー、32bit 形 |
 | `t10_atomic` | LR/SC と全 AMO の 32/64bit、不整列 |
 | `t11_fp` | `mstatus.FS`、NaN-boxing、`fcsr`/丸めモード、FP ストアのデータ源、FPU と他ユニットのハザード |
-| `t23_debug` | デバッグモード。テストベンチ内のデバッガ(`tb_CORE.sv` の debugger)が DM の代わりにコアの `dbg_*` を動かし、リセット直後の halt、ループ中の halt と step、EBREAK、GPR/FPR/CSR の読み書き(32bit 書き込み、エラー)、割り込みが保留中の step、ECALL の step、WFI 中の halt、U モードへの resume を検査する。この試験名のときだけデバッガが動く |
+| `t23_debug` | デバッグモード。テストベンチ内のデバッガ(`tb_CORE.sv` の debugger)が DM の代わりにコアの `dbg_*` を動かし、リセット直後の halt、ループ中の halt と step、EBREAK、GPR/FPR/CSR の読み書き(32bit 書き込み、エラー)、割り込みが保留中の step、ECALL の step、WFI 中の halt、U モードへの resume、デバッガのトリガ(dmode・action 1 の実行トリガとロードトリガを U モードで。命令・ロードの手前で止まり、hit が立ち、トラップしない。プログラムからはそのトリガを書き換えられない)を検査する。この試験名のときだけデバッガが動く |
 | `t24_predict` | 分岐予測(ワードをまたぐ 32bit 分岐の tail エントリ、飛び込んだワードでは tail を使わないこと、戻りアドレススタック、1 回おきに成立する分岐 ―― gshare の履歴が無いと半分外れる)。予測が外れても結果は同じなので、同じ実行の中で予測に頼らない参照と時間を比べ、1.25 倍を超えたら不合格 |
 | `t25_lsu` | EX から早出しした要求(`CPU_CORE_SPEC.md` 5.4): 取り消したストアの後ろのロード、トラップ時に飛んでいる答え、トラップの後ろの PLIC の claim(副作用のある I/O ロードは前の命令の確定を待つ)、ハンドラが飛ばすストア |
 | `t26_late` | ロードの値で分岐する条件分岐(MR で確定する「遅い分岐」、`CPU_CORE_SPEC.md` 決定 64): 6 種の比較 × ロードが rs1 / rs2 / 両方、予測の当たり外れの両方向、外れたときに EX にいたストア・フォールトするロード・除算・CSR 書き込みが何も残さないこと、遅い分岐のすぐ後ろの分岐、ロードがフォールトしたときトラップが勝つこと、遅い分岐の後ろで待つループの分岐の時間(待たないと BTB が学ばない)、ロードした番地への jalr(こちらは EX で待つ) |
 | `t27_fence` | FENCE(`CPU_CORE_SPEC.md` 5.3): 全種のエンコーディング(`fence.tso`、`pause`、予約フィールドが立ったものはトラップせず rd も書かない)、ストア・キャッシュしないストア / ロードのすぐ後ろ、ロードの答えが捨てられる途中のトラップハンドラの先頭。前のアクセスが終わる前に FENCE が出ないことはテストベンチが毎回確かめる |
 | `t28_bitmanip` | Zba / Zbb(`CPU_CORE_SPEC.md` 決定 65)を Python のモデルと突き合わせる(`tools/gen_t28.py` が作る。手で書き換えない)。47 の命令・即値のそれぞれについて、端の値 8 個の組と xorshift64 の 32 組を回し、結果を回転・xor・乗算でまとめたチェックサムを比べる。新しい符号の隣(PACKW、未定義の単項演算、Zbs)が不正命令のままであること |
 | `t29_sstc` | Sstc と特権仕様 1.12 の CSR(`CPU_CORE_SPEC.md` 決定 66): `menvcfg` / `senvcfg` / `mcountinhibit` の実装フィールド、CY / IR でカウンタが止まること、STCE の有無で `mip.STIP` が書けるビットか比較かが変わること、S からの `stimecmp` が STCE と `mcounteren.TM` の両方を要ること、`stimecmp` からの S タイマ割り込みを S モードで受けること |
+| `t30_trig` | Sdtrig の例外を起こすトリガ(`CPU_CORE_SPEC.md` 決定 67): `tselect` / `tdata1` / `tdata2` / `tdata3` / `tinfo` / `tcontrol` の読み書き、M モードの実行トリガと `tcontrol.MTE` / MPTE、ハンドラ内では発火しないこと、ロード・ストア・AMO のトリガ(アクセスが起きない、mtval、完全一致、不整列より優先)、m / s / u ビット(S・U モード)、捨てられる経路(予測ミスの後ろ、ECALL の後ろの命令とロード)では発火も hit も無いこと、不正命令より優先すること |
 
 ## テストベンチが自動で見ているもの
 

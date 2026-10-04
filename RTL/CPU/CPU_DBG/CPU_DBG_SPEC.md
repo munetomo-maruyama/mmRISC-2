@@ -27,7 +27,7 @@ OpenOCDからJTAG経由でアクセスできることをシミュレーション
 | ハートの halt / resume / step / reset | **本実装**: CPU_CORE のデバッグモード。BFM 構成では疑似ハート |
 | コアデバッグCSR (dcsr/dpc/dscratch, 4.9) | **本実装**: CORE_CSR(デバッガからのみ見える)。BFM 構成では疑似ハート |
 | Program Buffer (3.8) | 実装しない(progbufsize=0) |
-| Trigger Module / Sdtrig (5章) | 実装しない(CPU本体実装後に検討) |
+| Trigger Module / Sdtrig (5章) | **CPU_CORE に実装**(type 2 を 4 本、`CPU_CORE_SPEC.md` 決定 67)。DM 側には何も要らない(トリガの CSR は Access Register で読み書きする)。BFM 構成の疑似ハートには無い |
 | Quick Access (3.7.1.2) | 実装しない(cmderr=2) |
 | cJTAG (IEEE 1149.7 OScan1) | **本実装**(JTAGと切り替え、7章・3.6) |
 | 認証 (authdata, 3.12) | **本実装**(有効/無効と鍵をCPU_TOP外部から入力、4.7) |
@@ -260,7 +260,7 @@ CSR が存在しない、読み出し専用の CSR に書く、範囲外の regn
 | `0x07B0` | dcsr | debugver=4、prv(WARL: 0/1/3)、step、ebreakm/s/u、cause(RO) |
 | `0x07B1` | dpc | |
 | `0x07B2`,`0x07B3` | dscratch0 / dscratch1 | |
-| `0x07A0`–`0x07A5` | tselect 等 | **未実装: cmderr=3**(OpenOCDはトリガ0個と判断する) |
+| `0x07A0`–`0x07A5` | tselect 等 | 疑似ハートには無い: cmderr=3(OpenOCDはトリガ0個と判断する)。本物のコアにはある |
 | 上記以外 | | cmderr=3 |
 
 ### 4.5 Access Memory
@@ -610,7 +610,7 @@ FPGA確認(Arty A7-100T): OpenOCD から上記8と同じ操作、および `load
 
 OpenOCD が出す `Unable to insert program into progbuf` は無害(progbufsize=0 のため)。
 - examine 時の2回。
-- 最初の resume / step のトリガ列挙時(tselect が cmderr=3)。
+- 最初の resume / step のトリガ列挙時(疑似ハートのみ。tselect が cmderr=3)。
 
 ### 10.6 FPGA 確認手順
 

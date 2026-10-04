@@ -90,12 +90,20 @@ resume
   Linux のカーネル仮想アドレスをそのまま `mdw` しても読めない。物理アドレス
   (メモリは 0x8000_0000 から)で読むか、halt 中に `riscv set_enable_virt2phys on`
   にする(ページテーブルを OpenOCD が引く)。
-- **ソフトウェアブレークポイントのみ**。トリガ(Sdtrig)は無いので `bp <addr> 4` は
-  EBREAK の書き込みになる(`hw` 指定は不可)。書き込みは D$ に入り、`CPU_TOP` が I$ を
-  無効化するので、そのまま効く。
+- **ブレークポイント**。`bp <addr> 4` は EBREAK の書き込みになる(ソフトウェア
+  ブレークポイント)。書き込みは D$ に入り、`CPU_TOP` が I$ を無効化するので、そのまま効く。
+  `bp <addr> 4 hw`(gdb の `hbreak`)はトリガ(Sdtrig、4 本)を使い、命令を書き換えない
+  (ROM や、書き換えたくない場所にも置ける)。OpenOCD は接続時に `Found 4 triggers` と出す。
+- **ウォッチポイント**(`wp <addr> <len> r|w|a`、gdb の `watch` / `rwatch` / `awatch`)。
+  アクセスの手前で止まり、ストアはまだ書かれていない(resume すると OpenOCD がトリガを
+  外して 1 命令進めてから付け直す)。トリガは**アドレスの完全一致だけ**なので、範囲の
+  先頭アドレスへのアクセスでしか止まらない(OpenOCD は `Could not set a trigger that will
+  match a whole address range` と警告する)。8 バイトの変数なら、その先頭への `ld` / `sd`
+  では止まるが、途中のバイトへの `sb` では止まらない。トリガは 4 本で、ハードウェア
+  ブレークポイントと合わせて数える。
 - **Program Buffer は無い**(`progbufsize=0`)。接続時と最初の step の前に
-  `Unable to insert program into progbuf` が 3 行出る。OpenOCD が、このコアに無い
-  CSR(vlenb、mtopi、tselect)を探して Program Buffer を試した跡で、害はない。
+  `Unable to insert program into progbuf` が 2 行出る。OpenOCD が、このコアに無い
+  CSR(vlenb、mtopi)を探して Program Buffer を試した跡で、害はない。
 - step 中は割り込みを取らない(`dcsr.stepie=0`)。Linux のアイドル(WFI)で halt
   すると、WFI を終えた次の命令で止まる。止めている間も `mtime` は進むので、
   resume 直後にタイマ割り込みがまとめて来る。
@@ -123,6 +131,6 @@ dmstatus=0x3 は version=3(Debug Spec 1.0)で authenticated=0 の値。
 | 環境 | 内容 |
 |---|---|
 | `SIM/SIM_CORE` `t23_debug` | コア単体。テストベンチのデバッガがコアの `dbg_*` を直接動かす。変異 M211–M231 |
-| `SIM/SIM_OCD` | `RTL/TOP/TOP.sv`(本物のコアがハート)と OpenOCD の協調シミュレーション。halt、GPR/FPR/CSR、メモリ(メモリバス・周辺バス)、load_image、step、ソフトウェアブレークポイント、reset halt。認証ありでも同じ |
+| `SIM/SIM_OCD` | `RTL/TOP/TOP.sv`(本物のコアがハート)と OpenOCD の協調シミュレーション。halt、GPR/FPR/CSR、メモリ(メモリバス・周辺バス)、load_image、step、ソフトウェアブレークポイント、ハードウェアブレークポイント、ウォッチポイント(ストア・ロード)、reset halt。認証ありでも同じ |
 | `SIM/SIM_DBG` | デバッグ論理そのもの(TAP、DTM、DM、cJTAG、SBA)、3026 項目 |
 | 実機 | `scripts/jtag_check.tcl`(上記)。JTAG / cJTAG × 認証なし / あり の 4 通りで PASS、誤った鍵の拒否も確認(2026-10-01) |

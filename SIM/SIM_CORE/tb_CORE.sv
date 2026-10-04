@@ -437,6 +437,14 @@ module tb_CORE;
     //     the first instruction of the handler
     //   4 halt request while WFI waits: the WFI completes, dpc is behind it;
     //     resumed in user mode through dcsr.prv
+    //   5 triggers (Sdtrig), set up at the halt of 4 as gdb's hbreak and
+    //     watch do through OpenOCD: dmode, action 1, in user mode. The
+    //     execute trigger halts in front of its instruction (cause 2), the
+    //     load trigger in front of the load, which has not written its
+    //     register; hit is set, no trap is taken; tdata1 written to 0 takes
+    //     a trigger away, one with dmode and nothing on keeps it for the
+    //     debugger: tdata1 / tdata2 of a dmode trigger can be written by the
+    //     debugger only (the program checks that)
     //=================================================================
     localparam logic [15:0] R_MSTATUS  = 16'h0300;
     localparam logic [15:0] R_MTVEC    = 16'h0305;
@@ -447,6 +455,10 @@ module tb_CORE;
     localparam logic [15:0] R_DCSR     = 16'h07B0;
     localparam logic [15:0] R_DPC      = 16'h07B1;
     localparam logic [15:0] R_DSCRATCH0= 16'h07B2;
+    localparam logic [15:0] R_TSELECT  = 16'h07A0;
+    localparam logic [15:0] R_TDATA1   = 16'h07A1;
+    localparam logic [15:0] R_TDATA2   = 16'h07A2;
+    localparam logic [15:0] R_MTVAL    = 16'h0343;
     function automatic logic [15:0] R_X(input int n); return 16'h1000 + n; endfunction
     function automatic logic [15:0] R_F(input int n); return 16'h1020 + n; endfunction
 
@@ -574,8 +586,8 @@ module tb_CORE;
             dbg_check(110, dr_err, "write to mhartid did not fail");
             dbg_rd(16'h2000);                                 // no such register
             dbg_check(111, dr_err, "regno 0x2000 did not fail");
-            dbg_rd(16'h07A5);                                 // no such CSR
-            dbg_check(112, dr_err, "CSR 0x7a5 did not fail");
+            dbg_rd(16'h07A6);                                 // no such CSR
+            dbg_check(112, dr_err, "CSR 0x7a6 did not fail");
             dbg_rd(R_X(10));                                  // no error sticks
             dbg_check(113, !dr_err, "error after an error");
             dbg_resume(114);
@@ -690,7 +702,59 @@ module tb_CORE;
             dbg_wr(R_DCSR, 64'h8000);                        // go on in user mode
             dbg_rd(R_DCSR);
             dbg_check(405, dr_data[1:0] == 2'd0, "dcsr.prv written");
+
+            //---------------------------------------------------------
+            // 5 triggers: an execute and a load trigger, dmode, action 1
+            //---------------------------------------------------------
+            dbg_rd(R_X(22));                                  // the instruction
+            bp = dr_data;
+            dbg_wr(R_TSELECT, 64'd0);
+            dbg_wr(R_TDATA1, 64'h2800_0000_0000_100C);        // dmode, action 1, u, execute
+            dbg_wr(R_TDATA2, bp);
+            dbg_rd(R_TDATA1);
+            dbg_check(501, !dr_err && dr_data == 64'h2800_0000_0000_100C,
+                      $sformatf("tdata1 %016h", dr_data));
+            dbg_rd(R_X(23));                                  // the data
+            v = dr_data;
+            dbg_wr(R_TSELECT, 64'd3);
+            dbg_wr(R_TDATA1, 64'h2800_0000_0000_1009);        // dmode, action 1, u, load
+            dbg_wr(R_TDATA2, v);
+            dbg_rd(R_TDATA2);
+            dbg_check(502, !dr_err && dr_data == v, "tdata2");
+            dbg_wr(R_MCAUSE, 64'd0);                          // no trap from here on
             dbg_resume(406);
+
+            dbg_wait_halted(503);
+            dbg_cause(504, 2);
+            dbg_rd(R_DPC);
+            dbg_check(505, dr_data == bp, $sformatf("dpc %010h at the execute trigger %010h",
+                                                    dr_data, bp));
+            dbg_rd(R_DCSR);
+            dbg_check(506, dr_data[1:0] == 2'd0, "dcsr.prv at the trigger");
+            dbg_wr(R_TSELECT, 64'd0);
+            dbg_rd(R_TDATA1);
+            dbg_check(507, dr_data[20], "hit of the execute trigger");
+            dbg_wr(R_TDATA1, 64'h2800_0000_0000_1000);        // off, still the debugger's
+            dbg_rd(R_MCAUSE);
+            dbg_check(508, dr_data == 64'd0, "the trigger took a trap");
+            dbg_resume(509);
+
+            dbg_wait_halted(510);
+            dbg_cause(511, 2);
+            dbg_rd(R_X(24));                                  // the load
+            bp = dr_data;
+            dbg_rd(R_DPC);
+            dbg_check(512, dr_data == bp, $sformatf("dpc %010h at the load trigger %010h",
+                                                    dr_data, bp));
+            dbg_rd(R_X(25));
+            dbg_check(513, dr_data == 64'h1111, "the load wrote its register");
+            dbg_wr(R_TSELECT, 64'd3);
+            dbg_rd(R_TDATA1);
+            dbg_check(514, dr_data[20], "hit of the load trigger");
+            dbg_wr(R_TDATA1, 64'd0);
+            dbg_rd(R_MCAUSE);
+            dbg_check(515, dr_data == 64'd0, "the trigger took a trap");
+            dbg_resume(516);
         end
     end
 

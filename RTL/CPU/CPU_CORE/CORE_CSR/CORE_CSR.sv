@@ -21,6 +21,15 @@
 //   time >= stimecmp instead of a bit M mode writes. menvcfg, senvcfg and
 //   mcountinhibit came with it: they make the hart one of version 1.12 of
 //   the privileged specification, which is when OpenSBI looks for Sstc.
+//
+//   Sdtrig (2026-10, CPU_CORE_SPEC.md decision 67): TRIGGERS triggers of
+//   type 2 (mcontrol) behind tselect / tdata1 / tdata2, and tcontrol. Each
+//   matches the address of an instruction (execute) or of a load or store
+//   exactly, in the levels its m / s / u bits name, and raises a breakpoint
+//   exception (action 0) or enters debug mode (action 1, only for a trigger
+//   that belongs to the debugger, dmode). The core does the matching
+//   (trig_* below); this keeps the registers and sets hit when a trigger
+//   really fired.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -38,7 +47,9 @@ module CORE_CSR
         // does not provide still have to read as zero rather than raise an
         // illegal instruction. PMP_ENTRIES is how many actually check an
         // address; this is how many the software can see.
-        parameter int          PMP_CSRS    = 16
+        parameter int          PMP_CSRS    = 16,
+        // Sdtrig: number of triggers (type 2, mcontrol)
+        parameter int          TRIGGERS    = 4
     )
     (
         input  logic        clk,
@@ -122,7 +133,14 @@ module CORE_CSR
         output logic        dcsr_ebreakm,
         output logic        dcsr_ebreaks,
         output logic        dcsr_ebreaku,
-        output logic [63:0] dpc_out
+        output logic [63:0] dpc_out,
+
+        // Sdtrig: what each trigger matches, for the core
+        //   trig_cfg[8i +: 8] = {dmode, action, m, s, u, execute, store, load}
+        output logic [8*TRIGGERS-1:0]  trig_cfg,
+        output logic [64*TRIGGERS-1:0] trig_addr,  // tdata2
+        output logic        tcontrol_mte,          // M mode triggers of action 0 on
+        input  logic [TRIGGERS-1:0]    trig_fired  // set hit (with the trap / halt)
     );
 
     //-----------------------------------------------------------------
@@ -178,6 +196,12 @@ module CORE_CSR
     localparam logic [11:0] CSR_MIMPID    = 12'hF13;
     localparam logic [11:0] CSR_MHARTID   = 12'hF14;
     // debug mode only
+    localparam logic [11:0] CSR_TSELECT   = 12'h7A0;
+    localparam logic [11:0] CSR_TDATA1    = 12'h7A1;
+    localparam logic [11:0] CSR_TDATA2    = 12'h7A2;
+    localparam logic [11:0] CSR_TDATA3    = 12'h7A3;
+    localparam logic [11:0] CSR_TINFO     = 12'h7A4;
+    localparam logic [11:0] CSR_TCONTROL  = 12'h7A5;
     localparam logic [11:0] CSR_DCSR      = 12'h7B0;
     localparam logic [11:0] CSR_DPC       = 12'h7B1;
     localparam logic [11:0] CSR_DSCRATCH0 = 12'h7B2;
@@ -231,6 +255,19 @@ module CORE_CSR
     logic        inhibit_cy, inhibit_ir;
     logic [63:0] stimecmp;
     logic        stip_cmp;       // time >= stimecmp, one cycle late
+
+    // Sdtrig. A trigger has the fields of mcontrol that are not hard wired
+    // here: match is always 0 (equal; maskmax 0, no NAPOT), select / timing
+    // / size / chain are 0 (the address, before the access, any size, not
+    // chained), action is 0 or 1.
+    localparam int TSEL_BITS = (TRIGGERS > 1) ? $clog2(TRIGGERS) : 1;
+    logic [TSEL_BITS-1:0] tselect;
+    logic [TRIGGERS-1:0]  t_dmode, t_action, t_hit;
+    logic [TRIGGERS-1:0]  t_m, t_s, t_u, t_exec, t_store, t_load;
+    logic [63:0]          t_data2 [0:TRIGGERS-1];
+    logic                 tc_mte, tc_mpte;
+    logic [63:0]          tdata1_val;
+    logic                 t_writable;    // the selected trigger may be written
     logic [4:0]  fflags;
     logic [2:0]  frm;
 
@@ -354,6 +391,26 @@ module CORE_CSR
     assign scause_val = {scause_int, 58'd0, scause_code};
 
     //-----------------------------------------------------------------
+    // Sdtrig: tdata1 of the selected trigger (mcontrol, RV64)
+    //   63:60 type = 2   59 dmode   58:53 maskmax = 0   20 hit
+    //   15:12 action     6 m   4 s   3 u   2 execute   1 store   0 load
+    //-----------------------------------------------------------------
+    assign tdata1_val = {4'd2, t_dmode[tselect], 6'd0, 30'd0, 2'd0, t_hit[tselect],
+                         1'b0, 1'b0, 2'd0, {3'd0, t_action[tselect]}, 1'b0, 4'd0,
+                         t_m[tselect], 1'b0, t_s[tselect], t_u[tselect],
+                         t_exec[tselect], t_store[tselect], t_load[tselect]};
+    // a trigger of the debugger is written by the debugger alone
+    assign t_writable = ~t_dmode[tselect] | dbg_access;
+    assign tcontrol_mte = tc_mte;
+    always @(*) begin
+        for (int i = 0; i < TRIGGERS; i++) begin
+            trig_cfg[8*i +: 8]   = {t_dmode[i], t_action[i], t_m[i], t_s[i], t_u[i],
+                                    t_exec[i], t_store[i], t_load[i]};
+            trig_addr[64*i +: 64] = t_data2[i];
+        end
+    end
+
+    //-----------------------------------------------------------------
     // read
     //
     //   `rd_exists` says the address is implemented, `rd_denied` that the
@@ -460,6 +517,12 @@ module CORE_CSR
                              3'b000, dcsr_step_r, dcsr_prv};
                 rd_exists = dbg_access;
             end
+            CSR_TSELECT   : rd_data = 64'(tselect);
+            CSR_TDATA1    : rd_data = tdata1_val;
+            CSR_TDATA2    : rd_data = t_data2[tselect];
+            CSR_TDATA3    : rd_data = 64'd0;     // no textra
+            CSR_TINFO     : rd_data = 64'd4;     // type 2 only
+            CSR_TCONTROL  : rd_data = {56'd0, tc_mpte, 3'd0, tc_mte, 3'd0};
             CSR_DPC       : begin rd_data = dpc;       rd_exists = dbg_access; end
             CSR_DSCRATCH0 : begin rd_data = dscratch0; rd_exists = dbg_access; end
             CSR_DSCRATCH1 : begin rd_data = dscratch1; rd_exists = dbg_access; end
@@ -590,6 +653,19 @@ module CORE_CSR
             mcycle       <= 64'd0;
             minstret     <= 64'd0;
             menvcfg_stce <= 1'b0;
+            tselect      <= '0;
+            t_dmode      <= '0;
+            t_action     <= '0;
+            t_hit        <= '0;
+            t_m          <= '0;
+            t_s          <= '0;
+            t_u          <= '0;
+            t_exec       <= '0;
+            t_store      <= '0;
+            t_load       <= '0;
+            for (int i = 0; i < TRIGGERS; i++) t_data2[i] <= 64'd0;
+            tc_mte       <= 1'b0;
+            tc_mpte      <= 1'b0;
             inhibit_cy   <= 1'b0;
             inhibit_ir   <= 1'b0;
             stimecmp     <= {64{1'b1}};      // never, until written
@@ -604,6 +680,8 @@ module CORE_CSR
             if (!inhibit_cy)                mcycle   <= mcycle + 64'd1;
             if (instret_inc && !inhibit_ir) minstret <= minstret + 64'd1;
             stip_cmp <= (mtime >= stimecmp);
+            // a trigger fired: the trap or the halt it caused happens now
+            t_hit    <= t_hit | trig_fired;
 
             // the flags of the operations pile up; a write of the CSR below
             // takes precedence over the accumulation of the same cycle
@@ -640,8 +718,12 @@ module CORE_CSR
                     mstatus_mie  <= 1'b0;
                     mstatus_mpp  <= priv_r;
                     priv_r       <= PRIV_M;
+                    // no M mode breakpoint in the handler until MRET
+                    tc_mpte      <= tc_mte;
+                    tc_mte       <= 1'b0;
                 end
             end else if (mret_en) begin
+                tc_mte       <= tc_mpte;
                 mstatus_mie  <= mstatus_mpie;
                 mstatus_mpie <= 1'b1;
                 mstatus_mpp  <= PRIV_U;
@@ -746,6 +828,42 @@ module CORE_CSR
                         inhibit_ir <= wr_data[2];
                     end
                     CSR_STIMECMP     : stimecmp <= wr_data;
+                    // a value past the last trigger is not taken (that is
+                    // how a debugger counts them)
+                    CSR_TSELECT      : if (wr_data < 64'(TRIGGERS))
+                                           tselect <= wr_data[TSEL_BITS-1:0];
+                    CSR_TDATA1       : if (t_writable) begin
+                        if (wr_data[63:60] == 4'd2) begin
+                            // dmode only from the debugger; action 1 (enter
+                            // debug mode) only for a trigger of the debugger
+                            t_dmode [tselect] <= dbg_access & wr_data[59];
+                            t_action[tselect] <= dbg_access & wr_data[59] &
+                                                 (wr_data[15:12] == 4'd1);
+                            t_hit   [tselect] <= wr_data[20];
+                            t_m     [tselect] <= wr_data[6];
+                            t_s     [tselect] <= wr_data[4];
+                            t_u     [tselect] <= wr_data[3];
+                            t_exec  [tselect] <= wr_data[2];
+                            t_store [tselect] <= wr_data[1];
+                            t_load  [tselect] <= wr_data[0];
+                        end else begin
+                            // another type (0 is "disabled"): nothing matches
+                            t_dmode [tselect] <= 1'b0;
+                            t_action[tselect] <= 1'b0;
+                            t_hit   [tselect] <= 1'b0;
+                            t_m     [tselect] <= 1'b0;
+                            t_s     [tselect] <= 1'b0;
+                            t_u     [tselect] <= 1'b0;
+                            t_exec  [tselect] <= 1'b0;
+                            t_store [tselect] <= 1'b0;
+                            t_load  [tselect] <= 1'b0;
+                        end
+                    end
+                    CSR_TDATA2       : if (t_writable) t_data2[tselect] <= wr_data;
+                    CSR_TCONTROL     : begin
+                        tc_mte  <= wr_data[3];
+                        tc_mpte <= wr_data[7];
+                    end
                     CSR_SIP: begin
                         // the supervisor may only clear its own software
                         // interrupt; the timer and external ones belong to M

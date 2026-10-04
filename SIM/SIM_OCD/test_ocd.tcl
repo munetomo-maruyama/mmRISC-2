@@ -10,11 +10,17 @@
 #   0x80001004  addi a1, a1, 2
 #   0x80001008  j    0x80001000
 #
+#   0x80001100  addi a0, a0, 1           (a second one, for the triggers)
+#   0x80001104  sd   a0, 0(a2)
+#   0x80001108  ld   a1, 0(a2)
+#   0x8000110c  j    0x80001100
+#
 # The core has no program buffer (progbufsize=0). OpenOCD probes a few CSRs
-# the core does not have (vlenb, mtopi, tselect), and when the abstract
-# command answers "no such register" it tries the program buffer and prints
-# "Unable to insert program into progbuf". That is harmless: it then takes
-# them as absent (no vector unit, no AIA, no triggers).
+# the core does not have (vlenb, mtopi), and when the abstract command
+# answers "no such register" it tries the program buffer and prints "Unable
+# to insert program into progbuf". That is harmless: it then takes them as
+# absent (no vector unit, no AIA). The triggers (Sdtrig, 4 of type 2) are
+# there: a hardware breakpoint and watchpoints are set on the second loop.
 #---------------------------------------------------------------------------
 set errors 0
 proc chk {name exp act} {
@@ -119,6 +125,52 @@ chk "a0 at breakpoint again" "0x0000000000000003" [lindex [reg a0] 2]
 chk "a1 at breakpoint again" "0x0000000000000004" [lindex [reg a1] 2]
 rbp 0x80001004
 chk "instruction back after rbp" "0x00258593" [format 0x%08x [read_memory 0x80001004 32 1]]
+
+# hardware breakpoint (a trigger: the instruction is not touched)
+bp 0x80001008 4 hw
+chk "instruction under a hw breakpoint" "0xff9ff06f" [format 0x%08x [read_memory 0x80001008 32 1]]
+reg a0 0
+reg pc 0x80001000
+resume
+wait_halt 2000
+chk "pc at hw breakpoint" "0x0000000080001008" [lindex [reg pc] 2]
+chk "dcsr.cause trigger" "2" [expr {([lindex [reg dcsr] 2] >> 6) & 7}]
+chk "a0 at hw breakpoint" "0x0000000000000001" [lindex [reg a0] 2]
+resume
+wait_halt 2000
+chk "pc at hw breakpoint again" "0x0000000080001008" [lindex [reg pc] 2]
+chk "a0 at hw breakpoint again" "0x0000000000000002" [lindex [reg a0] 2]
+rbp 0x80001008
+
+# watchpoints: a store, then a load. The hart halts in front of the access
+mww 0x80001100 0x00150513
+mww 0x80001104 0x00a63023
+mww 0x80001108 0x00063583
+mww 0x8000110c 0xff5ff06f
+mwd 0x80003000 0
+reg pc 0x80001100
+reg a0 0
+reg a1 0
+reg a2 0x80003000
+wp 0x80003000 8 w
+resume
+wait_halt 2000
+chk "pc at the store watchpoint" "0x0000000080001104" [lindex [reg pc] 2]
+chk "dcsr.cause trigger (store)" "2" [expr {([lindex [reg dcsr] 2] >> 6) & 7}]
+chk "the store did not happen" "0x0000000000000000" [format 0x%016x [read_memory 0x80003000 64 1]]
+resume
+wait_halt 2000
+chk "pc at the store watchpoint again" "0x0000000080001104" [lindex [reg pc] 2]
+chk "the first store happened" "0x0000000000000001" [format 0x%016x [read_memory 0x80003000 64 1]]
+rwp 0x80003000
+wp 0x80003000 8 r
+resume
+wait_halt 2000
+chk "pc at the load watchpoint" "0x0000000080001108" [lindex [reg pc] 2]
+chk "a1 still the load before (memory has 2)" "0x0000000000000001" [lindex [reg a1] 2]
+chk "the store before it happened" "0x0000000000000002" [format 0x%016x [read_memory 0x80003000 64 1]]
+rwp 0x80003000
+reg pc 0x80001000
 
 # free run
 resume

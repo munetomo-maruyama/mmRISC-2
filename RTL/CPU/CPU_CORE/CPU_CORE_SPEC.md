@@ -45,6 +45,7 @@ CPU コア本体を定義する。
 | 付随 | Zicsr、Zifencei、Zicntr(`mcycle`/`minstret`) |
 | 特権の版 | 1.12(`menvcfg` / `senvcfg` / `mcountinhibit` があるので、OpenSBI は 1.12 と見る。決定 66) |
 | タイマ | **Sstc**(`stimecmp`、2026-10、決定 66) |
+| デバッグのトリガ | **Sdtrig**(type 2 の `mcontrol` を 4 本、2026-10、決定 67)。ハードウェアブレークポイント・ウォッチポイント |
 | ビット操作 | **Zba、Zbb**(2026-10、決定 65)。`misa` に該当するビットは無く、ソフトウェアにはデバイスツリー(`riscv,isa-extensions`)で知らせる |
 | 特権 | M / S / U、Sv39(3 段ページテーブル、4KiB/2MiB/1GiB) |
 | `misa` | `0x8000_0000_0014_112d`(= A,C,D,F,I,M,S,U。CPU_TOP のパラメータ、読み出し専用) |
@@ -520,8 +521,19 @@ CSR ファイルはアドレス → レジスタのテーブル駆動にして�
 | 0x14D | `stimecmp` | Sstc。S からは `menvcfg.STCE` と `mcounteren.TM` が両方立っているときだけ。リセット値は全 1(決定 66) |
 | 0x180 | `satp` | MODE は bare(0)と Sv39(8)のみ。それ以外の書き込みは無視 |
 
+トリガ(Sdtrig、決定 67。M モードから。`dmode` の立ったトリガの `tdata1` / `tdata2` はデバッガだけが書ける):
+
+| アドレス | CSR | 備考 |
+|---|---|---|
+| 0x7A0 | `tselect` | 0〜3。それより大きい値の書き込みは無視(値は変わらない) |
+| 0x7A1 | `tdata1` | 常に type 2(`mcontrol`)。実装しているフィールドは dmode、hit、action(0 か 1)、m、s、u、execute、store、load。maskmax・select・timing・sizelo・chain・match は 0 固定(アドレスの完全一致、命令の手前で発火)。type 2 以外の値を書くとトリガは全フィールド 0 になる。action 1 は dmode と一緒にデバッガが書いたときだけ |
+| 0x7A2 | `tdata2` | 比べるアドレス(仮想アドレス) |
+| 0x7A3 | `tdata3` | 0(textra は無い) |
+| 0x7A4 | `tinfo` | 4(type 2 だけ) |
+| 0x7A5 | `tcontrol` | MTE(bit 3)と MPTE(bit 7)。M へのトラップで MPTE ← MTE、MTE ← 0、MRET で MTE ← MPTE |
+
 浮動小数点: 0x001/0x002/0x003 = `fflags`/`frm`/`fcsr`(10 章)。
-デバッグ用 CSR(`dcsr`/`dpc`/`dscratch*`)はまだ無い。
+デバッグ用 CSR(`dcsr`/`dpc`/`dscratch0/1`)はデバッガからだけ見える(11 章)。
 
 **アクセスの可否**は 3 つの条件で決まり、どれも不正命令例外になる:
 
@@ -810,8 +822,8 @@ RISC-V Debug Spec 1.0 のデバッグモードを持つ。DM(`CPU_DBG`)とは `d
 | halt / resume / step | デバッグモード。`dcsr`(xdebugver=4、ebreakm/s/u、cause、step、prv)、`dpc`、`dscratch0/1` を `CORE_CSR` に置く。4 つともデバッガからだけ見え、プログラムからは存在しない CSR |
 | レジスタアクセス | Abstract Command(GPR/FPR/CSR)。halt 中だけ受け付ける |
 | メモリアクセス | **D$ 経由**(`CPU_CACHE_SPEC.md` 4.7)。物理アドレスのみ(aamvirtual=0)。書いたあとは `CPU_TOP` が I$ を無効化するので、ソフトウェアブレークポイント(EBREAK の書き込み)がそのまま効く |
-| Program Buffer | なし(`progbufsize=0`)。OpenOCD は存在しない CSR(vlenb、mtopi、tselect)を探るときに Program Buffer を試し、エラーを 1 行出してから「無い」と判断する。害はない |
-| トリガ(Sdtrig) | なし。ハードウェアブレークポイントは使えない(OpenOCD はソフトウェアブレークポイントを使う) |
+| Program Buffer | なし(`progbufsize=0`)。OpenOCD は存在しない CSR(vlenb、mtopi)を探るときに Program Buffer を試し、エラーを 1 行出してから「無い」と判断する。害はない |
+| トリガ(Sdtrig) | type 2 を 4 本(決定 67)。OpenOCD はこれでハードウェアブレークポイント(`bp ... hw`、gdb の `hbreak`)とウォッチポイント(`wp`、gdb の `watch` / `rwatch`)を作る。命令の手前・アクセスの手前で止まり(dcsr.cause 2)、ストアは行われていない |
 | ハートリセット | `hartreset` / `ndmreset`。コア・キャッシュ・バス側をまとめてリセットする。キャッシュは空になる |
 
 **デバッグモードへの入り方。** halt は ID で「この命令の手前で止まる」印を付け、印は
@@ -839,10 +851,11 @@ RISC-V Debug Spec 1.0 のデバッグモードを持つ。DM(`CPU_DBG`)とは `d
 (DM が cmderr=3 にする)。デバッガが FPR に書くと `mstatus.FS` は Dirty になる。
 
 **検証。** `SIM/SIM_CORE` の `t23_debug`(テストベンチ内のデバッガが DM の代わりに信号を動かす。
-halt・step・EBREAK・レジスタの読み書きとエラー・WFI 中の halt・U モードへの resume を検査)、
-バグ注入 M211–M231(`SIM_CORE/bug_inject.sh`)、`SIM/SIM_OCD`(OpenOCD と RTL の協調
+halt・step・EBREAK・レジスタの読み書きとエラー・WFI 中の halt・U モードへの resume・
+デバッガのトリガ(実行とロード、U モード)を検査)、`t30_trig`(例外を起こすトリガ)、
+バグ注入 M211–M231・M298–M314(`SIM_CORE/bug_inject.sh`)、`SIM/SIM_OCD`(OpenOCD と RTL の協調
 シミュレーション。コアをハートにして、halt・レジスタ・step・ソフトウェアブレークポイント・
-reset halt を実行)。
+ハードウェアブレークポイント・ウォッチポイント(ストア、ロード)・reset halt を実行)。
 
 ---
 
@@ -995,7 +1008,7 @@ reset halt を実行)。
 | 試験 | 理由 |
 |---|---|
 | `rv64ui-p-ma_data` | 不整列アクセスをハードウェアで実行することを要求する。本コアは仕様どおりトラップする(`rv64mi-p-ma_addr` はトラップ側を検査して PASS) |
-| `rv64mi-p-breakpoint` | デバッグトリガ(`tselect`/`tdata*`)が必要。デバッグ論理の結合時に対応 |
+| `rv64mi-p-breakpoint` | デバッグトリガ(`tselect`/`tdata*`)が必要。デバッグ論理の結合時に対応(2026-10、決定 67 で PASS) |
 | `rv64mi-p-pmpaddr` | PMP が必要。S/U モードを入れる M5 で実装する |
 
 バグ注入は 50 種に増やし、背圧あり/なしの両方で全て検出する。
@@ -1475,3 +1488,4 @@ SIM_SYS(本物のキャッシュ)での内訳: 51014 命令中ロード 9784 (19
 | 64 | ロードの値で分岐する条件分岐(遅い分岐) | **EX で待たず、予測のまま MR へ進め、MR で確定する**。MR ではロードが MA にいて、その応答が `~stall_ma` のサイクルに来る(MR が進むのと同じサイクル)ので、そこで EX と同じ比較をして 1 度だけ確定する。外れたら MR からリダイレクトし、EX にいる(若い)命令を捨てる(`kill_ex`。EX の valid、MR に渡したもの、MDU / FPU を止める。`flush` と同じく、`ex_advance` には入れない)。BTB・履歴の更新も MR から。遅い分岐が MR にいる間、EX の制御転送は 1 サイクル待つ(更新とリダイレクトを順番どおりにするため。待たない形も測ったが、更新が失われて予測ミスが増え、CoreMark で 0.3 % 遅かった)。外れたときの損失は EX で外れたより 1 サイクル多いが、遅い分岐の外れは 1.7 %。ロードユースの待ちのうち、アドレス(ポインタをたどる)と ALU の分は残る。CoreMark +3.2 %、Dhrystone +5.2 %(シミュレーション) |
 | 65 | ビット操作(Zba / Zbb) | **EX の ALU に足す**(パイプラインの形は変えない)。Zba は加算器と左シフトの前で rs1 を変えるだけ(`a_uw`: 下位 32 ビットのゼロ拡張、`a_shift`: 1〜3 ビット左)。Zbb は `alu_op` を 5 ビットに広げて演算を足す(andn / orn / xnor、min / max、rol / ror、clz / ctz / cpop とそれぞれの W 形、sext.b / sext.h / zext.h、orc.b、rev8)。分岐の比較・行き先・アクセスのアドレスは ALU を通らないので、その経路は変わらない。`-march=..._zba_zbb` で作った CoreMark は命令数が 11 % 減って +11.2 %(シミュレーション、2.85 CoreMark/MHz)。Linux はデバイスツリーで Zbb を知ると、起動時に Zbb 版の文字列関数に差し替える。Python のモデルと突き合わせる `t28_bitmanip`(`tools/gen_t28.py`)、riscv-tests の `rv64uzba` / `rv64uzbb` |
 | 66 | S モードのタイマ(Sstc) | **`stimecmp` を足し、`menvcfg.STCE` が立っていれば `mip.STIP` を `time >= stimecmp`(1 サイクル遅れのレジスタ)にする**。Linux はタイマのたびに SBI(OpenSBI への ECALL、M モードで `mtimecmp` を書き STIP を立てる)を呼ばずに、`stimecmp` を自分で書く。OpenSBI は特権仕様 1.12 のハートでしか Sstc を探さず、1.12 かどうかを `menvcfg`(1.12)と `mcountinhibit`(1.11)の有無で見るので、その 2 つと `senvcfg` も足した(フィールドは実装している拡張の分だけ: `menvcfg` は STCE、`mcountinhibit` は CY / IR、`senvcfg` は無し)。S からの `stimecmp` は STCE と `mcounteren.TM` が両方立っているときだけ。`t29_sstc`、変異 M289〜M297 |
+| 67 | デバッグのトリガ(Sdtrig) | **type 2(`mcontrol`)を 4 本、アドレスの完全一致だけ、発火は命令・アクセスの手前(timing 0)**。レジスタは `CORE_CSR`、照合は `CPU_CORE`。実行トリガは ID で `fq_pc` と比べ、割り込みと同じく命令に印を付ける(優先度は割り込みの次、命令自身の例外より前)。ロード・ストアのトリガは **MR で `mr_vaddr`(EX で計算済みのレジスタ)と比べ、MR の例外に入れる**。EX の例外に入れると DTLB とキャッシュ要求の前の経路(TIMING.md 30)に 64 ビット比較が 4 本載るので避けた。MR の例外は早出しした D$ のアクセスを取り消すので(PMP の失敗と同じ道)、発火したストアは書かれない。特権仕様 3.1.15 のとおりデータのブレークポイントは同じアクセスの不整列・ページフォールト・アクセスフォールトより前なので、MR は EX がそのアクセスについて見つけた例外を置き換える(`mr_exc_mem`)。どのトリガかの印(`id_trig` → `ex_trig_r` → `mr_trig` → `ma_trig`)を運び、**hit はコミット点でトラップ(または halt)したときに立てる**(捨てられる経路では立たない)。action 0 はブレークポイント例外(cause 3、mtval はアドレス)、action 1 はデバッグモード(dcsr.cause 2)。action 1 は dmode と一緒にデバッガが書いたときだけ。M モードの action 0 は `tcontrol.MTE` が立っているときだけ発火し、M へのトラップで MTE を落とすので、ハンドラの中では発火しない。範囲の一致(match 1 の NAPOT、2〜5 の大小比較)は無いので、OpenOCD は範囲のウォッチポイントを先頭アドレスの一致で代用する(警告が出る)。要るようになれば、比較の前に tdata2 から作ったマスクをかけるだけで match 1 を足せる。`t30_trig`、`t23_debug` 5、`rv64mi-p-breakpoint`、`SIM_OCD`(OpenOCD の hw ブレークポイント・ウォッチポイント)、変異 M298〜M314 |

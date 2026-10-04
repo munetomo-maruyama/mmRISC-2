@@ -45,9 +45,8 @@ fi
 #   ma_data    : wants misaligned accesses to be carried out in hardware; this
 #                core traps on them, which the specification allows
 #                (rv64mi-p-ma_addr checks the trapping side and passes)
-#   breakpoint : wants the debug triggers (tselect / tdata*)
 #   amocas_*   : the compare and swap of Zacas, which is not part of A
-EXPECTED_FAIL="rv64ui-p-ma_data rv64mi-p-breakpoint \
+EXPECTED_FAIL="rv64ui-p-ma_data \
 rv64ua-p-amocas_w rv64ua-p-amocas_d rv64ua-p-amocas_q \
 rv64ui-v-ma_data rv64ua-v-amocas_w rv64ua-v-amocas_d rv64ua-v-amocas_q"
 

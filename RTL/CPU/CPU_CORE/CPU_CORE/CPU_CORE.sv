@@ -716,7 +716,55 @@ module CPU_CORE
                                        (64'd1 << 8) | (64'd1 << 12) |
                                        (64'd1 << 18) | (64'd1 << 20);
 
-    CORE_CSR #(.HART_ID(HART_ID), .MISA(MISA_VAL), .PMP_ENTRIES(PMP_ENTRIES)) u_csr
+    //-----------------------------------------------------------------
+    // Sdtrig (CPU_CORE_SPEC.md decision 67): the triggers live in CORE_CSR,
+    // the matching is here. A trigger is on in a level when its m / s / u
+    // bit says so; one of action 0 (breakpoint exception) does not fire in
+    // M mode unless tcontrol.mte, so that its own handler cannot fire it
+    // again. Execute triggers compare the address of the instruction in ID
+    // and mark it like an interrupt does; load and store triggers compare
+    // the virtual address MR holds and go into the exception of MR, where
+    // the PMP's does (not into EX's: the DTLB and the request of the cache
+    // look at that one, and the comparison has no business on that path).
+    // MR then takes the access back, so a store that fires a trigger never
+    // happens. A data breakpoint comes before the misaligned address, the
+    // page fault and the access fault of the same access (privileged spec
+    // 3.1.15), so in MR it replaces an exception EX found for the access.
+    //-----------------------------------------------------------------
+    localparam int TRIGGERS = 4;
+    logic [8*TRIGGERS-1:0]  trig_cfg;
+    logic [64*TRIGGERS-1:0] trig_addr;
+    logic                   tcontrol_mte;
+    logic [TRIGGERS-1:0]    trig_fired;
+    logic [TRIGGERS-1:0]    trig_on;      // on in this level
+    logic [TRIGGERS-1:0]    trig_dbg;     // action 1: enter debug mode
+    logic [TRIGGERS-1:0]    id_thit, id_trig, mr_dthit;
+    // which triggers the exception of the instruction in each stage is from
+    logic [TRIGGERS-1:0]    ex_trig_r, mr_trig_r, mr_trig, ma_trig;
+    logic                   mr_exc_mem;   // EX's exception is the access's own
+    logic                   mr_dtrig;
+
+    always @(*) begin
+        for (int i = 0; i < TRIGGERS; i++) begin
+            trig_dbg[i] = trig_cfg[8*i+6];
+            // cfg = {dmode, action, m, s, u, execute, store, load}
+            trig_on[i] = ((priv == 2'b11) ? trig_cfg[8*i+5] :
+                          (priv == 2'b01) ? trig_cfg[8*i+4] : trig_cfg[8*i+3]) &
+                         (trig_cfg[8*i+6] | (priv != 2'b11) | tcontrol_mte);
+            id_thit[i]  = trig_on[i] & trig_cfg[8*i+2] &
+                          (fq_pc == trig_addr[64*i +: 64]);
+            mr_dthit[i] = trig_on[i] & mr_valid & (~mr_exc_r | mr_exc_mem) &
+                          ((trig_cfg[8*i+0] & mr_is_load) | (trig_cfg[8*i+1] & mr_is_store)) &
+                          (mr_vaddr == trig_addr[64*i +: 64]);
+        end
+    end
+    assign mr_dtrig = |mr_dthit;
+    // hit is set by the trap or the halt the trigger caused, at the commit
+    // point, not when it matched (the path might be thrown away)
+    assign trig_fired   = trap_taken ? ma_trig : '0;
+
+    CORE_CSR #(.HART_ID(HART_ID), .MISA(MISA_VAL), .PMP_ENTRIES(PMP_ENTRIES),
+               .TRIGGERS(TRIGGERS)) u_csr
         (
             .clk         (clk),
             .rst_n       (rst_n),
@@ -774,7 +822,11 @@ module CPU_CORE
             .dcsr_ebreakm(dcsr_ebreakm),
             .dcsr_ebreaks(dcsr_ebreaks),
             .dcsr_ebreaku(dcsr_ebreaku),
-            .dpc_out     (dpc)
+            .dpc_out     (dpc),
+            .trig_cfg    (trig_cfg),
+            .trig_addr   (trig_addr),
+            .tcontrol_mte(tcontrol_mte),
+            .trig_fired  (trig_fired)
         );
 
     // the new value of the CSR
@@ -1091,15 +1143,24 @@ module CPU_CORE
     //   It only decides when nothing before it has: a misaligned address
     //   and a fault of the translation were already found in EX.
     //=================================================================
-    logic        mr_exc;
+    logic        mr_exc, mr_exc_int;
     logic [4:0]  mr_exc_cause;
     logic [63:0] mr_exc_tval;
 
     always @(*) begin
         mr_exc       = mr_exc_r;
+        mr_exc_int   = mr_exc_int_r;
         mr_exc_cause = mr_exc_cause_r;
         mr_exc_tval  = mr_exc_tval_r;
-        if (!mr_exc_r && (mr_is_load || mr_is_store) && mr_pmp_fail) begin
+        mr_trig      = mr_trig_r;
+        // a load or store trigger (several at once: debug mode wins)
+        if (mr_dtrig) begin
+            mr_exc       = 1'b1;
+            mr_exc_int   = |(mr_dthit & trig_dbg);
+            mr_exc_cause = mr_exc_int ? {2'b10, 3'd2} : EXC_BREAK;
+            mr_exc_tval  = mr_vaddr;
+            mr_trig      = mr_dthit;
+        end else if (!mr_exc_r && (mr_is_load || mr_is_store) && mr_pmp_fail) begin
             mr_exc       = 1'b1;
             mr_exc_cause = mr_is_store ? EXC_SFAULT : EXC_LFAULT;
             mr_exc_tval  = mr_vaddr;
@@ -1392,6 +1453,7 @@ module CPU_CORE
         id_exc_int   = 1'b0;
         id_exc_cause = 5'd0;
         id_exc_tval  = 64'd0;
+        id_trig      = '0;
         if (fq_valid) begin
             // Debug mode is entered instead of the instruction, before
             // anything else it could do: the debugger asked for a halt, or
@@ -1415,6 +1477,14 @@ module CPU_CORE
                 id_exc       = 1'b1;
                 id_exc_int   = 1'b1;
                 id_exc_cause = irq_cause;
+            // an execute trigger: before every exception of the instruction
+            // itself (the instruction address breakpoint comes first)
+            end else if (|id_thit) begin
+                id_exc       = 1'b1;
+                id_exc_int   = |(id_thit & trig_dbg);
+                id_exc_cause = id_exc_int ? {2'b10, 3'd2} : EXC_BREAK;
+                id_exc_tval  = fq_pc;
+                id_trig      = id_thit;
             end else if (fq_fault != 2'd0) begin
                 id_exc       = 1'b1;
                 id_exc_cause = (fq_fault == 2'd2) ? EXC_IPAGE : EXC_IFAULT;
@@ -1575,6 +1645,7 @@ module CPU_CORE
             ex_is_fencei  <= 1'b0;
             ex_serial     <= 1'b0;
             ex_exc_r      <= 1'b0;
+            ex_trig_r     <= '0;
             ex_exc_int_r  <= 1'b0;
             ex_exc_cause_r<= 5'd0;
             ex_exc_tval_r <= 64'd0;
@@ -1614,6 +1685,8 @@ module CPU_CORE
             mr_fp_box     <= 1'b0;
             mr_fp_flags   <= 5'd0;
             mr_exc_r      <= 1'b0;
+            mr_exc_mem    <= 1'b0;
+            mr_trig_r     <= '0;
             mr_exc_int_r  <= 1'b0;
             mr_exc_cause_r<= 5'd0;
             mr_exc_tval_r <= 64'd0;
@@ -1652,6 +1725,7 @@ module CPU_CORE
             ma_fp_rd      <= 5'd0;
             ma_fp_flags   <= 5'd0;
             ma_exc_r      <= 1'b0;
+            ma_trig       <= '0;
             ma_exc_int_r  <= 1'b0;
             ma_exc_cause_r<= 5'd0;
             ma_exc_tval_r <= 64'd0;
@@ -1732,6 +1806,7 @@ module CPU_CORE
                 ex_serial     <= dec_is_csr | dec_is_mret | dec_is_sret |
                                  dec_is_sfence;
                 ex_exc_r      <= id_exc;
+                ex_trig_r     <= id_trig;
                 ex_exc_int_r  <= id_exc_int;
                 ex_exc_cause_r<= id_exc_cause;
                 ex_exc_tval_r <= id_exc_tval;
@@ -1788,6 +1863,8 @@ module CPU_CORE
                 mr_csr_addr   <= ex_csr_addr;
                 mr_csr_wdata  <= csr_wval;
                 mr_exc_r      <= ex_exc;
+                mr_exc_mem    <= ex_exc & ~ex_exc_r;
+                mr_trig_r     <= ex_trig_r;
                 mr_exc_int_r  <= ex_exc_int;
                 mr_exc_cause_r<= ex_exc_cause;
                 mr_exc_tval_r <= ex_exc_tval;
@@ -1856,7 +1933,8 @@ module CPU_CORE
                 ma_csr_addr   <= mr_csr_addr;
                 ma_csr_wdata  <= mr_csr_wdata;
                 ma_exc_r      <= mr_exc;
-                ma_exc_int_r  <= mr_exc_int_r;
+                ma_exc_int_r  <= mr_exc_int;
+                ma_trig       <= mr_trig;
                 ma_exc_cause_r<= mr_exc_cause;
                 ma_exc_tval_r <= mr_exc_tval;
                 ma_result     <= mr_result;

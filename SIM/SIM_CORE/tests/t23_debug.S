@@ -15,8 +15,14 @@
 //     the first instruction of the handler)
 //   4 the debugger halts the core in WFI, writes x12 and sets dcsr.prv to
 //     user mode: the program goes on in user mode, and its ECALL says so
+//   5 at the same halt the debugger sets an execute trigger on tx and a
+//     load trigger on tdata (dmode, action 1, user mode): the hart halts
+//     in front of tx and in front of the load at tl, and goes on when the
+//     debugger has taken the triggers away. The program then finds that
+//     it cannot change those triggers itself (dmode), only read them
 //
-// x13 and x19 hold the addresses the debugger compares dpc with.
+// x13, x19, x22 and x24 hold the addresses the debugger compares dpc with,
+// x23 the address of the load trigger.
 #include "test.h"
 
 #define TB_IRQ_EXT  0x03000000
@@ -95,10 +101,22 @@ bp: ebreak
     csrw mtvec, t0
     li   x12, 0
     la   x19, 2f
+    la   x22, tx
+    la   x23, tdata
+    la   x24, tl
+    li   x25, 0x1111
 1:  wfi
 2:  beqz x12, 1b
     TEST_EQ(11, x12, 1)
     // the debugger resumed in user mode
+    //--------------------------------------------------------------
+    // 5 the triggers of the debugger
+    //--------------------------------------------------------------
+    li   x26, 0
+tx: addi x26, x26, 1                      // halts in front of it
+    TEST_EQ(17, x26, 1)                   //   and runs it once after
+tl: ld   x25, 0(x23)                      // halts in front of it
+    TEST_EQ(18, x25, 0x2222)
     ecall
     li   gp, 14
     j    fail
@@ -110,6 +128,20 @@ handler_u:
     srli x17, x17, 11
     andi x17, x17, 3
     TEST_EQ(16, x17, 0)
+    // a dmode trigger stays as the debugger left it: the program writes
+    // tdata1 and tdata2 in vain (no trap either)
+    csrwi 0x7a0, 0                        // tselect
+    csrr x17, 0x7a1                       // tdata1: type 2, dmode, nothing on
+    li   x18, 0x2800000000001000
+    TEST_EQ_REG(19, x17, x18)
+    li   x18, 0x20000000000000ff          // type 2, no dmode, all on
+    csrw 0x7a1, x18
+    csrw 0x7a2, x0
+    csrr x17, 0x7a1
+    li   x18, 0x2800000000001000
+    TEST_EQ_REG(20, x17, x18)
+    csrr x17, 0x7a2
+    TEST_EQ_REG(21, x17, x22)
     TEST_DONE
 
     // the ECALL of part 3 (the debugger steps into the first instruction)
@@ -122,5 +154,9 @@ handler:
     mret
 
     TEST_FAIL_HANDLER
+
+    .section .data
+    .align 3
+tdata: .dword 0x2222
 
     TOHOST_SECTION
