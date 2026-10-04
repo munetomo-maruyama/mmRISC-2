@@ -37,7 +37,7 @@ CoreMark(シミュレーション、CPI 1.089)の停止の内訳:
 | B1 | **Zba / Zbb**(ビット操作) | 中 | ALU に命令を足すだけで、パイプラインの形は変わらない。Linux はブート時に Zbb を見つけると文字列関数などを差し替える。`-march=..._zba_zbb` で作ったユーザランドや CoreMark も速くなる(効果は要測定) |
 |  | → **済み(2026-10-04)** | | CoreMark(Zba/Zbb で作り直し)実機 2.714 /MHz(+11.6 %)。Linux は起動時に Zbb の文字列関数に差し替え(シミュレーションで ORC.B 72,923 回)。`CPU_CORE_SPEC.md` 決定 65 |
 | B2 | **Sstc**(S モードのタイマ `stimecmp`) | 小〜中 | Linux はタイマ割り込みのたびに SBI(OpenSBI への ecall)を呼んでいるが、Sstc があれば直接書ける。HZ=100 なので全体への効果は小さいが、割り込みの遅延が減る |
-|  | → **RTL・検証済み(2026-10-04)**、実機待ち | | `menvcfg` / `senvcfg` / `mcountinhibit` も足して特権仕様 1.12 に。シミュレーションで OpenSBI が v1.12・sstc を検出、Linux が `stimecmp` を自分で書く(CSR 命令 1,440 回)。`CPU_CORE_SPEC.md` 決定 66 |
+|  | → **済み(2026-10-04)** | | 実機で CoreMark +1.5 %(タイマのたびの OpenSBI 経由が無くなった)。`menvcfg` / `senvcfg` / `mcountinhibit` も足して特権仕様 1.12 に。シミュレーションで OpenSBI が v1.12・sstc を検出、Linux が `stimecmp` を自分で書く(CSR 命令 1,440 回)。`CPU_CORE_SPEC.md` 決定 66 |
 | B3 | Zicond / Zihintpause | 小 | 条件付きゼロ化(分岐を減らす)、スピンループのヒント。小さい |
 | B4 | **Sdtrig**(デバッグのトリガ) | 中 | いまは `Debug Triggers: 0`。JTAG(`JTAG.md`)の gdb でハードウェアブレークポイント・ウォッチポイントが使えるようになる。デバッグ環境の完成度が上がる |
 | B5 | PMU(`mhpmcounter`、Sscofpmf) | 中 | Linux の `perf` で性能を測れる。いまシミュレーションのプロファイラでしかできない内訳を実機で取れる |
