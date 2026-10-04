@@ -7,10 +7,15 @@ CoreMark・Dhrystone・小さな測定(`micro`)を、静的リンクの Linux �
 
 | ファイル | 内容 |
 |---|---|
-| `Makefile` | `make` で `out/coremark`、`out/dhrystone`、`out/micro`。`make tftp` で TFTP サーバへ(sudo) |
-| `bench.sh` | ボードで実行。3 つを TFTP で `/tmp` に取ってきて順に走らせ、MHz あたりの値を出す |
+| `Makefile` | `make` で `out/coremark`、`out/dhrystone`、`out/micro`、Zba / Zbb で作った `out/coremark_zb`、`out/dhrystone_zb`。`make tftp` で TFTP サーバへ(sudo) |
+| `bench.sh` | ボードで実行。3 つを TFTP で `/tmp` に取ってきて順に走らせ、MHz あたりの値を出す。コアが Zba / Zbb を持ち(`/proc/cpuinfo`)、サーバに `*_zb` があればそれも走らせる |
 | `micro.c` | 帯域(D$ に入る / 入らない)、依存ロードの遅延、不整列ロード、倍精度の積和 |
 | `dhry_shim.c` | riscv-tests の Dhrystone が裸の環境に求めるもの(タイマ、表示)を Linux で |
+
+コンパイラは `/opt/riscv/bin/riscv64-unknown-linux-gnu-gcc`(**GCC 13.2.0**、glibc 2.40)、
+オプションは **`-march=rv64imafdc -mabi=lp64d -O2 -static`**(`*_zb` は `-march=rv64imafdc_zba_zbb`)。
+`-mtune` はツールチェーンの既定(`rocket`)。比較の条件をそろえるため `-O3` などは使わない
+(詳しくは `../../docs/BENCH.md` の「ビルドの条件」)。
 
 ソースはこのリポジトリに含めず、手元のチェックアウトを読む(中身は変更しない):
 

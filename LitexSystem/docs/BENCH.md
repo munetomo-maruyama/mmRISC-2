@@ -10,7 +10,28 @@ CoreMark と Dhrystone を、(1) シミュレーション(`SIM/SIM_SYS`、マシ
 | シミュレーション | `SIM/SIM_SYS/bench/`(C ライブラリなし、CoreMark の `ee_printf`) | `cd SIM/SIM_SYS && make bench` |
 | 実機 | `LitexSystem/software/bench/`(静的リンク、glibc) | `software/bench/README.md` |
 
-コンパイラはどちらも GCC 13.2、`-march=rv64imafdc -mabi=lp64d -O2`。
+### ビルドの条件
+
+コンパイラはどちらも **GCC 13.2.0**(riscv-gnu-toolchain、`gc891d8dc23e`、`/opt/riscv`)。
+最適化は **`-O2` だけ**で、`-O3`・`-funroll-loops`・`-finline-functions` などの、CoreMark の
+公表値でよく使われるオプションは付けていない。チューニングはツールチェーンの既定の
+`-mtune=rocket`(指定していない)。
+
+| | 実機(`LitexSystem/software/bench/`) | シミュレーション(`SIM/SIM_SYS/bench/`) |
+|---|---|---|
+| コンパイラ | `riscv64-unknown-linux-gnu-gcc` 13.2.0 | `riscv64-unknown-elf-gcc` 13.2.0 |
+| アーキテクチャ | `-march=rv64imafdc -mabi=lp64d`(`coremark` / `dhrystone`)<br>`-march=rv64imafdc_zba_zbb -mabi=lp64d`(`coremark_zb` / `dhrystone_zb`、11 章) | `-march=rv64imafdc_zicsr_zifencei -mabi=lp64d`(11 章の比較では `_zba_zbb` を足した) |
+| 最適化 | `-O2` | `-O2` |
+| その他 | `-static`(glibc 2.40 を静的リンク。C ライブラリ自体は rv64gc) | `-mcmodel=medany -nostdlib -fno-tree-loop-distribute-patterns`(C ライブラリなし。`memset` などは自前の `minilib.c`) |
+| CoreMark | posix の移植をそのまま、`-DITERATIONS=0 -DPERFORMANCE_RUN=1`(10 秒以上走る回数を自分で選ぶ) | `-DITERATIONS=10 -DPERFORMANCE_RUN=1`、`ee_printf` で `tohost` へ出力 |
+| Dhrystone | riscv-tests の Dhrystone 2.2、`-std=gnu89 -fno-common -fno-builtin-printf -w`。計時は `bench_usec()`(マイクロ秒)、2 秒未満なら回数を 10 倍にして測り直す | riscv-tests の Dhrystone 2.2、500 回、計時は `mcycle` |
+
+CoreMark は実行時に、使ったコンパイラとオプションを自分で表示する(`Compiler version :
+GCC13.2.0`、`Compiler flags : -march=rv64imafdc -mabi=lp64d -O2 -static`)。
+
+Dhrystone の文字列関数(`strcpy` / `strcmp`)は、実機では glibc の語単位の版、
+シミュレーションでは自前の 1 バイトずつの版を使う。同じ Dhrystone でも両者の数字が
+離れる(シミュレーションのほうが低い)のは主にこのため(2 章、10 章)。
 
 ## 1. シミュレーション(計時部分のみ)
 
