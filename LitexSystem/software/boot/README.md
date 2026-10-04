@@ -11,9 +11,9 @@
 
 第 1 パーティションに置く 3 つは、すべてこのディレクトリ(`software/boot/`)にある。
 
-| ファイル | 出どころ | ロード先 | md5(2026-09-30) |
+| ファイル | 出どころ | ロード先 | md5(2026-10-04) |
 |---|---|---|---|
-| `fw_jump.bin` | `scripts/build_opensbi.sh` がここに作る(デバイスツリー入り) | 0x8000_0000 | `ede1b7b02b2a1328759b10efd184ea27` |
+| `fw_jump.bin` | `scripts/build_opensbi.sh` がここに作る(デバイスツリー入り) | 0x8000_0000 | `559b517531d9ba8ba722a25a799bf251` |
 | `Image` | Linux カーネル。Rocket 構成で作ったもの(`LitexRocket/software/boot/Image`)の写し。CPU に依存しない | 0x8020_0000 | `1d0caecd9f373a9fb203dc9c28c2cd34` |
 | `boot.json` | BIOS が読む配置表。Rocket 構成と同じ | ― | `a1c356008baa859fa615b879d0fa18f3` |
 

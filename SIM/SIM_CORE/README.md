@@ -29,7 +29,7 @@
 | `make mdu` | `CORE_MDU` を参照モデルと突き合わせる(`tb_MDU.sv`、既定 20 万演算)。境界値のオペランド、サイクル数(MUL / MULW は 1、MULH 系は 2)、答えを遅れて受け取る場合、途中の kill。プログラムからは選べないものを見る |
 | `make clint` | `CPU_CLINT` を 4 ハート構成で直接叩く(`tb_CLINT.sv`)。単一コアのプログラムからは届かないレジスタマップの検査 |
 | `make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / uzba / uzbb / mi)。`RVTESTS` でリポジトリの場所を指定 |
-| `make bugs` / `./bug_inject.sh` | バグ注入 271 種(背圧あり/なしの両方で判定。M211〜M231 はデバッグモード、M298〜M314 はトリガ、M240 以降は EX からの早出し。`CORE_MDU` の変異は `tb_MDU` でも判定) |
+| `make bugs` / `./bug_inject.sh` | バグ注入 276 種(背圧あり/なしの両方で判定。M211〜M231 はデバッグモード、M298〜M314 はトリガ、M240 以降は EX からの早出し。`CORE_MDU` の変異は `tb_MDU` でも判定) |
 | `make lint` | Verilator lint |
 
 プラスアーグ:
@@ -82,6 +82,7 @@ x10〜x30 だけを使うこと。`TEST_INIT` が既定のトラップハンド�
 | `t28_bitmanip` | Zba / Zbb(`CPU_CORE_SPEC.md` 決定 65)を Python のモデルと突き合わせる(`tools/gen_t28.py` が作る。手で書き換えない)。47 の命令・即値のそれぞれについて、端の値 8 個の組と xorshift64 の 32 組を回し、結果を回転・xor・乗算でまとめたチェックサムを比べる。新しい符号の隣(PACKW、未定義の単項演算、Zbs)が不正命令のままであること |
 | `t29_sstc` | Sstc と特権仕様 1.12 の CSR(`CPU_CORE_SPEC.md` 決定 66): `menvcfg` / `senvcfg` / `mcountinhibit` の実装フィールド、CY / IR でカウンタが止まること、STCE の有無で `mip.STIP` が書けるビットか比較かが変わること、S からの `stimecmp` が STCE と `mcounteren.TM` の両方を要ること、`stimecmp` からの S タイマ割り込みを S モードで受けること |
 | `t30_trig` | Sdtrig の例外を起こすトリガ(`CPU_CORE_SPEC.md` 決定 67): `tselect` / `tdata1` / `tdata2` / `tdata3` / `tinfo` / `tcontrol` の読み書き、M モードの実行トリガと `tcontrol.MTE` / MPTE、ハンドラ内では発火しないこと、ロード・ストア・AMO のトリガ(アクセスが起きない、mtval、完全一致、不整列より優先)、m / s / u ビット(S・U モード)、捨てられる経路(予測ミスの後ろ、ECALL の後ろの命令とロード)では発火も hit も無いこと、不正命令より優先すること |
+| `t31_zicond` | Zicond(`CPU_CORE_SPEC.md` 決定 68): `czero.eqz` / `czero.nez` の値の表(rs2 の最下位・最上位・上位半分の 1 ビットだけ)、rd = rs1 / rd = rs2 / rs1 = rs2 / x0、直前の ALU・ロードからのフォワーディング、結果を分岐とアドレスに使う場合。PAUSE・NTL.*・C.NTL.* がトラップせず何も書かないこと |
 
 ## テストベンチが自動で見ているもの
 

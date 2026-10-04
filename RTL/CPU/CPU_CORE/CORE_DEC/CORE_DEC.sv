@@ -119,6 +119,9 @@ module CORE_DEC
     localparam logic [4:0] ALU_ZEXTH= 5'd24;
     localparam logic [4:0] ALU_ORCB = 5'd25;
     localparam logic [4:0] ALU_REV8 = 5'd26;
+    // Zicond
+    localparam logic [4:0] ALU_CZEQZ= 5'd27;
+    localparam logic [4:0] ALU_CZNEZ= 5'd28;
 
     // operand A / B select
     localparam logic [1:0] A_RS1  = 2'd0;
@@ -446,6 +449,9 @@ module CORE_DEC
                     {7'b0010000, 3'b010}: a_shift = 2'd1;           // SH1ADD
                     {7'b0010000, 3'b100}: a_shift = 2'd2;           // SH2ADD
                     {7'b0010000, 3'b110}: a_shift = 2'd3;           // SH3ADD
+                    // Zicond
+                    {7'b0000111, 3'b101}: alu_op = ALU_CZEQZ;
+                    {7'b0000111, 3'b111}: alu_op = ALU_CZNEZ;
                     default: illegal = 1'b1;
                 endcase
             end

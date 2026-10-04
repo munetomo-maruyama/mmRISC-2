@@ -39,6 +39,7 @@ CoreMark(シミュレーション、CPI 1.089)の停止の内訳:
 | B2 | **Sstc**(S モードのタイマ `stimecmp`) | 小〜中 | Linux はタイマ割り込みのたびに SBI(OpenSBI への ecall)を呼んでいるが、Sstc があれば直接書ける。HZ=100 なので全体への効果は小さいが、割り込みの遅延が減る |
 |  | → **済み(2026-10-04)** | | 実機で CoreMark +1.5 %(タイマのたびの OpenSBI 経由が無くなった)。`menvcfg` / `senvcfg` / `mcountinhibit` も足して特権仕様 1.12 に。シミュレーションで OpenSBI が v1.12・sstc を検出、Linux が `stimecmp` を自分で書く(CSR 命令 1,440 回)。`CPU_CORE_SPEC.md` 決定 66 |
 | B3 | Zicond / Zihintpause | 小 | 条件付きゼロ化(分岐を減らす)、スピンループのヒント。小さい |
+|  | → **シミュレーションで済み(2026-10-04)** | | Zicond は ALU に 2 演算。PAUSE はもともと FENCE として実行していたのでデバイスツリーに載せただけ(Zihintntl も)。GCC 13.2 は `czero` を生成しないので、ベンチマークは変わらない見込み。`CPU_CORE_SPEC.md` 決定 68 |
 | B4 | **Sdtrig**(デバッグのトリガ) | 中 | いまは `Debug Triggers: 0`。JTAG(`JTAG.md`)の gdb でハードウェアブレークポイント・ウォッチポイントが使えるようになる。デバッグ環境の完成度が上がる |
 |  | → **シミュレーションで済み(2026-10-04)、実機の確認待ち** | | type 2(`mcontrol`)を 4 本。実行トリガは ID、ロード・ストアのトリガは MR で照合(EX の DTLB・D$ 要求の経路には載せない)。`rv64mi-p-breakpoint` が PASS、`SIM_OCD` で OpenOCD の hw ブレークポイント・ウォッチポイントが動作。`CPU_CORE_SPEC.md` 決定 67 |
 | B5 | PMU(`mhpmcounter`、Sscofpmf) | 中 | Linux の `perf` で性能を測れる。いまシミュレーションのプロファイラでしかできない内訳を実機で取れる |

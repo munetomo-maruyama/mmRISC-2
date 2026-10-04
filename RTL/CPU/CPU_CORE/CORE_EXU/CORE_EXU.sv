@@ -8,7 +8,8 @@
 // 2.1). Zba is the adder and the left shift with two changes to the first
 // operand in front of them: its low half zero extended (a_uw, the .uw
 // forms) and a shift left by one to three (a_shift, sh1add .. sh3add).
-// Zbb has operations of its own. None of this touches the branch
+// Zbb has operations of its own, and so has Zicond (czero.eqz / czero.nez:
+// rs1, or zero by whether rs2 is zero). None of this touches the branch
 // comparison, the target or the address of a memory access.
 //---------------------------------------------------------------------------
 
@@ -70,6 +71,9 @@ module CORE_EXU
     localparam logic [4:0] ALU_ZEXTH= 5'd24;
     localparam logic [4:0] ALU_ORCB = 5'd25;
     localparam logic [4:0] ALU_REV8 = 5'd26;
+    // Zicond
+    localparam logic [4:0] ALU_CZEQZ= 5'd27;
+    localparam logic [4:0] ALU_CZNEZ= 5'd28;
 
     localparam logic [1:0] A_RS1  = 2'd0;
     localparam logic [1:0] A_PC   = 2'd1;
@@ -162,6 +166,8 @@ module CORE_EXU
             ALU_ZEXTH:res = {48'd0, op_a[15:0]};
             ALU_ORCB: for (int i = 0; i < 8; i++) res[8*i +: 8] = {8{|op_a[8*i +: 8]}};
             ALU_REV8: for (int i = 0; i < 8; i++) res[8*i +: 8] = op_a[8*(7-i) +: 8];
+            ALU_CZEQZ:res = (op_b == 64'd0) ? 64'd0 : op_a;
+            ALU_CZNEZ:res = (op_b != 64'd0) ? 64'd0 : op_a;
             default:  res = a_add + op_b;             // ALU_ADD, add.uw, sh*add
         endcase
 
