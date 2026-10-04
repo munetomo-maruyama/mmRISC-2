@@ -43,6 +43,8 @@ CPU コア本体を定義する。
 | 基本 | RV64I |
 | 標準拡張 | M(乗除算)、A(AMO/LR-SC)、F/D(単精度・倍精度)、C(圧縮命令) |
 | 付随 | Zicsr、Zifencei、Zicntr(`mcycle`/`minstret`) |
+| 特権の版 | 1.12(`menvcfg` / `senvcfg` / `mcountinhibit` があるので、OpenSBI は 1.12 と見る。決定 66) |
+| タイマ | **Sstc**(`stimecmp`、2026-10、決定 66) |
 | ビット操作 | **Zba、Zbb**(2026-10、決定 65)。`misa` に該当するビットは無く、ソフトウェアにはデバイスツリー(`riscv,isa-extensions`)で知らせる |
 | 特権 | M / S / U、Sv39(3 段ページテーブル、4KiB/2MiB/1GiB) |
 | `misa` | `0x8000_0000_0014_112d`(= A,C,D,F,I,M,S,U。CPU_TOP のパラメータ、読み出し専用) |
@@ -493,9 +495,11 @@ CSR ファイルはアドレス → レジスタのテーブル駆動にして�
 | 0x300 | `mstatus` | MIE/SIE/MPIE/SPIE/MPP/SPP/FS/MPRV/SUM/MXR/TVM/TW/TSR/UXL/SXL/SD |
 | 0x301 | `misa` | MXL=2、IMAFDC + S + U。書き込みは無視 |
 | 0x302 / 0x303 | `medeleg` / `mideleg` | 委譲。11 番(M からの ECALL)と予約番号は書けない |
-| 0x304 / 0x344 | `mie` / `mip` | M と S の 3 本ずつ。M の pending は CLINT・PLIC が駆動。`mip.SEIP` の読み出しはソフトウェアの書けるビットと PLIC の S 線の OR だが、`csrrs` / `csrrc` はソフトウェアのビットだけを基に書く(決定 51) |
+| 0x304 / 0x344 | `mie` / `mip` | M と S の 3 本ずつ。M の pending は CLINT・PLIC が駆動。`mip.SEIP` の読み出しはソフトウェアの書けるビットと PLIC の S 線の OR だが、`csrrs` / `csrrc` はソフトウェアのビットだけを基に書く(決定 51)。`mip.STIP` は `menvcfg.STCE` が立っていれば `time >= stimecmp`(読み出し専用、決定 66)、立っていなければソフトウェアの書くビット |
 | 0x305 | `mtvec` | モード 0(direct)と 1(vectored)。予約モードは取り込まない |
-| 0x306 | `mcounteren` | S/U がカウンタを読めるかどうか |
+| 0x306 | `mcounteren` | S/U がカウンタを読めるかどうか。TM は `stimecmp` にも効く |
+| 0x30A | `menvcfg` | STCE(bit 63)だけ。ほかのフィールドは対応する拡張が無いので 0(決定 66) |
+| 0x320 | `mcountinhibit` | CY(bit 0)と IR(bit 2)。立てると `mcycle` / `minstret` が止まる(決定 66) |
 | 0x340-0x343 | `mscratch` / `mepc` / `mcause` / `mtval` | `mepc` は下位 1bit を落とす |
 | 0x3A0 / 0x3A2 | `pmpcfg0` / `pmpcfg2` | PMP 設定、1 本に 8 エントリ |
 | 0x3B0-0x3BF | `pmpaddr0`-`15` | PMP アドレス |
@@ -512,6 +516,8 @@ CSR ファイルはアドレス → レジスタのテーブル駆動にして�
 | 0x105 | `stvec` | `mtvec` と同じ 2 モード |
 | 0x106 | `scounteren` | U がカウンタを読めるかどうか |
 | 0x140-0x143 | `sscratch` / `sepc` / `scause` / `stval` | |
+| 0x10A | `senvcfg` | 読み出しは 0、書き込みは無視(フィールドの拡張が無い。決定 66) |
+| 0x14D | `stimecmp` | Sstc。S からは `menvcfg.STCE` と `mcounteren.TM` が両方立っているときだけ。リセット値は全 1(決定 66) |
 | 0x180 | `satp` | MODE は bare(0)と Sv39(8)のみ。それ以外の書き込みは無視 |
 
 浮動小数点: 0x001/0x002/0x003 = `fflags`/`frm`/`fcsr`(10 章)。
@@ -1468,3 +1474,4 @@ SIM_SYS(本物のキャッシュ)での内訳: 51014 命令中ロード 9784 (19
 | 63 | 条件分岐の予測 | **gshare(PHT 8192 × 2bit、履歴 12 ビット)**。履歴は BTB にエントリを持つ条件分岐の向き(4.2)。フェッチ側と実行側で同じものを数えられ、ずれはリダイレクトで直る。表の大きさと履歴長は `SIM_SYS` の CoreMark で掃引した: 1024 エントリでは衝突で効果が小さく(外れ −8〜10 %)、4096 で −33 %、8192 で −42 %、16384 は 8192 と同じ。CoreMark +2.3 %、Dhrystone +1.7 %(シミュレーション) |
 | 64 | ロードの値で分岐する条件分岐(遅い分岐) | **EX で待たず、予測のまま MR へ進め、MR で確定する**。MR ではロードが MA にいて、その応答が `~stall_ma` のサイクルに来る(MR が進むのと同じサイクル)ので、そこで EX と同じ比較をして 1 度だけ確定する。外れたら MR からリダイレクトし、EX にいる(若い)命令を捨てる(`kill_ex`。EX の valid、MR に渡したもの、MDU / FPU を止める。`flush` と同じく、`ex_advance` には入れない)。BTB・履歴の更新も MR から。遅い分岐が MR にいる間、EX の制御転送は 1 サイクル待つ(更新とリダイレクトを順番どおりにするため。待たない形も測ったが、更新が失われて予測ミスが増え、CoreMark で 0.3 % 遅かった)。外れたときの損失は EX で外れたより 1 サイクル多いが、遅い分岐の外れは 1.7 %。ロードユースの待ちのうち、アドレス(ポインタをたどる)と ALU の分は残る。CoreMark +3.2 %、Dhrystone +5.2 %(シミュレーション) |
 | 65 | ビット操作(Zba / Zbb) | **EX の ALU に足す**(パイプラインの形は変えない)。Zba は加算器と左シフトの前で rs1 を変えるだけ(`a_uw`: 下位 32 ビットのゼロ拡張、`a_shift`: 1〜3 ビット左)。Zbb は `alu_op` を 5 ビットに広げて演算を足す(andn / orn / xnor、min / max、rol / ror、clz / ctz / cpop とそれぞれの W 形、sext.b / sext.h / zext.h、orc.b、rev8)。分岐の比較・行き先・アクセスのアドレスは ALU を通らないので、その経路は変わらない。`-march=..._zba_zbb` で作った CoreMark は命令数が 11 % 減って +11.2 %(シミュレーション、2.85 CoreMark/MHz)。Linux はデバイスツリーで Zbb を知ると、起動時に Zbb 版の文字列関数に差し替える。Python のモデルと突き合わせる `t28_bitmanip`(`tools/gen_t28.py`)、riscv-tests の `rv64uzba` / `rv64uzbb` |
+| 66 | S モードのタイマ(Sstc) | **`stimecmp` を足し、`menvcfg.STCE` が立っていれば `mip.STIP` を `time >= stimecmp`(1 サイクル遅れのレジスタ)にする**。Linux はタイマのたびに SBI(OpenSBI への ECALL、M モードで `mtimecmp` を書き STIP を立てる)を呼ばずに、`stimecmp` を自分で書く。OpenSBI は特権仕様 1.12 のハートでしか Sstc を探さず、1.12 かどうかを `menvcfg`(1.12)と `mcountinhibit`(1.11)の有無で見るので、その 2 つと `senvcfg` も足した(フィールドは実装している拡張の分だけ: `menvcfg` は STCE、`mcountinhibit` は CY / IR、`senvcfg` は無し)。S からの `stimecmp` は STCE と `mcounteren.TM` が両方立っているときだけ。`t29_sstc`、変異 M289〜M297 |

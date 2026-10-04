@@ -54,13 +54,15 @@
 			 * core has: the counters are cycle, time and instret (Zicntr),
 			 * there are no hpmcounters (no Zihpm). Zba and Zbb since
 			 * 2026-10 (CPU_CORE_SPEC.md 2.1): with them Linux patches in
-			 * its Zbb string functions at boot. riscv,isa stays for
-			 * OpenSBI and older software.
-			 * Use this tree only with a bitstream that has Zba / Zbb. */
-			riscv,isa = "rv64imafdc_zicntr_zicsr_zifencei_zba_zbb";
+			 * its Zbb string functions at boot. Sstc since 2026-10 too
+			 * (decision 66): Linux then sets its timer in stimecmp
+			 * instead of asking OpenSBI. riscv,isa stays for OpenSBI and
+			 * older software.
+			 * Use this tree only with a bitstream that has all of them. */
+			riscv,isa = "rv64imafdc_zicntr_zicsr_zifencei_zba_zbb_sstc";
 			riscv,isa-base = "rv64i";
 			riscv,isa-extensions = "i", "m", "a", "f", "d", "c",
-				"zicntr", "zicsr", "zifencei", "zba", "zbb";
+				"zicntr", "zicsr", "zifencei", "zba", "zbb", "sstc";
 			riscv,pmpgranularity = <4>;
 			riscv,pmpregions = <8>;
 			status = "okay";

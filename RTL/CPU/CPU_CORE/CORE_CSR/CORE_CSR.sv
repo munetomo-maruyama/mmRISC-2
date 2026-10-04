@@ -15,6 +15,12 @@
 //   M5 adds supervisor and user mode. The privilege level lives here because
 //   everything that changes it (a trap, MRET, SRET) is decided here; the
 //   pipeline only reads it.
+//
+//   Sstc (2026-10, CPU_CORE_SPEC.md decision 66): stimecmp, and with
+//   menvcfg.STCE set the supervisor timer interrupt (mip.STIP) is
+//   time >= stimecmp instead of a bit M mode writes. menvcfg, senvcfg and
+//   mcountinhibit came with it: they make the hart one of version 1.12 of
+//   the privileged specification, which is when OpenSBI looks for Sstc.
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -143,6 +149,10 @@ module CORE_CSR
     localparam logic [11:0] CSR_STVAL     = 12'h143;
     localparam logic [11:0] CSR_SIP       = 12'h144;
     localparam logic [11:0] CSR_SATP      = 12'h180;
+    localparam logic [11:0] CSR_SENVCFG   = 12'h10A;
+    localparam logic [11:0] CSR_STIMECMP  = 12'h14D;
+    localparam logic [11:0] CSR_MENVCFG   = 12'h30A;
+    localparam logic [11:0] CSR_MCOUNTINHIBIT = 12'h320;
     // machine
     localparam logic [11:0] CSR_MSTATUS   = 12'h300;
     localparam logic [11:0] CSR_MISA      = 12'h301;
@@ -214,6 +224,13 @@ module CORE_CSR
     logic [63:0] satp;
     logic [31:0] mcounteren, scounteren;
     logic [63:0] mcycle, minstret;
+    // Sstc and its company: menvcfg is STCE alone (every other field belongs
+    // to an extension this core does not have and reads 0), senvcfg is all
+    // read only 0, mcountinhibit has CY and IR (no hpmcounters)
+    logic        menvcfg_stce;
+    logic        inhibit_cy, inhibit_ir;
+    logic [63:0] stimecmp;
+    logic        stip_cmp;       // time >= stimecmp, one cycle late
     logic [4:0]  fflags;
     logic [2:0]  frm;
 
@@ -313,7 +330,7 @@ module CORE_CSR
         mip_val               = 64'd0;
         mip_val[IRQ_S_SOFT]   = mip_ssip;
         mip_val[IRQ_M_SOFT]   = irq_m_soft;
-        mip_val[IRQ_S_TIMER]  = mip_stip;
+        mip_val[IRQ_S_TIMER]  = menvcfg_stce ? stip_cmp : mip_stip;
         mip_val[IRQ_M_TIMER]  = irq_m_timer;
         mip_val[IRQ_S_EXT]    = mip_seip | irq_s_ext;
         mip_val[IRQ_M_EXT]    = irq_m_ext;
@@ -403,6 +420,14 @@ module CORE_CSR
             CSR_SCAUSE    : rd_data = scause_val;
             CSR_STVAL     : rd_data = stval;
             CSR_SIP       : rd_data = sip_val;
+            CSR_SENVCFG   : rd_data = 64'd0;
+            CSR_STIMECMP  : begin
+                rd_data   = stimecmp;
+                // below M only with STCE and with the time counter allowed
+                rd_denied = (priv_r != PRIV_M) & (~menvcfg_stce | ~mcounteren[1]);
+            end
+            CSR_MENVCFG   : rd_data = {menvcfg_stce, 63'd0};
+            CSR_MCOUNTINHIBIT: rd_data = {61'd0, inhibit_ir, 1'b0, inhibit_cy};
             CSR_SATP      : begin
                 rd_data   = satp;
                 // TVM traps the supervisor reading or writing satp
@@ -564,6 +589,11 @@ module CORE_CSR
             scounteren   <= 32'd0;
             mcycle       <= 64'd0;
             minstret     <= 64'd0;
+            menvcfg_stce <= 1'b0;
+            inhibit_cy   <= 1'b0;
+            inhibit_ir   <= 1'b0;
+            stimecmp     <= {64{1'b1}};      // never, until written
+            stip_cmp     <= 1'b0;
             fflags       <= 5'd0;
             frm          <= 3'd0;
             for (int i = 0; i < PMP_ENTRIES; i++) begin
@@ -571,8 +601,9 @@ module CORE_CSR
                 pmpaddr[i] <= 54'd0;
             end
         end else begin
-            mcycle <= mcycle + 64'd1;
-            if (instret_inc) minstret <= minstret + 64'd1;
+            if (!inhibit_cy)                mcycle   <= mcycle + 64'd1;
+            if (instret_inc && !inhibit_ir) minstret <= minstret + 64'd1;
+            stip_cmp <= (mtime >= stimecmp);
 
             // the flags of the operations pile up; a write of the CSR below
             // takes precedence over the accumulation of the same cycle
@@ -705,9 +736,16 @@ module CORE_CSR
                     end
                     CSR_MIP: begin
                         mip_ssip <= wr_data[IRQ_S_SOFT];
-                        mip_stip <= wr_data[IRQ_S_TIMER];
+                        // with STCE the bit is the comparison, read only
+                        if (!menvcfg_stce) mip_stip <= wr_data[IRQ_S_TIMER];
                         mip_seip <= wr_data[IRQ_S_EXT];
                     end
+                    CSR_MENVCFG      : menvcfg_stce <= wr_data[63];
+                    CSR_MCOUNTINHIBIT: begin
+                        inhibit_cy <= wr_data[0];
+                        inhibit_ir <= wr_data[2];
+                    end
+                    CSR_STIMECMP     : stimecmp <= wr_data;
                     CSR_SIP: begin
                         // the supervisor may only clear its own software
                         // interrupt; the timer and external ones belong to M
