@@ -1,0 +1,26 @@
+lib: sbi_pmu: a stop with RESET frees a counter that is already stopped
+
+Linux's riscv_pmu_del() stops a counter and then stops it once more with
+SBI_PMU_STOP_FLAG_RESET to release it. The second call found the counter
+stopped, returned SBI_EALREADY_STOPPED before the reset, and the counter
+stayed taken: every perf event that ended used one up for good.
+
+--- a/lib/sbi/sbi_pmu.c	2026-10-05 00:44:01.730001069 +0900
++++ b/lib/sbi/sbi_pmu.c	2026-10-05 00:44:01.738001069 +0900
+@@ -718,7 +718,15 @@
+ 		else
+ 			ret = pmu_ctr_stop_hw(cidx);
+ 
+-		if(ret)
++		/*
++		 * A counter that is already stopped is still freed by a stop
++		 * with RESET: Linux's riscv_pmu_del() stops the counter and
++		 * then stops it again with RESET to release it, and the second
++		 * call used to return here and leave the counter taken for
++		 * good (mmRISC-2, CPU_CORE_SPEC.md decision 69).
++		 */
++		if (ret && !(ret == SBI_EALREADY_STOPPED &&
++			     (flag & SBI_PMU_STOP_FLAG_RESET)))
+ 			return ret;
+ 
+ 		if (cidx > (CSR_INSTRET - CSR_CYCLE) && flag & SBI_PMU_STOP_FLAG_RESET) {

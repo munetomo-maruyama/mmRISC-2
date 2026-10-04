@@ -30,6 +30,18 @@
 //   that belongs to the debugger, dmode). The core does the matching
 //   (trig_* below); this keeps the registers and sets hit when a trigger
 //   really fired.
+//
+//   PMU (2026-10, CPU_CORE_SPEC.md decision 69): HPM_COUNTERS counters from
+//   mhpmcounter3 on, each with its mhpmevent (an event number below
+//   HPM_EVENTS, and the Sscofpmf bits OF / MINH / SINH / UINH), and their
+//   bits in mcountinhibit, mcounteren and scounteren. The core says which
+//   events happened in a cycle (hpm_ev); they are counted one cycle later.
+//   A counter that wraps sets its OF, and OF going from 0 to 1 raises the
+//   local counter overflow interrupt (LCOFI, 13), which can be delegated.
+//   The counters above the implemented ones read 0 and ignore writes.
+//   Smcntrpmf gives mcycle and minstret the same MINH / SINH / UINH, in
+//   mcyclecfg and minstretcfg: without it OpenSBI does not let Linux use
+//   them once Sscofpmf is there (they could not leave a level out).
 //---------------------------------------------------------------------------
 
 `timescale 1ns/1ps
@@ -49,7 +61,11 @@ module CORE_CSR
         // address; this is how many the software can see.
         parameter int          PMP_CSRS    = 16,
         // Sdtrig: number of triggers (type 2, mcontrol)
-        parameter int          TRIGGERS    = 4
+        parameter int          TRIGGERS    = 4,
+        // PMU: counters mhpmcounter3 .. mhpmcounter(3+HPM_COUNTERS-1), and
+        // the number of event inputs (event 0 is "nothing")
+        parameter int          HPM_COUNTERS = 4,
+        parameter int          HPM_EVENTS   = 18
     )
     (
         input  logic        clk,
@@ -112,6 +128,7 @@ module CORE_CSR
 
         // counters
         input  logic        instret_inc,
+        input  logic [HPM_EVENTS-1:0] hpm_ev,   // the events of this cycle
 
         // floating point state
         input  logic        fflags_we,     // accumulate the flags of one op
@@ -171,6 +188,9 @@ module CORE_CSR
     localparam logic [11:0] CSR_STIMECMP  = 12'h14D;
     localparam logic [11:0] CSR_MENVCFG   = 12'h30A;
     localparam logic [11:0] CSR_MCOUNTINHIBIT = 12'h320;
+    localparam logic [11:0] CSR_SCOUNTOVF = 12'hDA0;
+    localparam logic [11:0] CSR_MCYCLECFG   = 12'h321;
+    localparam logic [11:0] CSR_MINSTRETCFG = 12'h322;
     // machine
     localparam logic [11:0] CSR_MSTATUS   = 12'h300;
     localparam logic [11:0] CSR_MISA      = 12'h301;
@@ -214,11 +234,13 @@ module CORE_CSR
     localparam int IRQ_M_TIMER = 7;
     localparam int IRQ_S_EXT   = 9;
     localparam int IRQ_M_EXT   = 11;
+    localparam int IRQ_LCOF    = 13;     // Sscofpmf: a counter overflowed
 
     // delegation masks. Exception 11 (ECALL from M) can never be delegated,
-    // 10 and 14 are reserved; only the three supervisor interrupts can.
+    // 10 and 14 are reserved; only the three supervisor interrupts and the
+    // counter overflow can.
     localparam logic [63:0] MEDELEG_MASK = 64'h0000_0000_0000_B3FF;
-    localparam logic [63:0] MIDELEG_MASK = 64'h0000_0000_0000_0222;
+    localparam logic [63:0] MIDELEG_MASK = 64'h0000_0000_0000_2222;
 
     //-----------------------------------------------------------------
     // state
@@ -255,6 +277,21 @@ module CORE_CSR
     logic        inhibit_cy, inhibit_ir;
     logic [63:0] stimecmp;
     logic        stip_cmp;       // time >= stimecmp, one cycle late
+
+    // PMU. Counter i is mhpmcounter(3+i).
+    localparam int HPM_N = (HPM_COUNTERS > 0) ? HPM_COUNTERS : 1;
+    logic [63:0] hpm_cnt   [0:HPM_N-1];
+    logic [4:0]  hpm_sel   [0:HPM_N-1];   // the event
+    logic [HPM_N-1:0] hpm_of, hpm_minh, hpm_sinh, hpm_uinh;
+    logic [HPM_N-1:0] inhibit_hpm;
+    logic        mip_lcofip, mie_lcofie;
+    logic [HPM_EVENTS-1:0] hpm_ev_q;      // the events of the last cycle
+    logic [1:0]  hpm_priv_q;              //   and the level they happened at
+    logic [31:0] hpm_ovf;                 // OF of each counter, at its number
+    logic [31:3] hpm_inh;                 // mcountinhibit of the counters
+    // Smcntrpmf: the levels mcycle and minstret do not count at
+    logic        cy_minh, cy_sinh, cy_uinh, ir_minh, ir_sinh, ir_uinh;
+    logic        cy_filt, ir_filt;
 
     // Sdtrig. A trigger has the fields of mcontrol that are not hard wired
     // here: match is always 0 (equal; maskmax 0, no NAPOT), select / timing
@@ -359,6 +396,7 @@ module CORE_CSR
         mie_val[IRQ_M_TIMER]  = mie_mtie;
         mie_val[IRQ_S_EXT]    = mie_seie;
         mie_val[IRQ_M_EXT]    = mie_meie;
+        mie_val[IRQ_LCOF]     = mie_lcofie;
 
         // the machine pending bits are driven by the CLINT and the PLIC and
         // are read only; the supervisor ones are written by software (this is
@@ -371,6 +409,21 @@ module CORE_CSR
         mip_val[IRQ_M_TIMER]  = irq_m_timer;
         mip_val[IRQ_S_EXT]    = mip_seip | irq_s_ext;
         mip_val[IRQ_M_EXT]    = irq_m_ext;
+        mip_val[IRQ_LCOF]     = mip_lcofip;
+    end
+
+    // Smcntrpmf: mcycle and minstret leave the current level out
+    assign cy_filt = (priv_r == PRIV_M) ? cy_minh : (priv_r == PRIV_S) ? cy_sinh : cy_uinh;
+    assign ir_filt = (priv_r == PRIV_M) ? ir_minh : (priv_r == PRIV_S) ? ir_sinh : ir_uinh;
+
+    // the counters' bits of scountovf and mcountinhibit
+    always @(*) begin
+        hpm_ovf = 32'd0;
+        hpm_inh = '0;
+        for (int i = 0; i < HPM_COUNTERS; i++) begin
+            hpm_ovf[3+i] = hpm_of[i];
+            hpm_inh[3+i] = inhibit_hpm[i];
+        end
     end
 
     assign sie_val    = mie_val & mideleg;
@@ -419,6 +472,30 @@ module CORE_CSR
     //-----------------------------------------------------------------
     logic        ctr_denied;
     logic [4:0]  ctr_bit;
+    logic        hpm_rd_hit;
+    logic [63:0] hpm_rdata;
+    int          rd_hpm_idx;
+
+    // mhpmcounter3-31 (0xB03-), hpmcounter3-31 (0xC03-), mhpmevent3-31
+    // (0x323-): all of them exist, those past the implemented ones read 0
+    assign rd_hpm_idx = int'(rd_addr[4:0]) - 3;
+    always @(*) begin
+        hpm_rd_hit = 1'b0;
+        hpm_rdata  = 64'd0;
+        if (rd_addr[4:0] >= 5'd3) begin
+            if ((rd_addr[11:5] == 7'h58) || (rd_addr[11:5] == 7'h60)) begin
+                hpm_rd_hit = 1'b1;
+                for (int i = 0; i < HPM_COUNTERS; i++)
+                    if (rd_hpm_idx == i) hpm_rdata = hpm_cnt[i];
+            end else if (rd_addr[11:5] == 7'h19) begin
+                hpm_rd_hit = 1'b1;
+                for (int i = 0; i < HPM_COUNTERS; i++)
+                    if (rd_hpm_idx == i)
+                        hpm_rdata = {hpm_of[i], hpm_minh[i], hpm_sinh[i], hpm_uinh[i],
+                                     2'b00, 53'd0, hpm_sel[i]};
+            end
+        end
+    end
     logic        pmp_hit;
     logic [63:0] pmp_rdata;
 
@@ -484,7 +561,13 @@ module CORE_CSR
                 rd_denied = (priv_r != PRIV_M) & (~menvcfg_stce | ~mcounteren[1]);
             end
             CSR_MENVCFG   : rd_data = {menvcfg_stce, 63'd0};
-            CSR_MCOUNTINHIBIT: rd_data = {61'd0, inhibit_ir, 1'b0, inhibit_cy};
+            CSR_MCOUNTINHIBIT: rd_data = {32'd0, hpm_inh[31:3], inhibit_ir, 1'b0, inhibit_cy};
+            CSR_MCYCLECFG : rd_data = {1'b0, cy_minh, cy_sinh, cy_uinh, 60'd0};
+            CSR_MINSTRETCFG:rd_data = {1'b0, ir_minh, ir_sinh, ir_uinh, 60'd0};
+            // the supervisor sees the overflow of a counter only if M lets
+            // it read that counter
+            CSR_SCOUNTOVF : rd_data = {32'd0, hpm_ovf &
+                                       ((priv_r == PRIV_M) ? 32'hFFFF_FFFF : mcounteren)};
             CSR_SATP      : begin
                 rd_data   = satp;
                 // TVM traps the supervisor reading or writing satp
@@ -527,8 +610,10 @@ module CORE_CSR
             CSR_DSCRATCH0 : begin rd_data = dscratch0; rd_exists = dbg_access; end
             CSR_DSCRATCH1 : begin rd_data = dscratch1; rd_exists = dbg_access; end
             default       : begin
-                rd_data   = pmp_rdata;
-                rd_exists = pmp_hit;
+                rd_data   = hpm_rd_hit ? hpm_rdata : pmp_rdata;
+                rd_exists = pmp_hit | hpm_rd_hit;
+                // hpmcounterN like cycle / instret
+                if (rd_addr[11:5] == 7'h60) rd_denied = ctr_denied;
             end
         endcase
 
@@ -562,14 +647,16 @@ module CORE_CSR
     assign irq_req = |irq_deliver;
 
     // the priority of the privileged specification: machine before
-    // supervisor, and external before software before timer
+    // supervisor, and external before software before timer; the counter
+    // overflow after all of them
     always @(*) begin
         if      (irq_deliver[IRQ_M_EXT])   irq_cause = 5'(IRQ_M_EXT);
         else if (irq_deliver[IRQ_M_SOFT])  irq_cause = 5'(IRQ_M_SOFT);
         else if (irq_deliver[IRQ_M_TIMER]) irq_cause = 5'(IRQ_M_TIMER);
         else if (irq_deliver[IRQ_S_EXT])   irq_cause = 5'(IRQ_S_EXT);
         else if (irq_deliver[IRQ_S_SOFT])  irq_cause = 5'(IRQ_S_SOFT);
-        else                               irq_cause = 5'(IRQ_S_TIMER);
+        else if (irq_deliver[IRQ_S_TIMER]) irq_cause = 5'(IRQ_S_TIMER);
+        else                               irq_cause = 5'(IRQ_LCOF);
     end
 
     //-----------------------------------------------------------------
@@ -668,6 +755,21 @@ module CORE_CSR
             tc_mpte      <= 1'b0;
             inhibit_cy   <= 1'b0;
             inhibit_ir   <= 1'b0;
+            for (int i = 0; i < HPM_N; i++) begin
+                hpm_cnt[i] <= 64'd0;
+                hpm_sel[i] <= 5'd0;
+            end
+            hpm_of       <= '0;
+            hpm_minh     <= '0;
+            hpm_sinh     <= '0;
+            hpm_uinh     <= '0;
+            inhibit_hpm  <= '0;
+            mip_lcofip   <= 1'b0;
+            mie_lcofie   <= 1'b0;
+            hpm_ev_q     <= '0;
+            hpm_priv_q   <= PRIV_M;
+            {cy_minh, cy_sinh, cy_uinh} <= 3'b000;
+            {ir_minh, ir_sinh, ir_uinh} <= 3'b000;
             stimecmp     <= {64{1'b1}};      // never, until written
             stip_cmp     <= 1'b0;
             fflags       <= 5'd0;
@@ -677,8 +779,25 @@ module CORE_CSR
                 pmpaddr[i] <= 54'd0;
             end
         end else begin
-            if (!inhibit_cy)                mcycle   <= mcycle + 64'd1;
-            if (instret_inc && !inhibit_ir) minstret <= minstret + 64'd1;
+            if (!inhibit_cy && !cy_filt)                mcycle   <= mcycle + 64'd1;
+            if (instret_inc && !inhibit_ir && !ir_filt) minstret <= minstret + 64'd1;
+            // the counters of events: what happened last cycle, at the
+            // level it happened at, unless the counter is inhibited or its
+            // mhpmevent leaves that level out. Wrapping sets OF; OF going
+            // from 0 to 1 raises the overflow interrupt.
+            hpm_ev_q   <= hpm_ev;
+            hpm_priv_q <= priv_r;
+            for (int i = 0; i < HPM_COUNTERS; i++) begin
+                if (hpm_ev_q[hpm_sel[i]] && !inhibit_hpm[i] &&
+                    !((hpm_priv_q == PRIV_M) ? hpm_minh[i] :
+                      (hpm_priv_q == PRIV_S) ? hpm_sinh[i] : hpm_uinh[i])) begin
+                    hpm_cnt[i] <= hpm_cnt[i] + 64'd1;
+                    if (&hpm_cnt[i]) begin
+                        hpm_of[i] <= 1'b1;
+                        if (!hpm_of[i]) mip_lcofip <= 1'b1;
+                    end
+                end
+            end
             stip_cmp <= (mtime >= stimecmp);
             // a trigger fired: the trap or the halt it caused happens now
             t_hit    <= t_hit | trig_fired;
@@ -809,25 +928,32 @@ module CORE_CSR
                         mie_mtie <= wr_data[IRQ_M_TIMER];
                         mie_seie <= wr_data[IRQ_S_EXT];
                         mie_meie <= wr_data[IRQ_M_EXT];
+                        mie_lcofie <= wr_data[IRQ_LCOF];
                     end
                     CSR_SIE: begin
                         // only the delegated bits are visible through sie
                         if (mideleg[IRQ_S_SOFT])  mie_ssie <= wr_data[IRQ_S_SOFT];
                         if (mideleg[IRQ_S_TIMER]) mie_stie <= wr_data[IRQ_S_TIMER];
                         if (mideleg[IRQ_S_EXT])   mie_seie <= wr_data[IRQ_S_EXT];
+                        if (mideleg[IRQ_LCOF])    mie_lcofie <= wr_data[IRQ_LCOF];
                     end
                     CSR_MIP: begin
                         mip_ssip <= wr_data[IRQ_S_SOFT];
                         // with STCE the bit is the comparison, read only
                         if (!menvcfg_stce) mip_stip <= wr_data[IRQ_S_TIMER];
                         mip_seip <= wr_data[IRQ_S_EXT];
+                        mip_lcofip <= wr_data[IRQ_LCOF];
                     end
                     CSR_MENVCFG      : menvcfg_stce <= wr_data[63];
                     CSR_MCOUNTINHIBIT: begin
                         inhibit_cy <= wr_data[0];
                         inhibit_ir <= wr_data[2];
+                        for (int i = 0; i < HPM_COUNTERS; i++)
+                            inhibit_hpm[i] <= wr_data[3+i];
                     end
                     CSR_STIMECMP     : stimecmp <= wr_data;
+                    CSR_MCYCLECFG    : {cy_minh, cy_sinh, cy_uinh} <= wr_data[62:60];
+                    CSR_MINSTRETCFG  : {ir_minh, ir_sinh, ir_uinh} <= wr_data[62:60];
                     // a value past the last trigger is not taken (that is
                     // how a debugger counts them)
                     CSR_TSELECT      : if (wr_data < 64'(TRIGGERS))
@@ -868,6 +994,9 @@ module CORE_CSR
                         // the supervisor may only clear its own software
                         // interrupt; the timer and external ones belong to M
                         if (mideleg[IRQ_S_SOFT]) mip_ssip <= wr_data[IRQ_S_SOFT];
+                        // and the overflow, which is its business when
+                        // delegated (Sscofpmf)
+                        if (mideleg[IRQ_LCOF])   mip_lcofip <= wr_data[IRQ_LCOF];
                     end
                     // the two low bits are the mode: 0 direct, 1 vectored,
                     // everything else is reserved and is not taken over
@@ -910,7 +1039,23 @@ module CORE_CSR
                     CSR_DSCRATCH1 : if (dbg_access) dscratch1 <= wr_data;
                     CSR_MCYCLE    : mcycle     <= wr_data;
                     CSR_MINSTRET  : minstret   <= wr_data;
-                    default       : ;            // misa and the read only ones
+                    default       : begin
+                        // mhpmcounterN / mhpmeventN; an event number that
+                        // does not exist is taken as 0 (nothing). misa and
+                        // the read only ones end here too.
+                        for (int i = 0; i < HPM_COUNTERS; i++) begin
+                            if (wr_addr == 12'hB03 + 12'(i))
+                                hpm_cnt[i] <= wr_data;
+                            if (wr_addr == 12'h323 + 12'(i)) begin
+                                hpm_of[i]   <= wr_data[63];
+                                hpm_minh[i] <= wr_data[62];
+                                hpm_sinh[i] <= wr_data[61];
+                                hpm_uinh[i] <= wr_data[60];
+                                hpm_sel[i]  <= (wr_data[55:0] < 56'(HPM_EVENTS))
+                                             ? wr_data[4:0] : 5'd0;
+                            end
+                        end
+                    end
                 endcase
                 end
             end

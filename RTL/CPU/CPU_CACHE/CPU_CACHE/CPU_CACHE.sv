@@ -140,7 +140,11 @@ module CPU_CACHE
         input  logic [63:0]              m_axil_rdata,
         input  logic [1:0]               m_axil_rresp,
         input  logic                     m_axil_rvalid,
-        output logic                     m_axil_rready
+        output logic                     m_axil_rready,
+
+        // PMU: a line fill of each cache starts (CPU_CORE_SPEC.md decision 69)
+        output logic                     ev_ic_refill,
+        output logic                     ev_dc_refill
     );
 
     //=================================================================
@@ -265,6 +269,10 @@ module CPU_CACHE
     //=================================================================
     // Instruction cache (read only : the write channels are tied off)
     //=================================================================
+    // PMU: one pulse per line the caches read (their misses)
+    assign ev_ic_refill = ic_axi4_arvalid & ic_axi4_arready;
+    assign ev_dc_refill = dc_axi4_arvalid & dc_axi4_arready;
+
     ICACHE
         #(
             .PADDR_WIDTH    (PADDR_WIDTH),

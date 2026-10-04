@@ -13,8 +13,8 @@
 
 | ファイル | 出どころ | ロード先 | md5(2026-10-04) |
 |---|---|---|---|
-| `fw_jump.bin` | `scripts/build_opensbi.sh` がここに作る(デバイスツリー入り) | 0x8000_0000 | `559b517531d9ba8ba722a25a799bf251` |
-| `Image` | Linux カーネル。Rocket 構成で作ったもの(`LitexRocket/software/boot/Image`)の写し。CPU に依存しない | 0x8020_0000 | `1d0caecd9f373a9fb203dc9c28c2cd34` |
+| `fw_jump.bin` | `scripts/build_opensbi.sh` がここに作る(デバイスツリー入り) | 0x8000_0000 | `28461f3da61988ac2ee6e61d7ddf1570` |
+| `Image` | Linux カーネル。Rocket 構成で作ったものと同じ設定に、性能カウンタ(`perf`)のための `CONFIG_PERF_EVENTS` / `CONFIG_RISCV_PMU_SBI` を足して作り直したもの(2026-10、`CPU_CORE_SPEC.md` 決定 69) | 0x8020_0000 | `1d886448db1ae0b8e1629cfeba6b605b` |
 | `boot.json` | BIOS が読む配置表。Rocket 構成と同じ | ― | `a1c356008baa859fa615b879d0fa18f3` |
 
 3 つとも git で管理しているので、リポジトリを取ってくればそのままカードを作れる
@@ -30,8 +30,8 @@
 
 | ファイル | ソース | 作り方 | ライセンス |
 |---|---|---|---|
-| `Image` | Linux、[litex-hub/linux](https://github.com/litex-hub/linux) の commit `4929f78c004ecab9b68bb41018a3d11749dcea62`(7.2.0-rc2 ベース)。手は入れていない | この `Image` を作ったときの `.config` が同じディレクトリの `linux.config`。それを `.config` に置いて `make ARCH=riscv CROSS_COMPILE=riscv64-unknown-linux-gnu- Image`。コンパイラは riscv64-unknown-linux-gnu-gcc 13.2.0 | GPL-2.0(ソースは上の URL と commit から入手できる) |
-| `fw_jump.bin` | OpenSBI、[riscv-software-src/opensbi](https://github.com/riscv-software-src/opensbi) の commit `3593a5facc4c6938b90429a6973ba9ee21fc5899`(v1.9 系)。手は入れていない | `scripts/build_opensbi.sh`(`PLATFORM=generic`、デバイスツリー `../mmrisc_arty.dts` を `FW_FDT_PATH` で埋め込む) | BSD-2-Clause(`COPYING.OpenSBI.BSD`) |
+| `Image` | Linux、[litex-hub/linux](https://github.com/litex-hub/linux) の commit `4929f78c004ecab9b68bb41018a3d11749dcea62`(7.2.0-rc2 ベース)。手は入れていない | この `Image` を作ったときの `.config` が同じディレクトリの `linux.config`(Rocket 構成の設定に `CONFIG_PERF_EVENTS`、`CONFIG_RISCV_PMU`、`CONFIG_RISCV_PMU_SBI` を足しただけ)。それを `.config` に置いて `make ARCH=riscv CROSS_COMPILE=riscv64-unknown-linux-gnu- Image`。コンパイラは riscv64-unknown-linux-gnu-gcc 13.2.0 | GPL-2.0(ソースは上の URL と commit から入手できる) |
+| `fw_jump.bin` | OpenSBI、[riscv-software-src/opensbi](https://github.com/riscv-software-src/opensbi) の commit `3593a5facc4c6938b90429a6973ba9ee21fc5899`(v1.9 系)。ソースには手を入れず、`opensbi_patches/` のパッチ(2026-10: `0001` 止まっているカウンタも RESET 付きの停止で解放する。これが無いと Linux の `perf` がカウンタを使い切る)をビルド用の写しに当てる | `scripts/build_opensbi.sh`(パッチを当て、`PLATFORM=generic`、デバイスツリー `../mmrisc_arty.dts` を `FW_FDT_PATH` で埋め込む) | BSD-2-Clause(`COPYING.OpenSBI.BSD`) |
 | `boot.json` | このリポジトリ | ― | このリポジトリと同じ |
 
 カーネルのバージョン文字列に付いている `-dirty` は、作業ツリーに大文字小文字だけが違う

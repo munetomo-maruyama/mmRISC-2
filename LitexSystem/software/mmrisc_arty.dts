@@ -52,7 +52,10 @@
 			/* The extensions one by one, as Linux wants them now (without
 			 * them it falls back to riscv,isa and warns). Only what the
 			 * core has: the counters are cycle, time and instret (Zicntr),
-			 * there are no hpmcounters (no Zihpm). Zba and Zbb since
+			 * and since 2026-10 hpmcounter3-6 (Zihpm) with the overflow
+			 * interrupt of Sscofpmf and the level filters of Smcntrpmf
+			 * for cycle / instret (decision 69; the pmu node below
+			 * tells OpenSBI their events). Zba and Zbb since
 			 * 2026-10 (CPU_CORE_SPEC.md 2.1): with them Linux patches in
 			 * its Zbb string functions at boot. Sstc since 2026-10 too
 			 * (decision 66): Linux then sets its timer in stimecmp
@@ -61,11 +64,12 @@
 			 * cpu_relax() use the hint. riscv,isa stays for OpenSBI and
 			 * older software.
 			 * Use this tree only with a bitstream that has all of them. */
-			riscv,isa = "rv64imafdc_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zba_zbb_sstc";
+			riscv,isa = "rv64imafdc_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zba_zbb_smcntrpmf_sscofpmf_sstc";
 			riscv,isa-base = "rv64i";
 			riscv,isa-extensions = "i", "m", "a", "f", "d", "c",
 				"zicntr", "zicond", "zicsr", "zifencei", "zihintntl",
-				"zihintpause", "zba", "zbb", "sstc";
+				"zihintpause", "zihpm", "zba", "zbb", "smcntrpmf", "sscofpmf",
+				"sstc";
 			riscv,pmpgranularity = <4>;
 			riscv,pmpregions = <8>;
 			status = "okay";
@@ -80,6 +84,53 @@
 	L8: memory@80000000 {
 		device_type = "memory";
 		reg = <0x80000000 0x10000000>; /* 256MB (Arty A7-100T, MT41K128M16 x2) */
+	};
+	/* The PMU for OpenSBI's SBI PMU extension, through which Linux's perf
+	 * uses the counters (CPU_CORE_SPEC.md decision 69). hpmcounter3-6
+	 * (map 0x78) count any event; the value for mhpmevent is the event
+	 * number of the core:
+	 *    1 cycles               7 I$ misses           13 load use cycles
+	 *    2 instructions         8 D$ misses           14 MDU / FPU wait cycles
+	 *    3 loads retired        9 ITLB misses (walks) 15 exceptions
+	 *    4 stores retired      10 DTLB misses (walks) 16 interrupts
+	 *    5 cond. branches      11 D$ wait cycles      17 back end stall cycles
+	 *    6 wrong guesses       12 front end empty cycles
+	 * Generic events (type 0) and cache events (type 1: cache << 3 |
+	 * op << 1 | result) map onto them; any of them is also a raw event
+	 * (perf stat -e r8 = D$ misses). cycles and instructions are the
+	 * fixed counters 0 and 2. */
+	pmu {
+		compatible = "riscv,pmu";
+		riscv,event-to-mhpmevent =
+			<0x00004 0x0 8>,	/* cache-misses: D$ misses */
+			<0x00005 0x0 5>,	/* branch-instructions */
+			<0x00006 0x0 6>,	/* branch-misses */
+			<0x00008 0x0 12>,	/* stalled-cycles-frontend */
+			<0x00009 0x0 17>,	/* stalled-cycles-backend */
+			<0x10000 0x0 3>,	/* L1-dcache-loads */
+			<0x10001 0x0 8>,	/* L1-dcache-load-misses (every fill) */
+			<0x10002 0x0 4>,	/* L1-dcache-stores */
+			<0x10009 0x0 7>,	/* L1-icache-load-misses */
+			<0x10019 0x0 10>,	/* dTLB-load-misses */
+			<0x10021 0x0 9>,	/* iTLB-load-misses */
+			<0x10028 0x0 5>,	/* branch-loads */
+			<0x10029 0x0 6>;	/* branch-load-misses */
+		/* cycles and instructions on their fixed counters only: listed
+		 * so that OpenSBI reports them (SBI 3.0 event info, which
+		 * Linux asks at boot), and with Smcntrpmf the fixed counters
+		 * take the level filters, so no hpmcounter is spent on them */
+		riscv,event-to-mhpmcounters =
+			<0x00001 0x00001 0x01>,
+			<0x00002 0x00002 0x04>,
+			<0x00004 0x00006 0x78>,
+			<0x00008 0x00009 0x78>,
+			<0x10000 0x10002 0x78>,
+			<0x10009 0x10009 0x78>,
+			<0x10019 0x10019 0x78>,
+			<0x10021 0x10021 0x78>,
+			<0x10028 0x10029 0x78>;
+		riscv,raw-event-to-mhpmcounters =
+			<0x0 0x0 0xffffffff 0xffffffe0 0x78>;
 	};
 	clocks {
 		sys_clk: litex_sys_clk {

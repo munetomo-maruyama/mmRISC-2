@@ -43,6 +43,7 @@ CoreMark(シミュレーション、CPI 1.089)の停止の内訳:
 | B4 | **Sdtrig**(デバッグのトリガ) | 中 | いまは `Debug Triggers: 0`。JTAG(`JTAG.md`)の gdb でハードウェアブレークポイント・ウォッチポイントが使えるようになる。デバッグ環境の完成度が上がる |
 |  | → **シミュレーションで済み(2026-10-04)、実機の確認待ち** | | type 2(`mcontrol`)を 4 本。実行トリガは ID、ロード・ストアのトリガは MR で照合(EX の DTLB・D$ 要求の経路には載せない)。`rv64mi-p-breakpoint` が PASS、`SIM_OCD` で OpenOCD の hw ブレークポイント・ウォッチポイントが動作。`CPU_CORE_SPEC.md` 決定 67 |
 | B5 | PMU(`mhpmcounter`、Sscofpmf) | 中 | Linux の `perf` で性能を測れる。いまシミュレーションのプロファイラでしかできない内訳を実機で取れる |
+|  | → **シミュレーションで済み(2026-10-04)、実機の確認待ち** | | `hpmcounter3`〜`6`、イベント 17 種(テストベンチのプロファイラと同じ内訳を含む)、Sscofpmf のあふれ割り込み。カーネルに `CONFIG_PERF_EVENTS` / `CONFIG_RISCV_PMU_SBI`、デバイスツリーに `pmu` ノード、`perf` は静的リンクで TFTP から(`software/bench/perf.sh`)。Smcntrpmf も追加(OpenSBI が固定カウンタを使わせる条件)、OpenSBI のカウンタ解放の不具合をパッチで修正(`software/boot/opensbi_patches/0001`)。シミュレーションの Linux で `perf stat`(cycles・instructions と 4 本のカウンタを同時に 100 %)と `perf record`(あふれ割り込みで 131 標本)を確認。`CPU_CORE_SPEC.md` 決定 69 |
 
 ### C. 大きなテーマ
 

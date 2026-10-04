@@ -499,6 +499,8 @@ module CPU_TOP
     // debug side of the data cache
     // the core takes back the request of the last cycle (CPU_CORE_SPEC.md 5)
     logic                       cpu_d_req_cancel;
+    // PMU: line fills of the caches, for the core's counters
+    logic                       ev_ic_refill, ev_dc_refill;
 
     logic                       dbg_dc_req_valid, dbg_dc_req_ready;
     logic [AXI4_ADDR_WIDTH-1:0] dbg_dc_req_addr, dbg_dc_req_paddr;
@@ -887,7 +889,9 @@ module CPU_TOP
             .m_axil_rdata    (cc_axil_rdata),
             .m_axil_rresp    (cc_axil_rresp),
             .m_axil_rvalid   (cc_axil_rvalid),
-            .m_axil_rready   (cc_axil_rready)
+            .m_axil_rready   (cc_axil_rready),
+            .ev_ic_refill    (ev_ic_refill),
+            .ev_dc_refill    (ev_dc_refill)
         );
 
     //=================================================================
@@ -1502,6 +1506,8 @@ module CPU_TOP
                     .irq_m_ext     (irq_m_ext[0]),
                     .irq_s_ext     (irq_s_ext[0]),
                     .mtime         (mtime),
+                    .ev_ic_refill  (ev_ic_refill),
+                    .ev_dc_refill  (ev_dc_refill),
                     .trace_valid   (),
                     .trace_pc      (),
                     .trace_insn    (),

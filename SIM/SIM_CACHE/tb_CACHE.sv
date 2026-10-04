@@ -321,7 +321,9 @@ module tb_CACHE;
             .m_axil_rdata   (m_axil_rdata),
             .m_axil_rresp   (m_axil_rresp),
             .m_axil_rvalid  (m_axil_rvalid),
-            .m_axil_rready  (m_axil_rready)
+            .m_axil_rready  (m_axil_rready),
+            .ev_ic_refill   (),               // PMU events, for the core
+            .ev_dc_refill   ()
         );
 
     //=================================================================

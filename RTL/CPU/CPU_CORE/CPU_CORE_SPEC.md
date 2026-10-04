@@ -42,7 +42,8 @@ CPU コア本体を定義する。
 |---|---|
 | 基本 | RV64I |
 | 標準拡張 | M(乗除算)、A(AMO/LR-SC)、F/D(単精度・倍精度)、C(圧縮命令) |
-| 付随 | Zicsr、Zifencei、Zicntr(`mcycle`/`minstret`) |
+| 付随 | Zicsr、Zifencei、Zicntr(`mcycle`/`minstret`)、**Zihpm**(`hpmcounter3`〜`6`、2026-10、決定 69) |
+| 性能カウンタの割り込み | **Sscofpmf**(カウンタのあふれ割り込み LCOFI、`scountovf`、`mhpmevent` の OF / MINH / SINH / UINH、決定 69)、**Smcntrpmf**(`mcycle` / `minstret` のレベル除外、`mcyclecfg` / `minstretcfg`) |
 | 特権の版 | 1.12(`menvcfg` / `senvcfg` / `mcountinhibit` があるので、OpenSBI は 1.12 と見る。決定 66) |
 | タイマ | **Sstc**(`stimecmp`、2026-10、決定 66) |
 | デバッグのトリガ | **Sdtrig**(type 2 の `mcontrol` を 4 本、2026-10、決定 67)。ハードウェアブレークポイント・ウォッチポイント |
@@ -496,17 +497,21 @@ CSR ファイルはアドレス → レジスタのテーブル駆動にして�
 |---|---|---|
 | 0x300 | `mstatus` | MIE/SIE/MPIE/SPIE/MPP/SPP/FS/MPRV/SUM/MXR/TVM/TW/TSR/UXL/SXL/SD |
 | 0x301 | `misa` | MXL=2、IMAFDC + S + U。書き込みは無視 |
-| 0x302 / 0x303 | `medeleg` / `mideleg` | 委譲。11 番(M からの ECALL)と予約番号は書けない |
-| 0x304 / 0x344 | `mie` / `mip` | M と S の 3 本ずつ。M の pending は CLINT・PLIC が駆動。`mip.SEIP` の読み出しはソフトウェアの書けるビットと PLIC の S 線の OR だが、`csrrs` / `csrrc` はソフトウェアのビットだけを基に書く(決定 51)。`mip.STIP` は `menvcfg.STCE` が立っていれば `time >= stimecmp`(読み出し専用、決定 66)、立っていなければソフトウェアの書くビット |
+| 0x302 / 0x303 | `medeleg` / `mideleg` | 委譲。11 番(M からの ECALL)と予約番号は書けない。`mideleg` は S の 3 本(1 / 5 / 9)とカウンタのあふれ(13)だけ |
+| 0x304 / 0x344 | `mie` / `mip` | M と S の 3 本ずつ。M の pending は CLINT・PLIC が駆動。`mip.SEIP` の読み出しはソフトウェアの書けるビットと PLIC の S 線の OR だが、`csrrs` / `csrrc` はソフトウェアのビットだけを基に書く(決定 51)。`mip.STIP` は `menvcfg.STCE` が立っていれば `time >= stimecmp`(読み出し専用、決定 66)、立っていなければソフトウェアの書くビット。bit 13 はカウンタのあふれ(LCOFIE / LCOFIP、決定 69)。LCOFIP はあふれで立ち、ソフトウェアが下ろす |
 | 0x305 | `mtvec` | モード 0(direct)と 1(vectored)。予約モードは取り込まない |
 | 0x306 | `mcounteren` | S/U がカウンタを読めるかどうか。TM は `stimecmp` にも効く |
 | 0x30A | `menvcfg` | STCE(bit 63)だけ。ほかのフィールドは対応する拡張が無いので 0(決定 66) |
-| 0x320 | `mcountinhibit` | CY(bit 0)と IR(bit 2)。立てると `mcycle` / `minstret` が止まる(決定 66) |
+| 0x320 | `mcountinhibit` | CY(bit 0)、IR(bit 2)、HPM3〜6(bit 3〜6)。立てるとそのカウンタが止まる(決定 66、69) |
+| 0x321 / 0x322 | `mcyclecfg` / `minstretcfg` | Smcntrpmf: bit 62 MINH、61 SINH、60 UINH。立てたレベルでは `mcycle` / `minstret` が進まない(決定 69) |
+| 0x323-0x33F | `mhpmevent3`-`31` | 3〜6 だけ実体: bit 63 OF、62 MINH、61 SINH、60 UINH(Sscofpmf)、下位 5 ビットがイベント番号(1〜17、決定 69 の表)。存在しない番号を書くと 0(何も数えない)。7〜31 は読み出し 0、書き込み無視 |
+| 0xB03-0xB1F | `mhpmcounter3`-`31` | 3〜6 だけ実体(64 ビット)。7〜31 は読み出し 0、書き込み無視 |
 | 0x340-0x343 | `mscratch` / `mepc` / `mcause` / `mtval` | `mepc` は下位 1bit を落とす |
 | 0x3A0 / 0x3A2 | `pmpcfg0` / `pmpcfg2` | PMP 設定、1 本に 8 エントリ |
 | 0x3B0-0x3BF | `pmpaddr0`-`15` | PMP アドレス |
 | 0xB00 / 0xB02 | `mcycle` / `minstret` | 書き込み可。書き込みはその命令の加算に優先する |
 | 0xC00 / 0xC01 / 0xC02 | `cycle` / `time` / `instret` | 読み出し専用。`time` は CLINT の `mtime` |
+| 0xC03-0xC1F | `hpmcounter3`-`31` | `mhpmcounter` の読み出し専用の窓。M 以外からは `mcounteren`(U からはさらに `scounteren`)の該当ビットが要る |
 | 0xF11-0xF14 | `mvendorid` / `marchid` / `mimpid` / `mhartid` | 読み出し専用 |
 
 スーパバイザモード:
@@ -514,7 +519,8 @@ CSR ファイルはアドレス → レジスタのテーブル駆動にして�
 | アドレス | CSR | 備考 |
 |---|---|---|
 | 0x100 | `sstatus` | `mstatus` をマスクして見たもの。実体は 1 つ |
-| 0x104 / 0x144 | `sie` / `sip` | `mie`/`mip` を `mideleg` でマスクしたもの |
+| 0x104 / 0x144 | `sie` / `sip` | `mie`/`mip` を `mideleg` でマスクしたもの。`sip` から書けるのは SSIP と、委譲されていれば LCOFIP |
+| 0xDA0 | `scountovf` | 読み出し専用。カウンタ N の OF をビット N に。S からは `mcounteren` で許されたカウンタの分だけ見える(Sscofpmf) |
 | 0x105 | `stvec` | `mtvec` と同じ 2 モード |
 | 0x106 | `scounteren` | U がカウンタを読めるかどうか |
 | 0x140-0x143 | `sscratch` / `sepc` / `scause` / `stval` | |
@@ -565,6 +571,8 @@ EX での CSR 読み出しが直前の CSR 書き込みを必ず見る。
   **命令アドレス不整列 → 命令アクセスフォールト → 命令ページフォールト →
   不正命令 → ブレークポイント → ロード/ストア不整列 → アクセスフォールト →
   ページフォールト**
+- 割り込みどうしの優先順位も特権仕様どおり: **M 外部 → M ソフトウェア → M タイマ →
+  S 外部 → S ソフトウェア → S タイマ → カウンタのあふれ(LCOFI、13、決定 69)**
 - 割り込み: CLINT(`msip`/`mtime`/`mtimecmp`)を内蔵(`RTL/CPU/CPU_CLINT`)。
   外部割り込みは PLIC(後段)。レジスタ配置は SiFive CLINT と同じで、
   ベースアドレスからの相対で
@@ -1491,3 +1499,4 @@ SIM_SYS(本物のキャッシュ)での内訳: 51014 命令中ロード 9784 (19
 | 66 | S モードのタイマ(Sstc) | **`stimecmp` を足し、`menvcfg.STCE` が立っていれば `mip.STIP` を `time >= stimecmp`(1 サイクル遅れのレジスタ)にする**。Linux はタイマのたびに SBI(OpenSBI への ECALL、M モードで `mtimecmp` を書き STIP を立てる)を呼ばずに、`stimecmp` を自分で書く。OpenSBI は特権仕様 1.12 のハートでしか Sstc を探さず、1.12 かどうかを `menvcfg`(1.12)と `mcountinhibit`(1.11)の有無で見るので、その 2 つと `senvcfg` も足した(フィールドは実装している拡張の分だけ: `menvcfg` は STCE、`mcountinhibit` は CY / IR、`senvcfg` は無し)。S からの `stimecmp` は STCE と `mcounteren.TM` が両方立っているときだけ。`t29_sstc`、変異 M289〜M297 |
 | 67 | デバッグのトリガ(Sdtrig) | **type 2(`mcontrol`)を 4 本、アドレスの完全一致だけ、発火は命令・アクセスの手前(timing 0)**。レジスタは `CORE_CSR`、照合は `CPU_CORE`。実行トリガは ID で `fq_pc` と比べ、割り込みと同じく命令に印を付ける(優先度は割り込みの次、命令自身の例外より前)。ロード・ストアのトリガは **MR で `mr_vaddr`(EX で計算済みのレジスタ)と比べ、MR の例外に入れる**。EX の例外に入れると DTLB とキャッシュ要求の前の経路(TIMING.md 30)に 64 ビット比較が 4 本載るので避けた。MR の例外は早出しした D$ のアクセスを取り消すので(PMP の失敗と同じ道)、発火したストアは書かれない。特権仕様 3.1.15 のとおりデータのブレークポイントは同じアクセスの不整列・ページフォールト・アクセスフォールトより前なので、MR は EX がそのアクセスについて見つけた例外を置き換える(`mr_exc_mem`)。どのトリガかの印(`id_trig` → `ex_trig_r` → `mr_trig` → `ma_trig`)を運び、**hit はコミット点でトラップ(または halt)したときに立てる**(捨てられる経路では立たない)。action 0 はブレークポイント例外(cause 3、mtval はアドレス)、action 1 はデバッグモード(dcsr.cause 2)。action 1 は dmode と一緒にデバッガが書いたときだけ。M モードの action 0 は `tcontrol.MTE` が立っているときだけ発火し、M へのトラップで MTE を落とすので、ハンドラの中では発火しない。範囲の一致(match 1 の NAPOT、2〜5 の大小比較)は無いので、OpenOCD は範囲のウォッチポイントを先頭アドレスの一致で代用する(警告が出る)。要るようになれば、比較の前に tdata2 から作ったマスクをかけるだけで match 1 を足せる。`t30_trig`、`t23_debug` 5、`rv64mi-p-breakpoint`、`SIM_OCD`(OpenOCD の hw ブレークポイント・ウォッチポイント)、変異 M298〜M314 |
 | 68 | Zicond と Zihintpause / Zihintntl | **Zicond は EX の ALU に 2 つの演算を足すだけ**(`czero.eqz`: rs2 が 0 なら 0、でなければ rs1。`czero.nez` はその逆)。rs2 の 64 ビットのゼロ判定が 1 つ増えるだけで、分岐・アドレスの経路は通らない。**PAUSE はもともと FENCE(pred=W, succ=0)として実行していた**ので(5.3、`t27_fence`)、ハードウェアは変えずにデバイスツリーに載せた。FENCE と同じく ID でパイプラインが空になるまで待つので、スピンループの 1 周がメモリアクセスの完了待ちで少し遅くなり、ヒントの意図(待つ間にパイプラインを空ける)に合う。Linux は Zihintpause があると `cpu_relax()` で PAUSE を使う。NTL.* は rd=x0 の ADD(C.NTL.* は rd=x0 の C.ADD)で、もともと何もしない命令として実行していた。GCC 13.2 は `_zicond` を受け付けるが `czero` を生成しない(if 変換で使うのは GCC 14 から)ので、いまのベンチマークには効かない。`t31_zicond`、riscv-tests の `rv64uzicond`、変異 M315〜M319 |
+| 69 | 性能カウンタ(Zihpm、Sscofpmf) | **`mhpmcounter3`〜`6` の 4 本(`CORE_CSR` のパラメータ `HPM_COUNTERS`)、イベントは 17 種、Sscofpmf のあふれ割り込みとレベルごとの除外**。コアは各イベントが今のサイクルに起きたかを 1 ビットずつ(`hpm_ev`)`CORE_CSR` に渡し、`CORE_CSR` は 1 サイクル遅れて数える(イベントの元はパイプラインの奥やキャッシュにあるので、選択と 64 ビットの加算の前でいったんレジスタに受ける。そのときのレベルも一緒に受けて MINH / SINH / UINH を当てる)。CSR 命令は直列化されるので、2 回の読み出しの差は遅れに関係なく正確。イベント番号: 1 サイクル、2 リタイアした命令、3 リタイアしたロード、4 リタイアしたストア、5 条件分岐(EX で解決したものと MR で解決した遅い分岐)、6 予測が外れた分岐・ジャンプ、7 I$ のミス(ラインの読み込み)、8 D$ のミス(同。DMA の分も含む)、9 ITLB のミス(ページテーブルを引いた回数)、10 DTLB のミス(同)、11 D$ 待ちのサイクル、12 フロントエンドが空のサイクル、13 ロードユースのサイクル、14 MDU / FPU 待ちのサイクル、15 例外、16 割り込み、17 バックエンドが詰まっているサイクル。11〜13 と 17 は、テストベンチのプロファイラと同じく「発行点(ID→EX)で 1 サイクルを失った理由」で、1 サイクルに理由は 1 つ。5・6 は EX / MR で数えるので、あとで捨てられる経路の分岐もわずかに入りうる。あふれ: カウンタが全 1 から 0 に戻ると OF が立ち、OF が 0 から 1 になったときだけ LCOFIP(`mip` bit 13)が立つ。`mideleg` で S に委譲でき、S は `sip` で下ろす。**Smcntrpmf** も足した(`mcyclecfg` / `minstretcfg` の MINH / SINH / UINH)。OpenSBI は Sscofpmf があって Smcntrpmf が無いと、レベルを除外できない固定カウンタ(`cycle` / `instret`)を Linux に使わせないため、`perf` の `cycles` / `instructions` が `<not supported>` になっていた。Linux は OpenSBI の SBI PMU 拡張を通してカウンタを使う。デバイスツリーには `cycles` / `instructions` も固定カウンタだけの対応として載せる(SBI 3.0 の event info に OpenSBI が「ある」と答えるため。Linux は起動時にそれを聞く)。また OpenSBI(v1.9 系、upstream も同じ)には、止まっているカウンタに RESET 付きの停止をかけても解放しない不具合があり、Linux の `riscv_pmu_del()` は「停止、続いて RESET 付きの停止」で解放するので、`perf` のイベントが終わるたびにカウンタが 1 本ずつ失われていた(生イベントが `<not counted>`、`perf record` の標本が 0)。`LitexSystem/software/boot/opensbi_patches/0001` で直し、`build_opensbi.sh` が写しに当てる。どのイベントをどのカウンタで数えられるかはデバイスツリーの `pmu` ノード(`riscv,event-to-mhpmevent` など)で OpenSBI に知らせる。`t32_pmu`(SIM_CORE / SIM_SYS)、`d04_pmu`(SIM_SYS: キャッシュと TLB のイベント)、`make pmu-sbi`(SIM_BIOS: OpenSBI の SBI PMU 拡張を Linux と同じ呼び方で検査。パッチなしの OpenSBI では失敗する)、`make linux-perf`(SIM_BIOS: Linux 上の `perf`。`cycles` / `instructions` と生イベント 4 本が同時に 100 % の時間数えられ、`perf record` があふれ割り込みで標本を取る)、変異 M320〜M340(SIM_CORE)、M13〜M16(SIM_SYS) |

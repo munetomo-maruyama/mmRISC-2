@@ -101,7 +101,11 @@ module CORE_MMU
         output logic [63:0] m_req_paddr,
         input  logic        m_resp_valid,
         input  logic [63:0] m_resp_data,
-        input  logic        m_resp_error
+        input  logic        m_resp_error,
+
+        // PMU: a walk starts (a miss of the TLB of that side)
+        output logic        ev_itlb_miss,
+        output logic        ev_dtlb_miss
     );
 
     localparam logic [1:0] PRIV_M     = 2'b11;
@@ -263,6 +267,11 @@ module CORE_MMU
             .m_resp_valid (m_resp_valid), .m_resp_data (m_resp_data),
             .m_resp_error (m_resp_error)
         );
+
+    // the cycle the port is granted to a walk, which then always runs (a
+    // kill can still throw its result away)
+    assign ev_dtlb_miss = ~grant & lsu_idle & ptw_need & ~kill &  d_need_walk;
+    assign ev_itlb_miss = ~grant & lsu_idle & ptw_need & ~kill & ~d_need_walk;
 
     assign i_fill = ptw_done & ~for_d & (ptw_fault == FAULT_NONE);
     assign d_fill = ptw_done &  for_d & (ptw_fault == FAULT_NONE);

@@ -2,7 +2,9 @@
 # Makefile : benchmarks for mmRISC-2 under Linux (static RISC-V binaries)
 #
 #   make            out/coremark, out/dhrystone, out/micro
-#   make tftp       copy them and bench.sh to the TFTP server (sudo)
+#   make tftp       copy them and bench.sh to the TFTP server (sudo); also
+#                   perf.sh and out/perf when ../../scripts/build_perf.sh
+#                   has made it (perf on the board: perf.sh)
 #   make clean
 #
 # The sources of CoreMark (EEMBC) and Dhrystone (from riscv-tests) are not
@@ -97,6 +99,9 @@ tftp: all
 	    bench.sh $(TFTP_DIR)/
 	sudo chmod 644 $(TFTP_DIR)/coremark $(TFTP_DIR)/dhrystone $(TFTP_DIR)/micro \
 	    $(TFTP_DIR)/coremark_zb $(TFTP_DIR)/dhrystone_zb $(TFTP_DIR)/bench.sh
+	if [ -f out/perf ]; then \
+	    sudo cp out/perf perf.sh $(TFTP_DIR)/ && \
+	    sudo chmod 644 $(TFTP_DIR)/perf $(TFTP_DIR)/perf.sh; fi
 	ls -l $(TFTP_DIR)
 
 clean:

@@ -117,11 +117,12 @@ back_in_m:
     andi x10, x10, 1
     TEST_EQ(15, x10, 0)
 
-    // only the three supervisor interrupts can be delegated
+    // only the three supervisor interrupts and the counter overflow (13,
+    // Sscofpmf) can be delegated
     li   t0, -1
     csrw mideleg, t0
     csrr x10, mideleg
-    TEST_EQ(16, x10, 0x222)
+    TEST_EQ(16, x10, 0x2222)
     csrw mideleg, x0
 
     // TVM makes SFENCE.VMA and satp trap in supervisor mode

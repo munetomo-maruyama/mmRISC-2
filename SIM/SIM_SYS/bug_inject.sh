@@ -51,6 +51,10 @@ MUTATIONS=(
 "9#CPU_DMA/DMA_CACHE.sv#s%assign dc_req_wdata = w_q >> (8 \* int'(p_off));%assign dc_req_wdata = w_q;%#DMA: the data of a piece is not moved to the right"
 "11#CPU_DMA/DMA_CACHE.sv#s%else                      dc_req_addr = {ar_q\[ADDR_WIDTH-1:3\], 3'b000};%else                      dc_req_addr = {aw_q[ADDR_WIDTH-1:3], 3'b000};%#DMA: a read goes to the address of the last write"
 "12#CPU_CORE/CORE_IFU/CORE_IFU.sv#s%assign i_req_valid = req_go \& ~redirect_valid;%assign i_req_valid = req_go;%#IFU: a fetch goes out in the cycle of a redirect"
+"13#CPU_CACHE/CPU_CACHE/CPU_CACHE.sv#s%assign ev_dc_refill = dc_axi4_arvalid \& dc_axi4_arready;%assign ev_dc_refill = ic_axi4_arvalid \& ic_axi4_arready;%#PMU: the D$ miss event counts the fills of the I$ (d04)"
+"14#CPU_CACHE/CPU_CACHE/CPU_CACHE.sv#s%assign ev_ic_refill = ic_axi4_arvalid \& ic_axi4_arready;%assign ev_ic_refill = 1'b0;%#PMU: no I$ miss events (d04)"
+"15#CPU_MMU/CORE_MMU/CORE_MMU.sv#s%ptw_need \& ~kill \& ~d_need_walk;%ptw_need \& ~kill \&  d_need_walk;%#PMU: the ITLB miss event counts the walks of the data side (d04)"
+"16#CPU_MMU/CORE_MMU/CORE_MMU.sv#s%assign ev_dtlb_miss = ~grant \& lsu_idle \& ptw_need \& ~kill \&  d_need_walk;%assign ev_dtlb_miss = ptw_need \&  d_need_walk;%#PMU: a DTLB miss counted every cycle it waits for the walker (d04)"
 )
 
 SEL=("$@")

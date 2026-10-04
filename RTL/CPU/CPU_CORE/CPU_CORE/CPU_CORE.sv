@@ -85,6 +85,10 @@ module CPU_CORE
         input  logic                    irq_s_ext,
         input  logic [63:0]             mtime,
 
+        // PMU: refills of the caches (one pulse per line read)
+        input  logic                    ev_ic_refill,
+        input  logic                    ev_dc_refill,
+
         // retirement trace (verification)
         output logic                    trace_valid,
         output logic [63:0]             trace_pc,
@@ -731,6 +735,12 @@ module CPU_CORE
     // page fault and the access fault of the same access (privileged spec
     // 3.1.15), so in MR it replaces an exception EX found for the access.
     //-----------------------------------------------------------------
+    // PMU (CPU_CORE_SPEC.md decision 69): the events, one bit each, set in
+    // the cycle they happen (assigned at the end of this file)
+    localparam int HPM_EVENTS = 18;
+    logic [HPM_EVENTS-1:0]  hpm_ev;
+    logic                   ev_itlb_miss, ev_dtlb_miss;
+
     localparam int TRIGGERS = 4;
     logic [8*TRIGGERS-1:0]  trig_cfg;
     logic [64*TRIGGERS-1:0] trig_addr;
@@ -764,7 +774,7 @@ module CPU_CORE
     assign trig_fired   = trap_taken ? ma_trig : '0;
 
     CORE_CSR #(.HART_ID(HART_ID), .MISA(MISA_VAL), .PMP_ENTRIES(PMP_ENTRIES),
-               .TRIGGERS(TRIGGERS)) u_csr
+               .TRIGGERS(TRIGGERS), .HPM_COUNTERS(4), .HPM_EVENTS(HPM_EVENTS)) u_csr
         (
             .clk         (clk),
             .rst_n       (rst_n),
@@ -808,6 +818,7 @@ module CPU_CORE
             .pmpcfg_out  (pmpcfg),
             .pmpaddr_out (pmpaddr),
             .instret_inc (commit),
+            .hpm_ev      (hpm_ev),
             .fflags_we   (commit & ma_fp_arith),
             .fflags_set  (ma_fp_flags),
             .fs_dirty    ((commit & ma_is_fp) | dbg_frf_we),
@@ -980,7 +991,9 @@ module CPU_CORE
             .m_req_paddr  (ptw_req_paddr),
             .m_resp_valid (ptw_resp_valid),
             .m_resp_data  (d_resp_data),
-            .m_resp_error (d_resp_error)
+            .m_resp_error (d_resp_error),
+            .ev_itlb_miss (ev_itlb_miss),
+            .ev_dtlb_miss (ev_dtlb_miss)
         );
 
     //=================================================================
@@ -2221,5 +2234,35 @@ module CPU_CORE
         trap_epc      = ma_pc;
         trap_tval     = ma_exc_tval;
     end
+
+    //=================================================================
+    // PMU events (CPU_CORE_SPEC.md decision 69)
+    //
+    //   The number is what mhpmevent selects. The cycles of 11 .. 13 and 17
+    //   are those the issue point (ID -> EX) loses, in the order the test
+    //   bench's profile uses: each lost cycle has one reason.
+    //=================================================================
+    logic hpm_unit_wait;
+    assign hpm_unit_wait = (mdu_active & ~mdu_done) | (fpu_active & ~fpu_done);
+
+    assign hpm_ev[0]  = 1'b0;                                  // nothing
+    assign hpm_ev[1]  = 1'b1;                                  // cycles
+    assign hpm_ev[2]  = commit;                                // instructions retired
+    assign hpm_ev[3]  = commit & ma_is_load;                   // loads retired
+    assign hpm_ev[4]  = commit & ma_is_store;                  // stores retired
+    assign hpm_ev[5]  = (ex_ctrl_go & ex_is_branch) | mr_late_go; // conditional branches
+    assign hpm_ev[6]  = (ex_ctrl_go & ex_mispredict) | kill_ex;   // wrong guesses
+    assign hpm_ev[7]  = ev_ic_refill;                          // I$ misses
+    assign hpm_ev[8]  = ev_dc_refill;                          // D$ misses
+    assign hpm_ev[9]  = ev_itlb_miss;                          // ITLB misses (walks)
+    assign hpm_ev[10] = ev_dtlb_miss;                          // DTLB misses (walks)
+    assign hpm_ev[11] = stall_ma;                              // waiting for the D$
+    assign hpm_ev[12] = ~id_issue & ~redirect_valid & ~stall_ex & ~fq_valid; // front end empty
+    assign hpm_ev[13] = ~id_issue & ~redirect_valid & stall_ex & ~stall_ma &
+                        ~hpm_unit_wait & lu_hazard;            // load use
+    assign hpm_ev[14] = hpm_unit_wait;                         // waiting for MDU / FPU
+    assign hpm_ev[15] = trap_en & ~trap_int_c;                 // exceptions
+    assign hpm_ev[16] = trap_en &  trap_int_c;                 // interrupts
+    assign hpm_ev[17] = ~id_issue & ~redirect_valid & stall_ex; // back end full
 
 endmodule : CPU_CORE

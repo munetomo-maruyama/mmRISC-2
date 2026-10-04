@@ -71,7 +71,7 @@ VERILATOR_FLAGS := --binary --timing -j 0 --top-module $(TOP) \
 TESTS    := t01_alu t02_branch t03_ldst t04_hazard t05_csr t07_trap t08_rvc \
             t09_muldiv t10_atomic t11_fp t12_priv t13_pmp t14_mmu \
             t16_bench t17_btb t18_asid t19_ldbench t20_ptw_pmp t21_satp \
-            t24_predict t26_late t27_fence
+            t24_predict t26_late t27_fence t30_trig t31_zicond t32_pmu
 TEST     ?= t01_alu
 PLUSARGS ?=
 
@@ -95,7 +95,7 @@ tests/%.hex:
 
 # Programs that need something only this bench has (the DMA model), built
 # the same way as the tests of SIM_CORE
-PROGS    := d01_dma d02_pmp_fetch d03_fencei
+PROGS    := d01_dma d02_pmp_fetch d03_fencei d04_pmu
 RVPREFIX := /opt/riscv/bin/riscv64-unknown-elf-
 progs/%.hex: progs/%.S ../SIM_CORE/tests/link.ld ../SIM_CORE/tests/test.h
 	$(RVPREFIX)gcc -march=rv64imafd_zicsr_zifencei -mabi=lp64 -mcmodel=medany \

@@ -10,6 +10,10 @@
 #   make linux-initrd  the same with the BusyBox initramfs, into user space
 #   make linux-sd      the board's own boot: the root from the SD card model
 #                      (SD_MODEL.sv) with sdcard.img, made here like the card
+#   make linux-perf    the same with perf on the card, run on a few
+#                      commands before the shell (sim_perf.sh)
+#   make pmu-sbi       OpenSBI with pmu_sbi/ in place of the kernel: the
+#                      calls of the SBI PMU extension Linux's perf makes
 #                (LINUX_ARGS adds plusargs, e.g. +pcmon=5000000)
 #---------------------------------------------------------------------------
 TOP      := tb_BIOS
@@ -67,10 +71,10 @@ VERILATOR_FLAGS := --binary --timing -j 0 --top-module $(TOP) \
 
 PLUSARGS ?=
 
-.PHONY: all run check trace linux linux-initrd linux-sd clean FORCE
+.PHONY: all run check trace linux linux-initrd linux-sd linux-perf pmu-sbi clean FORCE
 
 FW_BIN    := ../../LitexSystem/software/boot/fw_jump.bin
-IMAGE_BIN := ../../LitexRocket/software/boot/Image
+IMAGE_BIN := ../../LitexSystem/software/boot/Image
 LINUX_ARGS ?= +pcmon=10000000 +uart_cycles=20 +maxcycles=2000000000
 all: check
 
@@ -146,24 +150,60 @@ linux-initrd: obj_dir/V$(TOP) fw_jump_initrd.hex Image.hex initrd.hex
 ROOTFS_SRC := /home/taka/mmlitex_build/initramfs
 OVERLAY    := ../../LitexSystem/software/rootfs
 
-sdcard.img: $(INITRD_BIN) $(shell find $(OVERLAY) -type f)
+# $(1): what is added to the tree before it is written (nothing for the
+# plain card); $(2): its size in MiB, the partition and the card
+define SD_IMAGE
 	rm -rf sd_work; mkdir -p sd_work
 	cp -a $(ROOTFS_SRC) sd_work/rootfs
 	cp -a $(OVERLAY)/. sd_work/rootfs/
 	sed -i '/udhcpc/d' sd_work/rootfs/etc/inittab
-	dd if=/dev/zero of=sd_work/p2.img bs=1M count=16 status=none
+	$(1)
+	dd if=/dev/zero of=sd_work/p2.img bs=1M count=$(2) status=none
 	/usr/sbin/mke2fs -q -t ext4 -L rootfs -d sd_work/rootfs sd_work/p2.img
-	dd if=/dev/zero of=$@ bs=1M count=18 status=none
+	dd if=/dev/zero of=$@ bs=1M count=$$(( $(2) + 2 )) status=none
 	printf 'label: dos\nstart=2048, size=2048, type=c\nstart=4096, type=83\n' | \
 	    /usr/sbin/sfdisk -q $@
 	dd if=sd_work/p2.img of=$@ bs=512 seek=4096 conv=notrunc status=none
 	rm -rf sd_work
+endef
+
+sdcard.img: $(INITRD_BIN) $(shell find $(OVERLAY) -type f)
+	$(call SD_IMAGE,,16)
+
+# The same card with perf (LitexSystem/scripts/build_perf.sh) and
+# sim_perf.sh, which init runs before the shell: the PMU (CPU_CORE_SPEC.md
+# decision 69) seen from Linux, through OpenSBI's SBI PMU extension.
+PERF_BIN := $(HOME)/mmlitex_build/perf_build/perf.stripped
+sdcard_perf.img: $(INITRD_BIN) $(shell find $(OVERLAY) -type f) sim_perf.sh $(PERF_BIN)
+	$(call SD_IMAGE,cp $(PERF_BIN) sd_work/rootfs/usr/bin/perf; \
+	    cp sim_perf.sh sd_work/rootfs/root/; \
+	    sed -i 's|^::respawn:|::sysinit:/bin/sh /root/sim_perf.sh\n::respawn:|' sd_work/rootfs/etc/inittab,24)
 
 linux-sd: obj_dir/V$(TOP) fw_jump.hex Image.hex sdcard.img
 	cp sdcard.img sdcard_run.img
 	./obj_dir/V$(TOP) +linux +fw=fw_jump.hex +image=Image.hex \
 	    +sdimg=sdcard_run.img $(LINUX_ARGS)
 
+# pmu_sbi: a small S mode program in place of the kernel (pmu_sbi/pmu_sbi.c)
+PMU_SBI_SRC := pmu_sbi/start.S pmu_sbi/pmu_sbi.c
+pmu_sbi/pmu_sbi.hex: $(PMU_SBI_SRC) pmu_sbi/link.ld
+	/opt/riscv/bin/riscv64-unknown-elf-gcc -march=rv64imac_zicsr -mabi=lp64 \
+	    -mcmodel=medany -O2 -nostdlib -nostartfiles -ffreestanding \
+	    -Wl,--no-warn-rwx-segments -T pmu_sbi/link.ld -o pmu_sbi/pmu_sbi.elf $(PMU_SBI_SRC)
+	/opt/riscv/bin/riscv64-unknown-elf-objcopy -O binary pmu_sbi/pmu_sbi.elf pmu_sbi/pmu_sbi.bin
+	python3 ../SIM_CORE/tools/bin2hex.py pmu_sbi/pmu_sbi.bin $@
+
+pmu-sbi: obj_dir/V$(TOP) fw_jump.hex pmu_sbi/pmu_sbi.hex
+	./obj_dir/V$(TOP) +linux +fw=fw_jump.hex +image=pmu_sbi/pmu_sbi.hex \
+	    +maxcycles=80000000 $(LINUX_ARGS) | tee pmu_sbi.log
+	@grep -q "PMU_SBI RESULT : PASS" pmu_sbi.log
+
+linux-perf: obj_dir/V$(TOP) fw_jump.hex Image.hex sdcard_perf.img
+	cp sdcard_perf.img sdcard_run.img
+	./obj_dir/V$(TOP) +linux +fw=fw_jump.hex +image=Image.hex \
+	    +sdimg=sdcard_run.img $(LINUX_ARGS)
+
 clean:
 	rm -rf obj_dir bios.hex fw_jump.hex Image.hex fw_jump_initrd.hex initrd.hex sim_initrd.dts initrd_fw \
-	       sdcard.img sdcard_run.img sd_work
+	       sdcard.img sdcard_perf.img sdcard_run.img sd_work \
+	       pmu_sbi/*.elf pmu_sbi/*.bin pmu_sbi/*.hex

@@ -139,6 +139,8 @@ module tb_CORE;
             .irq_m_ext     (irq_m_ext),
             .irq_s_ext     (irq_s_ext),
             .mtime         (mtime),
+            .ev_ic_refill  (1'b0),            // no caches here
+            .ev_dc_refill  (1'b0),
             .trace_valid   (trace_valid),
             .trace_pc      (trace_pc),
             .trace_insn    (trace_insn),

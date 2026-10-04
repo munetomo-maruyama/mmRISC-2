@@ -10,7 +10,8 @@
 # changes.
 #
 # The source defaults to the one of the reference Rocket build, which is
-# outside this repository. Point the argument somewhere else if you have
+# outside this repository; the patches of software/boot/opensbi_patches are
+# applied to a copy of it. Point the argument somewhere else if you have
 # your own checkout.
 #---------------------------------------------------------------------------
 set -e
@@ -40,6 +41,14 @@ dtc -I dts -O dtb -o "$DTB" "$DTS"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 cp -r "$OPENSBI" "$WORK/opensbi"
+
+# Our fixes, on the copy only (software/boot/opensbi_patches, each one
+# says why). The source stays as the reference build has it.
+for p in "$LITEX_SYSTEM"/software/boot/opensbi_patches/*.patch; do
+    [ -f "$p" ] || continue
+    echo "== patch: $(basename "$p")"
+    patch -s -p1 -d "$WORK/opensbi" < "$p"
+done
 
 echo "== OpenSBI =="
 make -C "$WORK/opensbi" -j"$(nproc)" \
