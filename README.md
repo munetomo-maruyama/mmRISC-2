@@ -16,7 +16,7 @@ Ethernet・SD カードの同時照合)は、この版でも PASS(2026-10-06)。
 | ISA | RV64IMAFDC、Zicsr、Zifencei、Zicntr、Zihpm、**Zba、Zbb、Zicond**、Zihintpause、Zihintntl、M / S / U、Sv39、PMP 8 エントリ |
 | 特権の拡張 | **Sstc**(S モードのタイマ)、**Sscofpmf**(性能カウンタのあふれ割り込み)、**Smcntrpmf**、**Sdtrig**(デバッグのトリガ 4 本)、特権仕様 1.12 |
 | 性能カウンタ | `hpmcounter3`〜`6`、イベント 17 種(キャッシュ・TLB のミス、分岐予測ミス、停止の理由)。Linux の `perf stat` / `perf record` で使える |
-| デバッグ | JTAG / cJTAG(Debug Spec 1.0)。OpenOCD で halt / step / レジスタ / メモリ、ソフトウェアとハードウェアのブレークポイント、ウォッチポイント |
+| デバッグ | JTAG / cJTAG(Debug Spec 1.0)。OpenOCD / gdb で halt / step / レジスタ / メモリ、ソフトウェアとハードウェアのブレークポイント、ウォッチポイント(動いている Linux カーネルにも置ける) |
 | FPGA | 50 MHz で WNS +0.452 ns、LUT 45,598 / 63,400(71.9 %)、ブロック RAM 40.5 / 135 タイル |
 
 **コアの構成**

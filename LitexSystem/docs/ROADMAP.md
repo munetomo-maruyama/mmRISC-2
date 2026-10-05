@@ -46,7 +46,7 @@ CoreMark のようにキャッシュに収まる負荷では、パイプライ�
 | B3 | Zicond / Zihintpause | 小 | 条件付きゼロ化(分岐を減らす)、スピンループのヒント。小さい |
 |  | → **済み(2026-10-05、実機で Linux 起動とベンチマークを確認)** | | Zicond は ALU に 2 演算。PAUSE はもともと FENCE として実行していたのでデバイスツリーに載せただけ(Zihintntl も)。GCC 13.2 は `czero` を生成しないので、ベンチマークは変わらない見込み。`CPU_CORE_SPEC.md` 決定 68 |
 | B4 | **Sdtrig**(デバッグのトリガ) | 中 | いまは `Debug Triggers: 0`。JTAG(`JTAG.md`)の gdb でハードウェアブレークポイント・ウォッチポイントが使えるようになる。デバッグ環境の完成度が上がる |
-|  | → **済み(2026-10-05、実機で OpenSBI が `Debug Triggers: 4` を表示。gdb での確認は未)** | | type 2(`mcontrol`)を 4 本。実行トリガは ID、ロード・ストアのトリガは MR で照合(EX の DTLB・D$ 要求の経路には載せない)。`rv64mi-p-breakpoint` が PASS、`SIM_OCD` で OpenOCD の hw ブレークポイント・ウォッチポイントが動作。`CPU_CORE_SPEC.md` 決定 67 |
+|  | → **済み(2026-10-05、実機で OpenSBI が `Debug Triggers: 4` を表示。gdb でも確認: G1)** | | type 2(`mcontrol`)を 4 本。実行トリガは ID、ロード・ストアのトリガは MR で照合(EX の DTLB・D$ 要求の経路には載せない)。`rv64mi-p-breakpoint` が PASS、`SIM_OCD` で OpenOCD の hw ブレークポイント・ウォッチポイントが動作。`CPU_CORE_SPEC.md` 決定 67 |
 | B5 | PMU(`mhpmcounter`、Sscofpmf) | 中 | Linux の `perf` で性能を測れる。いまシミュレーションのプロファイラでしかできない内訳を実機で取れる |
 |  | → **済み(2026-10-05、実機で `perf stat` / `perf record`。`BENCH.md` 13 章)** | | `hpmcounter3`〜`6`、イベント 17 種(テストベンチのプロファイラと同じ内訳を含む)、Sscofpmf のあふれ割り込み。カーネルに `CONFIG_PERF_EVENTS` / `CONFIG_RISCV_PMU_SBI`、デバイスツリーに `pmu` ノード、`perf` は静的リンクで TFTP から(`software/bench/perf.sh`)。Smcntrpmf も追加(OpenSBI が固定カウンタを使わせる条件)、OpenSBI のカウンタ解放の不具合をパッチで修正(`software/boot/opensbi_patches/0001`)。シミュレーションの Linux で `perf stat`(cycles・instructions と 4 本のカウンタを同時に 100 %)と `perf record`(あふれ割り込みで 131 標本)を確認。`CPU_CORE_SPEC.md` 決定 69 |
 
@@ -89,6 +89,7 @@ CoreMark のようにキャッシュに収まる負荷では、パイプライ�
 | # | テーマ | 規模 | 内容 |
 |---|---|---|---|
 | G1 | 実機の gdb でトリガを確認 | 小(実機の時間) | `hbreak`、`watch` / `rwatch`。シミュレーションの OpenOCD では済み |
+|  | → **済み(2026-10-06)** | | 動いている Linux カーネルに `hbreak __riscv_sys_newuname`、`watch` / `rwatch` を `jiffies_64` に置いて確認(`JTAG.md` 5 章) |
 | G2 | トリガの範囲一致(match 1、NAPOT) | 小 | いまは完全一致だけなので、gdb の `watch` は変数の先頭アドレスへのアクセスでしか止まらない。比較の前にマスクをかけるだけ(`CPU_CORE_SPEC.md` 決定 67) |
 
 ### H. 堅牢さ

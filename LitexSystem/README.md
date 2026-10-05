@@ -24,9 +24,8 @@ Linux を起動するための一式。
 
 途中で見つかった問題と修正は `docs/BRINGUP.md`、タイミングは `docs/TIMING.md`、性能は
 `docs/BENCH.md`、次のテーマは `docs/ROADMAP.md`。JTAG / cJTAG のデバッグポートを PMOD JA に
-出してある。OpenOCD でハードウェアブレークポイント・ウォッチポイントも使える(gdb の
-`hbreak` / `watch` も同じ仕組み。実機の gdb ではまだ試していない)(`docs/JTAG.md`。ピン配置は
-`FPGA/ARTY_A7_100T` と同じ)。
+出してある。OpenOCD と gdb でハードウェアブレークポイント・ウォッチポイントも使える
+(動いている Linux カーネルで確認済み。`docs/JTAG.md`。ピン配置は `FPGA/ARTY_A7_100T` と同じ)。
 
 ## Rocket 構成との違い
 

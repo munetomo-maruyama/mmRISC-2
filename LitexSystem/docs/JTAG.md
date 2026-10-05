@@ -134,3 +134,56 @@ dmstatus=0x3 は version=3(Debug Spec 1.0)で authenticated=0 の値。
 | `SIM/SIM_OCD` | `RTL/TOP/TOP.sv`(本物のコアがハート)と OpenOCD の協調シミュレーション。halt、GPR/FPR/CSR、メモリ(メモリバス・周辺バス)、load_image、step、ソフトウェアブレークポイント、ハードウェアブレークポイント、ウォッチポイント(ストア・ロード)、reset halt。認証ありでも同じ |
 | `SIM/SIM_DBG` | デバッグ論理そのもの(TAP、DTM、DM、cJTAG、SBA)、3026 項目 |
 | 実機 | `scripts/jtag_check.tcl`(上記)。JTAG / cJTAG × 認証なし / あり の 4 通りで PASS、誤った鍵の拒否も確認(2026-10-01) |
+| 実機 | gdb で動いている Linux カーネルにハードウェアブレークポイントと書き込み / 読み出しのウォッチポイント(下の 5 章、2026-10-06) |
+
+## 5. gdb でカーネルにトリガを置く(2026-10-06、実機)
+
+トリガ(Sdtrig、4 本、`CPU_CORE_SPEC.md` 決定 67)は仮想アドレスで照合するので、動いている
+Linux カーネルの関数や変数にそのまま置ける。カーネルは KASLR なしなので番地は固定。
+SD カードの `Image` と同じビルドの `vmlinux`(シンボルあり、DWARF なし)を gdb に読ませる。
+
+```bash
+cd LitexSystem
+openocd -f ../FPGA/ARTY_A7_100T/openocd/ft2232h_jtag.cfg        # 端末 1
+riscv64-unknown-linux-gnu-gdb <カーネルのビルド>/vmlinux          # 端末 2
+```
+
+```
+(gdb) set pagination off
+(gdb) target extended-remote localhost:3333
+(gdb) monitor riscv set_enable_virt2phys on      ; カーネルの仮想アドレスでメモリを読むため
+(gdb) hbreak __riscv_sys_newuname                ; ボードで uname を打つと止まる
+(gdb) continue
+(gdb) x/4i $pc                                   ; 命令は書き換えられていない
+(gdb) delete
+(gdb) watch *(long *)&jiffies_64                 ; タイマ割り込み(10 ms)ごとに止まる
+(gdb) continue
+(gdb) delete
+(gdb) rwatch *(long *)&jiffies_64
+(gdb) continue
+(gdb) delete
+(gdb) continue
+```
+
+結果:
+
+- `hbreak`: `uname -a` で `__riscv_sys_newuname+12`(gdb はプロローグの後に置く)に止まり、
+  `x/4i` には元の命令(`jal __do_sys_newuname`)が見える。命令は書き換えていない
+- `watch`: `do_timer` の中で、止まるたびに `jiffies_64` が 1 ずつ増える(4294956787 → 788 →
+  789 → 790)。トリガはストアの手前で止め、OpenOCD がそのストアを 1 ステップ進めてから gdb に
+  報告するので、表示される pc はストアの次(`do_timer+…930`)
+- `rwatch`: `calc_global_load`、`update_process_times`、`calc_global_load_tick`、`do_timer` と、
+  `jiffies_64` を読む関数で止まる
+
+知っておくこと:
+
+- `vmlinux` に DWARF が無いので、変数は型を付けて指定する(`*(long *)&jiffies_64`)。行番号や
+  バックトレースは出ない
+- トリガは完全一致だけなので、ウォッチポイントは変数の先頭アドレスへのアクセスで止まる
+  (8 バイトの `jiffies_64` は 8 バイト単位で読み書きされるので問題ない)
+- `hbreak` / `watch` / `rwatch` を合わせて 4 個まで
+- OpenOCD は起動時ではなく、最初にトリガを使うときにトリガの数を調べる
+- 止まっている間に `interrupt` を打つと割り込みの要求が残り、次の停止(ウォッチポイントでも)が
+  `SIGINT` と報告される。止まった場所は正しい
+- 20 秒以上止めておくと、再開後に Linux が RCU stall の警告を出すことがある
+
