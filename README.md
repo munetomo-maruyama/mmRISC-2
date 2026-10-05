@@ -8,7 +8,7 @@ Linux を動かすプロジェクト。周辺回路は LiteX から持ってく�
 
 Arty A7-100T の実機(50 MHz)で、LiteX BIOS → OpenSBI → **Linux 7.2** が SD カードの ext4
 から BusyBox のシェルまで起動し、Ethernet(DHCP、TFTP)も動く。120 分の負荷試験(メモリ・
-Ethernet・SD カードの同時照合)は PASS。
+Ethernet・SD カードの同時照合)は、この版でも PASS(2026-10-06)。
 
 | | |
 |---|---|

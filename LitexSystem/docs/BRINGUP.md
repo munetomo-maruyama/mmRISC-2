@@ -578,3 +578,22 @@ FAT16 で作る(`software/boot/README.md`「新しいカードを作る」)。
 `MHPM Info: 4 (0x78)`、`Debug Triggers: 4`、Linux が `riscv-pmu-sbi: 16 firmware and 6
 hardware counters`。ベンチマークは前の版と同じ、`perf stat` / `perf record` が動いた
 (`BENCH.md` 13 章)。
+
+## 16 回目: トリガ・Zicond・PMU の版の長時間負荷試験(2026-10-06)
+
+B4(MR の例外の経路に入るデータのトリガ)と B5(CSR と性能イベントの配線)で変えたので、
+15 回目の版(WNS +0.452 ns)で 14 回目と同じ `stress.sh` を 120 分回した。
+
+```
+=== stress result (iterations, ok, ng) ===
+mem 60 60 0
+net 32 32 0
+sd  424 424 0
+=== new kernel messages that look like trouble ===
+(none)
+=== PASS ===
+```
+
+3 つが同時に走り、ロードアベレージは 3 前後。NG 0、カーネルの警告も無し。回数は
+14 回目(58 / 33 / 405)とほぼ同じ。
+
