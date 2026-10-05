@@ -69,6 +69,9 @@ cat stat.1.csv stat.2.csv stat.3.csv stat.4.csv | awk -F, '
     }' | tee -a "$LOG"
 
 echo "" | tee -a "$LOG"
-echo "=== $B under perf record (r1 every 100000 cycles, overflow interrupt)" | tee -a "$LOG"
-./perf record -e r1 -c 100000 -o perf.data ./$B > $B.out 2>&1
-./perf report -i perf.data --stdio --sort dso 2>&1 | grep -v "^$" | tee -a "$LOG"
+# every million cycles (50 a second): each sample is an overflow interrupt
+# that stops and restarts the counters through OpenSBI, and at 100000 the
+# kernel found that too slow and kept lowering its sample rate
+echo "=== $B under perf record (r1 every 1000000 cycles, overflow interrupt)" | tee -a "$LOG"
+./perf record -e r1 -c 1000000 -o perf.data ./$B > $B.out 2>&1
+./perf report -i perf.data --stdio --sort dso 2>&1 | grep -v "^$\|^#$\|tips.txt" | tee -a "$LOG"
