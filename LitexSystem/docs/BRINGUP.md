@@ -440,9 +440,10 @@ make PLATFORM=generic CROSS_COMPILE=riscv64-unknown-linux-gnu- \
 
 ### 4. SD カード
 
-Rocket 構成のものがそのまま使える。第 1 パーティション(FAT16)に
-`Image` / `fw_jump.bin` / `boot.json`、第 2 パーティション(ext4)に
-ルートファイルシステム。`fw_jump.bin` だけ差し替える。
+第 1 パーティション(FAT16)に `Image` / `fw_jump.bin` / `boot.json`、第 2 パーティション
+(ext4)にルートファイルシステム。3 つはどれも `software/boot/` にあり(2026-10 から `Image`
+も perf の設定を足した自前のもの)、第 1 パーティションは Mac から書く(15 回目、
+`software/boot/README.md`)。
 
 ## 実機で詰まったときの見どころ
 
@@ -550,3 +551,30 @@ sd  405 405 0
 - sd: 2 MB を SD カードに書いて読み戻し照合 405 回(SD の DMA、D$ の第 2 ポート)
 
 3 つが同時に走り、ロードアベレージは 3 前後。NG 0、カーネルの警告も無し。
+
+## 15 回目: トリガ・Zicond・PMU の版と、消える SD カードの中身(2026-10-05)
+
+Sdtrig・Zicond・PMU(`CPU_CORE_SPEC.md` 決定 67〜69)の版(WNS +0.452 ns)。新しい
+`fw_jump.bin`(拡張を宣言したデバイスツリー、OpenSBI のパッチ)と、`perf` のための設定を
+足したカーネル `Image` を SD カードに入れるところで詰まった。
+
+**1. FAT が読み出し専用になった。** `cp` が `Read-only file system`。カーネルが FAT の
+エラーを見つけて `errors=remount-ro` でマウントし直していた。壊れていたのは macOS が作る
+`.fseventsd`(読むと Input/output error)。
+
+**2. 書いたファイルが消える。** FAT を作り直して 3 つを書き、md5 も合っていたのに、
+カードを挿し直すと消えていて、代わりに macOS の `.Spotlight-V100` がある。FAT の時刻で
+順番が分かった(Linux は FAT の時刻を UTC として見せるので 9 時間引く): macOS がカードを
+マウント(21:20)→ VM に渡して書く(21:23)→ VM が手放してカードが Mac に戻る → macOS が
+マウントしたときの古い FAT とルートディレクトリを書き戻す(21:25)。3 回同じことが起き、
+一度は書き戻しでディレクトリが壊れた。カードもパーティションも正常で、原因は macOS の
+古いマウント。**第 1 パーティションは Mac から書く**ことにした(`software/boot/README.md`)。
+
+**3. FAT32 では BIOS がファイルを見つけない。** 作り直しに `mkfs.vfat` を `-F 16` なしで
+使ったら 512 MB で FAT32 になり、BIOS は `cannot open boot.json (FatFs error 4)`。手順どおり
+FAT16 で作る(`software/boot/README.md`「新しいカードを作る」)。
+
+**結果**: Mac から書いて起動。OpenSBI が `sscofpmf, zihpm, smcntrpmf, sdtrig`、
+`MHPM Info: 4 (0x78)`、`Debug Triggers: 4`、Linux が `riscv-pmu-sbi: 16 firmware and 6
+hardware counters`。ベンチマークは前の版と同じ、`perf stat` / `perf record` が動いた
+(`BENCH.md` 13 章)。

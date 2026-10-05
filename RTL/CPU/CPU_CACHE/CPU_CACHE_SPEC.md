@@ -1,6 +1,7 @@
 # mmRISC-2 L1 キャッシュ 仕様書
 
 - 版: Rev-2 (2026-09-19) 実装にあわせて改訂(Rev-1 の設計計画と実装仕様を統合)
+- 最終更新: 2026-10-05(EX からの早出しと取り消し、2 サイクルのヒット、性能カウンタのイベント)
 - 対象: `RTL/CPU/CPU_CACHE/`(L1 命令/データキャッシュ)、`SIM/SIM_CACHE`(検証)、
   `RTL/CPU/CPU_TOP/`(組み込み)
 - 既定値は LiteX + Rocket `LitexConfig_linux_1_1` の L1 と同等。
@@ -35,7 +36,7 @@ CPU コア(パイプライン)と MMU は次フェーズで実装する。本フ
 
 ## 2. 位置づけとブロック構成
 
-### 2.1 現在(CPU コア未実装)
+### 2.1 CPU コアを入れる前(BFM の構成)
 
 ```
             CPU コア(未実装、いまは SIM_CACHE の CPU BFM)
@@ -52,7 +53,7 @@ CPU コア(パイプライン)と MMU は次フェーズで実装する。本フ
                     CPU_TOP のポート
 ```
 
-### 2.2 CPU コアと MMU を実装したあとの姿
+### 2.2 CPU コアと MMU を実装したあとの姿(現在)
 
 ```
                           CPU_TOP
@@ -432,7 +433,12 @@ dirty なラインへバイト 2..5 だけ書いてマージされる(書き戻�
 `CPU_CACHE` が I$ / D$ の AXI4 を `BUS_ARB` で 1 本にまとめ、`CPU_TOP` の
 AXI4 / AXI4-Lite マスタポートへ接続する。デバッグ論理も同じ調停に入る。
 
-### 5.7 CPU コア実装時の対応(参考)
+**性能カウンタへのイベント(2026-10)。** `ev_ic_refill` / `ev_dc_refill`(out)は、I$ / D$ が
+行を読み込む AXI4 の読み出し要求が受け付けられたサイクルに 1 になる(`arvalid & arready`)。
+`CPU_TOP` がコアへ渡し、コアの性能カウンタのイベント 7(I$ ミス)・8(D$ ミス)になる
+(`CPU_CORE_SPEC.md` 決定 69)。D$ の行の読み込みは DMA の分も含む。
+
+### 5.8 CPU コア実装時の対応(参考)
 
 CPU コア側の信号名は次のように対応させる予定:
 `if_req_*` → `i_req_*`、`ls_req_*` → `d_req_*`、`ls_resp_sc_fail` は
@@ -938,9 +944,9 @@ make gtkwave-dmiss   # GTKWave で開く(ihit / imiss / dhit / dmiss)
 
 `verify_image` 実行時の `No working memory available` / `not enough working
 area` は想定どおり。OpenOCD はターゲット上で CRC ルーチンを実行しようとする
-が、コードを実行できるハートがまだ無い(`progbufsize=0`)ため、JTAG 経由で
-全データを読み戻す方式にフォールバックする。CPU コア実装まで work area は
-設定しないこと。
+が、デバッグモジュールに Program Buffer が無い(`progbufsize=0`)ので、ハートに
+コードを実行させられない。JTAG 経由で全データを読み戻す方式にフォールバックする。
+CPU コアをつないだ今も同じなので、work area は設定しないこと。
 
 CPU コア実装後は、コアからのアクセスとデバッガからのアクセスの一貫性(4.7)を
 実機でも確認する。

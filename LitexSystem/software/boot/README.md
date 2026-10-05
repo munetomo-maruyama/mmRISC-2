@@ -38,6 +38,29 @@
 名前のファイル(netfilter の `xt_*.h` など 13 個)が無いためで、コードの変更ではない
 (大文字小文字を区別しない場所を経由してコピーしたときに起きる)。
 
+## 第 1 パーティションは Mac から書く(2026-10-05 から)
+
+**Parallels の Ubuntu で第 1 パーティション(FAT)に書いた内容が、カードを挿し直したあと
+消えることがある。** カードリーダを挿し直すと Parallels はまず Mac につなぎ、macOS がカードを
+マウントする。そのあと VM に渡して書いても、macOS はマウントしたときの古い FAT とルート
+ディレクトリを持ったままで、カードが Mac に戻ったときにそれを書き戻す。VM で書いたファイルは
+消え、macOS の `.Spotlight-V100` だけが残る。一度は書き戻しでディレクトリが壊れ、Linux が
+読み出し専用にマウントし直した(`docs/BRINGUP.md` 15 回目)。
+
+第 1 パーティションの 3 つのファイルは、Mac のターミナルから書くのが確実(リポジトリは
+共有フォルダなので Mac のホームの下にある):
+
+```bash
+cp ~/Documents/CQ/RISCV/mmRISC/mmRISC-2/LitexSystem/software/boot/{Image,fw_jump.bin,boot.json} /Volumes/LITEXBOOT/ && sync
+md5 /Volumes/LITEXBOOT/Image /Volumes/LITEXBOOT/fw_jump.bin /Volumes/LITEXBOOT/boot.json
+diskutil eject /Volumes/LITEXBOOT
+```
+
+md5 が上の表と同じなら、取り出してボードへ。macOS が足すファイル(`.Spotlight-V100`、
+`.fseventsd`、`.Trashes`)は起動に関係しない。第 2 パーティション(ext4)は macOS が触らない
+ので、下の Ubuntu の手順で書いてよい。Ubuntu で第 1 パーティションも書くなら、Parallels で
+カードリーダを「常にこの仮想マシンに接続」にし、Mac に一度もマウントさせないこと。
+
 ## 書き込み手順(Parallels Desktop 上の Ubuntu)
 
 Parallels Desktop 上の Ubuntu では、カードを挿したときに自動でマウントされることも
@@ -138,6 +161,9 @@ sudo mkfs.ext4 -L rootfs /dev/sdb2
   ```bash
   dd if=/media/$USER/LITEXBOOT/fw_jump.bin iflag=direct bs=4096 status=none | md5sum
   ```
+- ボードの BIOS が `cannot open boot.json (FatFs error 4)`: 第 1 パーティションにファイルが
+  無い。Ubuntu で書いたのに消えているなら、上の「Mac から書く」の現象。第 1 パーティションを
+  作り直すときは必ず FAT16(`mkfs.vfat -F 16`)。`-F` を付けないと 512 MB では FAT32 になる。
 - ボード側で `Liftoff!` の後に何も出ない: 第 1 パーティションのファイルが壊れているか
   古い。`fw_jump.bin` はどの版も 279048 バイトで大きさでは区別できないので、md5 を
   上の表と比べる。

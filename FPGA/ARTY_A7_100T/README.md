@@ -4,6 +4,8 @@ Design: `RTL/TOP/TOP.sv`. It contains CPU_TOP (debug logic + L1 caches + the CPU
 
 Since 2026-09-30 the hart behind the debug module is the real CPU core, no longer the pseudo hart (`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md` 11). After configuration it runs whatever the RAM holds (nothing: it traps around), so `step` now executes an instruction: put one in the RAM first (see `SIM/SIM_OCD/test_ocd.tcl`, which does this in simulation). The LiteX SoC uses the same pins, switches and OpenOCD configurations (`LitexSystem/docs/JTAG.md`).
 
+Since 2026-10 the core also has four debug triggers (Sdtrig, `CPU_CORE_SPEC.md` decision 67): OpenOCD reports `Found 4 triggers`, and hardware breakpoints (`bp <addr> 4 hw`, gdb `hbreak`) and watchpoints (`wp`, gdb `watch`) work. They match an exact address only. `SIM/SIM_OCD` checks them against the RTL.
+
 Since the L1 caches were added, **memory bus accesses of the debugger go through the data cache** (`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md` 4.7): a read allocates the line (the next read of that line hits), a write goes through to memory without allocating, and the instruction cache is invalidated after a debug write. Accesses to the peripheral bus still go straight to the bus master.
 
 ## 1. Build (Windows, Vivado 2025.1)
@@ -164,8 +166,8 @@ It starts with `reset halt` (which empties the caches) and writes every value
 it checks, so it can be run again without power cycling the board. Note that
 a reset does not clear the RAM: the values of an earlier run are still there.
 
-Two messages during `verify_image` are expected as long as there is no CPU
-core:
+Two messages during `verify_image` are expected (still, with the CPU core
+connected):
 
 ```
 Error: No working memory available. Specify -work-area-phys to target.
@@ -173,11 +175,11 @@ Warn : not enough working area available(requested 1112)
 ```
 
 OpenOCD would like to run a CRC routine on the target to compare the image;
-that needs a hart that can execute code (this design has the pseudo hart with
-`progbufsize=0`). It falls back to reading the data back over JTAG, which is
-exactly the access path we want to check, and `verify_image` succeeds. Do not
-configure a work area before the CPU core exists: OpenOCD would then try to
-run the routine and fail.
+that needs the debug module to make the hart execute code, and it has no
+program buffer (`progbufsize=0`). It falls back to reading the data back over
+JTAG, which is exactly the access path we want to check, and `verify_image`
+succeeds. Do not configure a work area: OpenOCD would then try to run the
+routine and fail.
 
 Any file works for a manual `load_image`; for example
 `head -c 32768 /dev/urandom > test.bin`.

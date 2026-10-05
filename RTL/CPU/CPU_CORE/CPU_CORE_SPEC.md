@@ -1,6 +1,7 @@
 # mmRISC-2 CPU コア 仕様書
 
 - 版: Rev-1 (2026-09-20) 初版(設計計画)
+- 最終更新: 2026-10-05(実装に合わせて随時更新。決定事項は 13 章、最新は決定 69)
 - 対象: `RTL/CPU/CPU_CORE/`(パイプライン、CSR、MMU)、`RTL/CPU/CPU_TOP/`(組み込み)
 - 関連: `RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`(L1 キャッシュ)、
   `RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`(デバッグ論理)

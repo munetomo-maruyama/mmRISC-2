@@ -28,7 +28,9 @@
 | `make iverilog` | Icarus Verilog で同じ試験 |
 | `make mdu` | `CORE_MDU` を参照モデルと突き合わせる(`tb_MDU.sv`、既定 20 万演算)。境界値のオペランド、サイクル数(MUL / MULW は 1、MULH 系は 2)、答えを遅れて受け取る場合、途中の kill。プログラムからは選べないものを見る |
 | `make clint` | `CPU_CLINT` を 4 ハート構成で直接叩く(`tb_CLINT.sv`)。単一コアのプログラムからは届かないレジスタマップの検査 |
-| `make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / uzba / uzbb / mi)。`RVTESTS` でリポジトリの場所を指定 |
+| `make plic` | `CPU_PLIC` のレジスタポートを直接叩く(`tb_PLIC.sv`) |
+| `make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / uzba / uzbb / uzicond / mi / si)。`RVTESTS` でリポジトリの場所を指定 |
+| `make riscv-tests-v` | 同じ試験を仮想記憶の環境(`-v`、Sv39 でページを割り当てながら走る)で |
 | `make bugs` / `./bug_inject.sh` | バグ注入 297 種(背圧あり/なしの両方で判定。M211〜M231 はデバッグモード、M298〜M314 はトリガ、M320〜M340 は性能カウンタ、M240 以降は EX からの早出し。`CORE_MDU` の変異は `tb_MDU` でも判定) |
 | `make lint` | Verilator lint |
 
@@ -74,6 +76,17 @@ x10〜x30 だけを使うこと。`TEST_INIT` が既定のトラップハンド�
 | `t09_muldiv` | 乗除算の符号、ゼロ除算、オーバーフロー、32bit 形 |
 | `t10_atomic` | LR/SC と全 AMO の 32/64bit、不整列 |
 | `t11_fp` | `mstatus.FS`、NaN-boxing、`fcsr`/丸めモード、FP ストアのデータ源、FPU と他ユニットのハザード |
+| `t12_priv` | S / U モード、委譲、SRET。M → S → U と戻る経路、割り込みの委譲、`mstatus` の TVM / TW / TSR(公式の rv64si は U モードまで行かない) |
+| `t13_pmp` | PMP が実際にアクセスを止めること: 番号の小さいエントリが優先、M はロックされていないエントリを素通りしロックされたものには従う、R / W / X の区別 |
+| `t14_mmu` | Sv39: 手で作ったページテーブルで 3 段の変換、権限ビット、`SFENCE.VMA` |
+| `t15_plic` | PLIC をプログラムから: 線を上げる → 外部割り込み → ハンドラで claim / complete → 戻る |
+| `t16_bench` | 計測用(前端に効くループ 3 種)。バグ注入では予測器が働いていることを BENCH_LIMIT のサイクル数で確かめる |
+| `t17_btb` | 分岐予測の誤フェッチ: 予測で捨てた命令をフェッチ部が取り戻すこと |
+| `t18_asid` | 別のアドレス空間が残した予測(`satp` を替えても BTB は消えない)。予測が何と言っても、そこにある命令を実行すること |
+| `t19_ldbench` | C で書いたロード・ストアの計測(`t19_ldbench.c`) |
+| `t20_ptw_pmp` | ページテーブルの読み出しを PMP が拒んだとき、ページフォールトではなくアクセスの種類のアクセスフォールトになること |
+| `t21_satp` | Linux と同じ手順で S モードから MMU を入れる(`satp` を書いた直後の命令ページフォールトで仮想アドレスへ移る) |
+| `t22_mip_seip` | PLIC の S 線が立っている間の `csrs` / `csrc mip` がソフトウェアの SEIP に写らないこと(決定 51) |
 | `t23_debug` | デバッグモード。テストベンチ内のデバッガ(`tb_CORE.sv` の debugger)が DM の代わりにコアの `dbg_*` を動かし、リセット直後の halt、ループ中の halt と step、EBREAK、GPR/FPR/CSR の読み書き(32bit 書き込み、エラー)、割り込みが保留中の step、ECALL の step、WFI 中の halt、U モードへの resume、デバッガのトリガ(dmode・action 1 の実行トリガとロードトリガを U モードで。命令・ロードの手前で止まり、hit が立ち、トラップしない。プログラムからはそのトリガを書き換えられない)を検査する。この試験名のときだけデバッガが動く |
 | `t24_predict` | 分岐予測(ワードをまたぐ 32bit 分岐の tail エントリ、飛び込んだワードでは tail を使わないこと、戻りアドレススタック、1 回おきに成立する分岐 ―― gshare の履歴が無いと半分外れる)。予測が外れても結果は同じなので、同じ実行の中で予測に頼らない参照と時間を比べ、1.25 倍を超えたら不合格 |
 | `t25_lsu` | EX から早出しした要求(`CPU_CORE_SPEC.md` 5.4): 取り消したストアの後ろのロード、トラップ時に飛んでいる答え、トラップの後ろの PLIC の claim(副作用のある I/O ロードは前の命令の確定を待つ)、ハンドラが飛ばすストア |
