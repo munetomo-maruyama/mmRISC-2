@@ -1,0 +1,637 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
+----------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
+| Date         : Tue Oct  6 21:31:21 2026
+| Host         : ARM-Windows running 64-bit major release  (build 9200)
+| Command      : report_timing -max_paths 10 -nworst 1 -from [all_registers] -to [all_registers] -file ./output/L2_256K_4w/timing_reg2reg.rpt
+| Design       : CPU_L2
+| Device       : 7a100t-csg324
+| Speed File   : -1  PRODUCTION 1.23 2018-06-13
+| Design State : Routed
+----------------------------------------------------------------------------------------------------------------------------------------------
+
+Timing Report
+
+Slack (MET) :             5.977ns  (required time - arrival time)
+  Source:                 u_tag/g_way[2].mem_reg/CLKBWRCLK
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Destination:            u_dat/g_way[3].mem_reg_5_1/ENBWREN
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Path Group:             clk
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            20.000ns  (clk rise@20.000ns - clk rise@0.000ns)
+  Data Path Delay:        13.496ns  (logic 4.384ns (32.483%)  route 9.112ns (67.517%))
+  Logic Levels:           7  (CARRY4=1 LUT4=1 LUT5=2 LUT6=3)
+  Clock Path Skew:        -0.049ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.924ns = ( 20.924 - 20.000 ) 
+    Source Clock Delay      (SCD):    0.973ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk rise edge)        0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=1174, unset)         0.973     0.973    u_tag/clk
+    RAMB36_X2Y14         RAMB36E1                                     r  u_tag/g_way[2].mem_reg/CLKBWRCLK
+  -------------------------------------------------------------------    -------------------
+    RAMB36_X2Y14         RAMB36E1 (Prop_ramb36e1_CLKBWRCLK_DOBDO[15])
+                                                      2.454     3.427 r  u_tag/g_way[2].mem_reg/DOBDO[15]
+                         net (fo=2, routed)           1.472     4.899    u_tag/t_rd_tag[63]
+    SLICE_X71Y70         LUT6 (Prop_lut6_I2_O)        0.124     5.023 r  u_tag/ev_miss_INST_0_i_33/O
+                         net (fo=1, routed)           0.000     5.023    u_tag/ev_miss_INST_0_i_33_n_0
+    SLICE_X71Y70         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.550     5.573 r  u_tag/ev_miss_INST_0_i_16/CO[3]
+                         net (fo=3, routed)           1.284     6.858    u_tag/st64_out
+    SLICE_X64Y70         LUT4 (Prop_lut4_I3_O)        0.152     7.010 r  u_tag/ev_miss_INST_0_i_4/O
+                         net (fo=1, routed)           0.434     7.443    u_tag/ev_miss_INST_0_i_4_n_0
+    SLICE_X64Y70         LUT5 (Prop_lut5_I4_O)        0.321     7.764 r  u_tag/ev_miss_INST_0_i_1/O
+                         net (fo=12, routed)          0.842     8.606    u_tag/hit_any
+    SLICE_X66Y75         LUT6 (Prop_lut6_I0_O)        0.332     8.938 r  u_tag/rd_pend_i_4/O
+                         net (fo=5, routed)           0.634     9.572    u_tag/cmp_iss
+    SLICE_X64Y74         LUT5 (Prop_lut5_I4_O)        0.119     9.691 r  u_tag/g_way[0].mem_reg_0_0_i_25/O
+                         net (fo=3, routed)           0.623    10.313    u_tag/g_way[0].mem_reg_0_0_i_25_n_0
+    SLICE_X62Y72         LUT6 (Prop_lut6_I5_O)        0.332    10.645 r  u_tag/g_way[0].mem_reg_3_0_i_1/O
+                         net (fo=24, routed)          3.824    14.469    u_dat/g_way[0].mem_reg_3_0_0
+    RAMB36_X0Y3          RAMB36E1                                     r  u_dat/g_way[3].mem_reg_5_1/ENBWREN
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk rise edge)       20.000    20.000 r  
+                                                      0.000    20.000 r  clk (IN)
+                         net (fo=1174, unset)         0.924    20.924    u_dat/clk
+    RAMB36_X0Y3          RAMB36E1                                     r  u_dat/g_way[3].mem_reg_5_1/CLKBWRCLK
+                         clock pessimism              0.000    20.924    
+                         clock uncertainty           -0.035    20.889    
+    RAMB36_X0Y3          RAMB36E1 (Setup_ramb36e1_CLKBWRCLK_ENBWREN)
+                                                     -0.443    20.446    u_dat/g_way[3].mem_reg_5_1
+  -------------------------------------------------------------------
+                         required time                         20.446    
+                         arrival time                         -14.469    
+  -------------------------------------------------------------------
+                         slack                                  5.977    
+
+Slack (MET) :             6.176ns  (required time - arrival time)
+  Source:                 u_tag/g_way[2].mem_reg/CLKBWRCLK
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Destination:            u_dat/g_way[0].mem_reg_5_1/ENBWREN
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Path Group:             clk
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            20.000ns  (clk rise@20.000ns - clk rise@0.000ns)
+  Data Path Delay:        13.297ns  (logic 4.384ns (32.969%)  route 8.913ns (67.031%))
+  Logic Levels:           7  (CARRY4=1 LUT4=1 LUT5=2 LUT6=3)
+  Clock Path Skew:        -0.049ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.924ns = ( 20.924 - 20.000 ) 
+    Source Clock Delay      (SCD):    0.973ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk rise edge)        0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=1174, unset)         0.973     0.973    u_tag/clk
+    RAMB36_X2Y14         RAMB36E1                                     r  u_tag/g_way[2].mem_reg/CLKBWRCLK
+  -------------------------------------------------------------------    -------------------
+    RAMB36_X2Y14         RAMB36E1 (Prop_ramb36e1_CLKBWRCLK_DOBDO[15])
+                                                      2.454     3.427 r  u_tag/g_way[2].mem_reg/DOBDO[15]
+                         net (fo=2, routed)           1.472     4.899    u_tag/t_rd_tag[63]
+    SLICE_X71Y70         LUT6 (Prop_lut6_I2_O)        0.124     5.023 r  u_tag/ev_miss_INST_0_i_33/O
+                         net (fo=1, routed)           0.000     5.023    u_tag/ev_miss_INST_0_i_33_n_0
+    SLICE_X71Y70         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.550     5.573 r  u_tag/ev_miss_INST_0_i_16/CO[3]
+                         net (fo=3, routed)           1.284     6.858    u_tag/st64_out
+    SLICE_X64Y70         LUT4 (Prop_lut4_I3_O)        0.152     7.010 r  u_tag/ev_miss_INST_0_i_4/O
+                         net (fo=1, routed)           0.434     7.443    u_tag/ev_miss_INST_0_i_4_n_0
+    SLICE_X64Y70         LUT5 (Prop_lut5_I4_O)        0.321     7.764 r  u_tag/ev_miss_INST_0_i_1/O
+                         net (fo=12, routed)          0.842     8.606    u_tag/hit_any
+    SLICE_X66Y75         LUT6 (Prop_lut6_I0_O)        0.332     8.938 r  u_tag/rd_pend_i_4/O
+                         net (fo=5, routed)           0.634     9.572    u_tag/cmp_iss
+    SLICE_X64Y74         LUT5 (Prop_lut5_I4_O)        0.119     9.691 r  u_tag/g_way[0].mem_reg_0_0_i_25/O
+                         net (fo=3, routed)           0.623    10.313    u_tag/g_way[0].mem_reg_0_0_i_25_n_0
+    SLICE_X62Y72         LUT6 (Prop_lut6_I5_O)        0.332    10.645 r  u_tag/g_way[0].mem_reg_3_0_i_1/O
+                         net (fo=24, routed)          3.625    14.270    u_dat/g_way[0].mem_reg_3_0_0
+    RAMB36_X0Y4          RAMB36E1                                     r  u_dat/g_way[0].mem_reg_5_1/ENBWREN
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk rise edge)       20.000    20.000 r  
+                                                      0.000    20.000 r  clk (IN)
+                         net (fo=1174, unset)         0.924    20.924    u_dat/clk
+    RAMB36_X0Y4          RAMB36E1                                     r  u_dat/g_way[0].mem_reg_5_1/CLKBWRCLK
+                         clock pessimism              0.000    20.924    
+                         clock uncertainty           -0.035    20.889    
+    RAMB36_X0Y4          RAMB36E1 (Setup_ramb36e1_CLKBWRCLK_ENBWREN)
+                                                     -0.443    20.446    u_dat/g_way[0].mem_reg_5_1
+  -------------------------------------------------------------------
+                         required time                         20.446    
+                         arrival time                         -14.270    
+  -------------------------------------------------------------------
+                         slack                                  6.176    
+
+Slack (MET) :             6.283ns  (required time - arrival time)
+  Source:                 u_tag/g_way[2].mem_reg/CLKBWRCLK
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Destination:            u_dat/g_way[2].mem_reg_5_1/ENBWREN
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Path Group:             clk
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            20.000ns  (clk rise@20.000ns - clk rise@0.000ns)
+  Data Path Delay:        13.190ns  (logic 4.384ns (33.237%)  route 8.806ns (66.763%))
+  Logic Levels:           7  (CARRY4=1 LUT4=1 LUT5=2 LUT6=3)
+  Clock Path Skew:        -0.049ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.924ns = ( 20.924 - 20.000 ) 
+    Source Clock Delay      (SCD):    0.973ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk rise edge)        0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=1174, unset)         0.973     0.973    u_tag/clk
+    RAMB36_X2Y14         RAMB36E1                                     r  u_tag/g_way[2].mem_reg/CLKBWRCLK
+  -------------------------------------------------------------------    -------------------
+    RAMB36_X2Y14         RAMB36E1 (Prop_ramb36e1_CLKBWRCLK_DOBDO[15])
+                                                      2.454     3.427 r  u_tag/g_way[2].mem_reg/DOBDO[15]
+                         net (fo=2, routed)           1.472     4.899    u_tag/t_rd_tag[63]
+    SLICE_X71Y70         LUT6 (Prop_lut6_I2_O)        0.124     5.023 r  u_tag/ev_miss_INST_0_i_33/O
+                         net (fo=1, routed)           0.000     5.023    u_tag/ev_miss_INST_0_i_33_n_0
+    SLICE_X71Y70         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.550     5.573 r  u_tag/ev_miss_INST_0_i_16/CO[3]
+                         net (fo=3, routed)           1.284     6.858    u_tag/st64_out
+    SLICE_X64Y70         LUT4 (Prop_lut4_I3_O)        0.152     7.010 r  u_tag/ev_miss_INST_0_i_4/O
+                         net (fo=1, routed)           0.434     7.443    u_tag/ev_miss_INST_0_i_4_n_0
+    SLICE_X64Y70         LUT5 (Prop_lut5_I4_O)        0.321     7.764 r  u_tag/ev_miss_INST_0_i_1/O
+                         net (fo=12, routed)          0.842     8.606    u_tag/hit_any
+    SLICE_X66Y75         LUT6 (Prop_lut6_I0_O)        0.332     8.938 r  u_tag/rd_pend_i_4/O
+                         net (fo=5, routed)           0.634     9.572    u_tag/cmp_iss
+    SLICE_X64Y74         LUT5 (Prop_lut5_I4_O)        0.119     9.691 r  u_tag/g_way[0].mem_reg_0_0_i_25/O
+                         net (fo=3, routed)           0.623    10.313    u_tag/g_way[0].mem_reg_0_0_i_25_n_0
+    SLICE_X62Y72         LUT6 (Prop_lut6_I5_O)        0.332    10.645 r  u_tag/g_way[0].mem_reg_3_0_i_1/O
+                         net (fo=24, routed)          3.518    14.163    u_dat/g_way[0].mem_reg_3_0_0
+    RAMB36_X0Y5          RAMB36E1                                     r  u_dat/g_way[2].mem_reg_5_1/ENBWREN
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk rise edge)       20.000    20.000 r  
+                                                      0.000    20.000 r  clk (IN)
+                         net (fo=1174, unset)         0.924    20.924    u_dat/clk
+    RAMB36_X0Y5          RAMB36E1                                     r  u_dat/g_way[2].mem_reg_5_1/CLKBWRCLK
+                         clock pessimism              0.000    20.924    
+                         clock uncertainty           -0.035    20.889    
+    RAMB36_X0Y5          RAMB36E1 (Setup_ramb36e1_CLKBWRCLK_ENBWREN)
+                                                     -0.443    20.446    u_dat/g_way[2].mem_reg_5_1
+  -------------------------------------------------------------------
+                         required time                         20.446    
+                         arrival time                         -14.163    
+  -------------------------------------------------------------------
+                         slack                                  6.283    
+
+Slack (MET) :             6.336ns  (required time - arrival time)
+  Source:                 u_tag/g_way[2].mem_reg/CLKBWRCLK
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Destination:            u_dat/g_way[1].mem_reg_6_1/ENBWREN
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Path Group:             clk
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            20.000ns  (clk rise@20.000ns - clk rise@0.000ns)
+  Data Path Delay:        13.137ns  (logic 4.384ns (33.372%)  route 8.753ns (66.628%))
+  Logic Levels:           7  (CARRY4=1 LUT4=1 LUT5=2 LUT6=3)
+  Clock Path Skew:        -0.049ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.924ns = ( 20.924 - 20.000 ) 
+    Source Clock Delay      (SCD):    0.973ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk rise edge)        0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=1174, unset)         0.973     0.973    u_tag/clk
+    RAMB36_X2Y14         RAMB36E1                                     r  u_tag/g_way[2].mem_reg/CLKBWRCLK
+  -------------------------------------------------------------------    -------------------
+    RAMB36_X2Y14         RAMB36E1 (Prop_ramb36e1_CLKBWRCLK_DOBDO[15])
+                                                      2.454     3.427 r  u_tag/g_way[2].mem_reg/DOBDO[15]
+                         net (fo=2, routed)           1.472     4.899    u_tag/t_rd_tag[63]
+    SLICE_X71Y70         LUT6 (Prop_lut6_I2_O)        0.124     5.023 r  u_tag/ev_miss_INST_0_i_33/O
+                         net (fo=1, routed)           0.000     5.023    u_tag/ev_miss_INST_0_i_33_n_0
+    SLICE_X71Y70         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.550     5.573 r  u_tag/ev_miss_INST_0_i_16/CO[3]
+                         net (fo=3, routed)           1.284     6.858    u_tag/st64_out
+    SLICE_X64Y70         LUT4 (Prop_lut4_I3_O)        0.152     7.010 r  u_tag/ev_miss_INST_0_i_4/O
+                         net (fo=1, routed)           0.434     7.443    u_tag/ev_miss_INST_0_i_4_n_0
+    SLICE_X64Y70         LUT5 (Prop_lut5_I4_O)        0.321     7.764 r  u_tag/ev_miss_INST_0_i_1/O
+                         net (fo=12, routed)          0.842     8.606    u_tag/hit_any
+    SLICE_X66Y75         LUT6 (Prop_lut6_I0_O)        0.332     8.938 r  u_tag/rd_pend_i_4/O
+                         net (fo=5, routed)           0.634     9.572    u_tag/cmp_iss
+    SLICE_X64Y74         LUT5 (Prop_lut5_I4_O)        0.119     9.691 r  u_tag/g_way[0].mem_reg_0_0_i_25/O
+                         net (fo=3, routed)           0.627    10.317    u_tag/g_way[0].mem_reg_0_0_i_25_n_0
+    SLICE_X62Y72         LUT6 (Prop_lut6_I5_O)        0.332    10.649 r  u_tag/g_way[0].mem_reg_6_0_i_1/O
+                         net (fo=16, routed)          3.461    14.110    u_dat/rd_en
+    RAMB36_X0Y24         RAMB36E1                                     r  u_dat/g_way[1].mem_reg_6_1/ENBWREN
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk rise edge)       20.000    20.000 r  
+                                                      0.000    20.000 r  clk (IN)
+                         net (fo=1174, unset)         0.924    20.924    u_dat/clk
+    RAMB36_X0Y24         RAMB36E1                                     r  u_dat/g_way[1].mem_reg_6_1/CLKBWRCLK
+                         clock pessimism              0.000    20.924    
+                         clock uncertainty           -0.035    20.889    
+    RAMB36_X0Y24         RAMB36E1 (Setup_ramb36e1_CLKBWRCLK_ENBWREN)
+                                                     -0.443    20.446    u_dat/g_way[1].mem_reg_6_1
+  -------------------------------------------------------------------
+                         required time                         20.446    
+                         arrival time                         -14.110    
+  -------------------------------------------------------------------
+                         slack                                  6.336    
+
+Slack (MET) :             6.378ns  (required time - arrival time)
+  Source:                 u_tag/g_way[2].mem_reg/CLKBWRCLK
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Destination:            u_dat/g_way[0].mem_reg_6_1/ENBWREN
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Path Group:             clk
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            20.000ns  (clk rise@20.000ns - clk rise@0.000ns)
+  Data Path Delay:        13.095ns  (logic 4.384ns (33.479%)  route 8.711ns (66.521%))
+  Logic Levels:           7  (CARRY4=1 LUT4=1 LUT5=2 LUT6=3)
+  Clock Path Skew:        -0.049ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.924ns = ( 20.924 - 20.000 ) 
+    Source Clock Delay      (SCD):    0.973ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk rise edge)        0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=1174, unset)         0.973     0.973    u_tag/clk
+    RAMB36_X2Y14         RAMB36E1                                     r  u_tag/g_way[2].mem_reg/CLKBWRCLK
+  -------------------------------------------------------------------    -------------------
+    RAMB36_X2Y14         RAMB36E1 (Prop_ramb36e1_CLKBWRCLK_DOBDO[15])
+                                                      2.454     3.427 r  u_tag/g_way[2].mem_reg/DOBDO[15]
+                         net (fo=2, routed)           1.472     4.899    u_tag/t_rd_tag[63]
+    SLICE_X71Y70         LUT6 (Prop_lut6_I2_O)        0.124     5.023 r  u_tag/ev_miss_INST_0_i_33/O
+                         net (fo=1, routed)           0.000     5.023    u_tag/ev_miss_INST_0_i_33_n_0
+    SLICE_X71Y70         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.550     5.573 r  u_tag/ev_miss_INST_0_i_16/CO[3]
+                         net (fo=3, routed)           1.284     6.858    u_tag/st64_out
+    SLICE_X64Y70         LUT4 (Prop_lut4_I3_O)        0.152     7.010 r  u_tag/ev_miss_INST_0_i_4/O
+                         net (fo=1, routed)           0.434     7.443    u_tag/ev_miss_INST_0_i_4_n_0
+    SLICE_X64Y70         LUT5 (Prop_lut5_I4_O)        0.321     7.764 r  u_tag/ev_miss_INST_0_i_1/O
+                         net (fo=12, routed)          0.842     8.606    u_tag/hit_any
+    SLICE_X66Y75         LUT6 (Prop_lut6_I0_O)        0.332     8.938 r  u_tag/rd_pend_i_4/O
+                         net (fo=5, routed)           0.634     9.572    u_tag/cmp_iss
+    SLICE_X64Y74         LUT5 (Prop_lut5_I4_O)        0.119     9.691 r  u_tag/g_way[0].mem_reg_0_0_i_25/O
+                         net (fo=3, routed)           0.627    10.317    u_tag/g_way[0].mem_reg_0_0_i_25_n_0
+    SLICE_X62Y72         LUT6 (Prop_lut6_I5_O)        0.332    10.649 r  u_tag/g_way[0].mem_reg_6_0_i_1/O
+                         net (fo=16, routed)          3.418    14.068    u_dat/rd_en
+    RAMB36_X0Y23         RAMB36E1                                     r  u_dat/g_way[0].mem_reg_6_1/ENBWREN
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk rise edge)       20.000    20.000 r  
+                                                      0.000    20.000 r  clk (IN)
+                         net (fo=1174, unset)         0.924    20.924    u_dat/clk
+    RAMB36_X0Y23         RAMB36E1                                     r  u_dat/g_way[0].mem_reg_6_1/CLKBWRCLK
+                         clock pessimism              0.000    20.924    
+                         clock uncertainty           -0.035    20.889    
+    RAMB36_X0Y23         RAMB36E1 (Setup_ramb36e1_CLKBWRCLK_ENBWREN)
+                                                     -0.443    20.446    u_dat/g_way[0].mem_reg_6_1
+  -------------------------------------------------------------------
+                         required time                         20.446    
+                         arrival time                         -14.068    
+  -------------------------------------------------------------------
+                         slack                                  6.378    
+
+Slack (MET) :             6.484ns  (required time - arrival time)
+  Source:                 u_tag/g_way[2].mem_reg/CLKBWRCLK
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Destination:            u_dat/g_way[1].mem_reg_4_1/ENBWREN
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Path Group:             clk
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            20.000ns  (clk rise@20.000ns - clk rise@0.000ns)
+  Data Path Delay:        12.989ns  (logic 4.384ns (33.751%)  route 8.605ns (66.249%))
+  Logic Levels:           7  (CARRY4=1 LUT4=1 LUT5=2 LUT6=3)
+  Clock Path Skew:        -0.049ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.924ns = ( 20.924 - 20.000 ) 
+    Source Clock Delay      (SCD):    0.973ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk rise edge)        0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=1174, unset)         0.973     0.973    u_tag/clk
+    RAMB36_X2Y14         RAMB36E1                                     r  u_tag/g_way[2].mem_reg/CLKBWRCLK
+  -------------------------------------------------------------------    -------------------
+    RAMB36_X2Y14         RAMB36E1 (Prop_ramb36e1_CLKBWRCLK_DOBDO[15])
+                                                      2.454     3.427 r  u_tag/g_way[2].mem_reg/DOBDO[15]
+                         net (fo=2, routed)           1.472     4.899    u_tag/t_rd_tag[63]
+    SLICE_X71Y70         LUT6 (Prop_lut6_I2_O)        0.124     5.023 r  u_tag/ev_miss_INST_0_i_33/O
+                         net (fo=1, routed)           0.000     5.023    u_tag/ev_miss_INST_0_i_33_n_0
+    SLICE_X71Y70         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.550     5.573 r  u_tag/ev_miss_INST_0_i_16/CO[3]
+                         net (fo=3, routed)           1.284     6.858    u_tag/st64_out
+    SLICE_X64Y70         LUT4 (Prop_lut4_I3_O)        0.152     7.010 r  u_tag/ev_miss_INST_0_i_4/O
+                         net (fo=1, routed)           0.434     7.443    u_tag/ev_miss_INST_0_i_4_n_0
+    SLICE_X64Y70         LUT5 (Prop_lut5_I4_O)        0.321     7.764 r  u_tag/ev_miss_INST_0_i_1/O
+                         net (fo=12, routed)          0.842     8.606    u_tag/hit_any
+    SLICE_X66Y75         LUT6 (Prop_lut6_I0_O)        0.332     8.938 r  u_tag/rd_pend_i_4/O
+                         net (fo=5, routed)           0.634     9.572    u_tag/cmp_iss
+    SLICE_X64Y74         LUT5 (Prop_lut5_I4_O)        0.119     9.691 r  u_tag/g_way[0].mem_reg_0_0_i_25/O
+                         net (fo=3, routed)           0.623    10.313    u_tag/g_way[0].mem_reg_0_0_i_25_n_0
+    SLICE_X62Y72         LUT6 (Prop_lut6_I5_O)        0.332    10.645 r  u_tag/g_way[0].mem_reg_3_0_i_1/O
+                         net (fo=24, routed)          3.317    13.962    u_dat/g_way[0].mem_reg_3_0_0
+    RAMB36_X0Y7          RAMB36E1                                     r  u_dat/g_way[1].mem_reg_4_1/ENBWREN
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk rise edge)       20.000    20.000 r  
+                                                      0.000    20.000 r  clk (IN)
+                         net (fo=1174, unset)         0.924    20.924    u_dat/clk
+    RAMB36_X0Y7          RAMB36E1                                     r  u_dat/g_way[1].mem_reg_4_1/CLKBWRCLK
+                         clock pessimism              0.000    20.924    
+                         clock uncertainty           -0.035    20.889    
+    RAMB36_X0Y7          RAMB36E1 (Setup_ramb36e1_CLKBWRCLK_ENBWREN)
+                                                     -0.443    20.446    u_dat/g_way[1].mem_reg_4_1
+  -------------------------------------------------------------------
+                         required time                         20.446    
+                         arrival time                         -13.962    
+  -------------------------------------------------------------------
+                         slack                                  6.484    
+
+Slack (MET) :             6.498ns  (required time - arrival time)
+  Source:                 u_tag/g_way[2].mem_reg/CLKBWRCLK
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Destination:            u_dat/g_way[1].mem_reg_5_1/ENBWREN
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Path Group:             clk
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            20.000ns  (clk rise@20.000ns - clk rise@0.000ns)
+  Data Path Delay:        12.975ns  (logic 4.384ns (33.788%)  route 8.591ns (66.212%))
+  Logic Levels:           7  (CARRY4=1 LUT4=1 LUT5=2 LUT6=3)
+  Clock Path Skew:        -0.049ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.924ns = ( 20.924 - 20.000 ) 
+    Source Clock Delay      (SCD):    0.973ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk rise edge)        0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=1174, unset)         0.973     0.973    u_tag/clk
+    RAMB36_X2Y14         RAMB36E1                                     r  u_tag/g_way[2].mem_reg/CLKBWRCLK
+  -------------------------------------------------------------------    -------------------
+    RAMB36_X2Y14         RAMB36E1 (Prop_ramb36e1_CLKBWRCLK_DOBDO[15])
+                                                      2.454     3.427 r  u_tag/g_way[2].mem_reg/DOBDO[15]
+                         net (fo=2, routed)           1.472     4.899    u_tag/t_rd_tag[63]
+    SLICE_X71Y70         LUT6 (Prop_lut6_I2_O)        0.124     5.023 r  u_tag/ev_miss_INST_0_i_33/O
+                         net (fo=1, routed)           0.000     5.023    u_tag/ev_miss_INST_0_i_33_n_0
+    SLICE_X71Y70         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.550     5.573 r  u_tag/ev_miss_INST_0_i_16/CO[3]
+                         net (fo=3, routed)           1.284     6.858    u_tag/st64_out
+    SLICE_X64Y70         LUT4 (Prop_lut4_I3_O)        0.152     7.010 r  u_tag/ev_miss_INST_0_i_4/O
+                         net (fo=1, routed)           0.434     7.443    u_tag/ev_miss_INST_0_i_4_n_0
+    SLICE_X64Y70         LUT5 (Prop_lut5_I4_O)        0.321     7.764 r  u_tag/ev_miss_INST_0_i_1/O
+                         net (fo=12, routed)          0.842     8.606    u_tag/hit_any
+    SLICE_X66Y75         LUT6 (Prop_lut6_I0_O)        0.332     8.938 r  u_tag/rd_pend_i_4/O
+                         net (fo=5, routed)           0.634     9.572    u_tag/cmp_iss
+    SLICE_X64Y74         LUT5 (Prop_lut5_I4_O)        0.119     9.691 r  u_tag/g_way[0].mem_reg_0_0_i_25/O
+                         net (fo=3, routed)           0.623    10.313    u_tag/g_way[0].mem_reg_0_0_i_25_n_0
+    SLICE_X62Y72         LUT6 (Prop_lut6_I5_O)        0.332    10.645 r  u_tag/g_way[0].mem_reg_3_0_i_1/O
+                         net (fo=24, routed)          3.303    13.948    u_dat/g_way[0].mem_reg_3_0_0
+    RAMB36_X0Y6          RAMB36E1                                     r  u_dat/g_way[1].mem_reg_5_1/ENBWREN
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk rise edge)       20.000    20.000 r  
+                                                      0.000    20.000 r  clk (IN)
+                         net (fo=1174, unset)         0.924    20.924    u_dat/clk
+    RAMB36_X0Y6          RAMB36E1                                     r  u_dat/g_way[1].mem_reg_5_1/CLKBWRCLK
+                         clock pessimism              0.000    20.924    
+                         clock uncertainty           -0.035    20.889    
+    RAMB36_X0Y6          RAMB36E1 (Setup_ramb36e1_CLKBWRCLK_ENBWREN)
+                                                     -0.443    20.446    u_dat/g_way[1].mem_reg_5_1
+  -------------------------------------------------------------------
+                         required time                         20.446    
+                         arrival time                         -13.948    
+  -------------------------------------------------------------------
+                         slack                                  6.498    
+
+Slack (MET) :             6.571ns  (required time - arrival time)
+  Source:                 u_tag/g_way[2].mem_reg/CLKBWRCLK
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Destination:            u_dat/g_way[3].mem_reg_6_1/ENBWREN
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Path Group:             clk
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            20.000ns  (clk rise@20.000ns - clk rise@0.000ns)
+  Data Path Delay:        12.902ns  (logic 4.384ns (33.981%)  route 8.518ns (66.019%))
+  Logic Levels:           7  (CARRY4=1 LUT4=1 LUT5=2 LUT6=3)
+  Clock Path Skew:        -0.049ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.924ns = ( 20.924 - 20.000 ) 
+    Source Clock Delay      (SCD):    0.973ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk rise edge)        0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=1174, unset)         0.973     0.973    u_tag/clk
+    RAMB36_X2Y14         RAMB36E1                                     r  u_tag/g_way[2].mem_reg/CLKBWRCLK
+  -------------------------------------------------------------------    -------------------
+    RAMB36_X2Y14         RAMB36E1 (Prop_ramb36e1_CLKBWRCLK_DOBDO[15])
+                                                      2.454     3.427 r  u_tag/g_way[2].mem_reg/DOBDO[15]
+                         net (fo=2, routed)           1.472     4.899    u_tag/t_rd_tag[63]
+    SLICE_X71Y70         LUT6 (Prop_lut6_I2_O)        0.124     5.023 r  u_tag/ev_miss_INST_0_i_33/O
+                         net (fo=1, routed)           0.000     5.023    u_tag/ev_miss_INST_0_i_33_n_0
+    SLICE_X71Y70         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.550     5.573 r  u_tag/ev_miss_INST_0_i_16/CO[3]
+                         net (fo=3, routed)           1.284     6.858    u_tag/st64_out
+    SLICE_X64Y70         LUT4 (Prop_lut4_I3_O)        0.152     7.010 r  u_tag/ev_miss_INST_0_i_4/O
+                         net (fo=1, routed)           0.434     7.443    u_tag/ev_miss_INST_0_i_4_n_0
+    SLICE_X64Y70         LUT5 (Prop_lut5_I4_O)        0.321     7.764 r  u_tag/ev_miss_INST_0_i_1/O
+                         net (fo=12, routed)          0.842     8.606    u_tag/hit_any
+    SLICE_X66Y75         LUT6 (Prop_lut6_I0_O)        0.332     8.938 r  u_tag/rd_pend_i_4/O
+                         net (fo=5, routed)           0.634     9.572    u_tag/cmp_iss
+    SLICE_X64Y74         LUT5 (Prop_lut5_I4_O)        0.119     9.691 r  u_tag/g_way[0].mem_reg_0_0_i_25/O
+                         net (fo=3, routed)           0.627    10.317    u_tag/g_way[0].mem_reg_0_0_i_25_n_0
+    SLICE_X62Y72         LUT6 (Prop_lut6_I5_O)        0.332    10.649 r  u_tag/g_way[0].mem_reg_6_0_i_1/O
+                         net (fo=16, routed)          3.225    13.875    u_dat/rd_en
+    RAMB36_X0Y22         RAMB36E1                                     r  u_dat/g_way[3].mem_reg_6_1/ENBWREN
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk rise edge)       20.000    20.000 r  
+                                                      0.000    20.000 r  clk (IN)
+                         net (fo=1174, unset)         0.924    20.924    u_dat/clk
+    RAMB36_X0Y22         RAMB36E1                                     r  u_dat/g_way[3].mem_reg_6_1/CLKBWRCLK
+                         clock pessimism              0.000    20.924    
+                         clock uncertainty           -0.035    20.889    
+    RAMB36_X0Y22         RAMB36E1 (Setup_ramb36e1_CLKBWRCLK_ENBWREN)
+                                                     -0.443    20.446    u_dat/g_way[3].mem_reg_6_1
+  -------------------------------------------------------------------
+                         required time                         20.446    
+                         arrival time                         -13.875    
+  -------------------------------------------------------------------
+                         slack                                  6.571    
+
+Slack (MET) :             6.786ns  (required time - arrival time)
+  Source:                 u_tag/g_way[0].mem_reg/CLKBWRCLK
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Destination:            f_data_reg[2][46]/D
+                            (rising edge-triggered cell FDCE clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Path Group:             clk
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            20.000ns  (clk rise@20.000ns - clk rise@0.000ns)
+  Data Path Delay:        13.114ns  (logic 3.720ns (28.366%)  route 9.394ns (71.634%))
+  Logic Levels:           7  (CARRY4=2 LUT4=1 LUT5=1 LUT6=3)
+  Clock Path Skew:        -0.049ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.924ns = ( 20.924 - 20.000 ) 
+    Source Clock Delay      (SCD):    0.973ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk rise edge)        0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=1174, unset)         0.973     0.973    u_tag/clk
+    RAMB36_X1Y13         RAMB36E1                                     r  u_tag/g_way[0].mem_reg/CLKBWRCLK
+  -------------------------------------------------------------------    -------------------
+    RAMB36_X1Y13         RAMB36E1 (Prop_ramb36e1_CLKBWRCLK_DOBDO[1])
+                                                      2.454     3.427 r  u_tag/g_way[0].mem_reg/DOBDO[1]
+                         net (fo=2, routed)           1.428     4.855    u_tag/t_rd_tag[1]
+    SLICE_X65Y68         LUT6 (Prop_lut6_I0_O)        0.124     4.979 r  u_tag/ev_miss_INST_0_i_24/O
+                         net (fo=1, routed)           0.000     4.979    u_tag/ev_miss_INST_0_i_24_n_0
+    SLICE_X65Y68         CARRY4 (Prop_carry4_S[0]_CO[3])
+                                                      0.532     5.511 r  u_tag/ev_miss_INST_0_i_10/CO[3]
+                         net (fo=1, routed)           0.000     5.511    u_tag/ev_miss_INST_0_i_10_n_0
+    SLICE_X65Y69         CARRY4 (Prop_carry4_CI_CO[3])
+                                                      0.114     5.625 f  u_tag/ev_miss_INST_0_i_3/CO[3]
+                         net (fo=3, routed)           0.892     6.517    u_tag/st6
+    SLICE_X64Y70         LUT4 (Prop_lut4_I1_O)        0.124     6.641 f  u_tag/way[1]_i_4/O
+                         net (fo=1, routed)           0.444     7.085    u_tag/way[1]_i_4_n_0
+    SLICE_X64Y70         LUT5 (Prop_lut5_I4_O)        0.124     7.209 r  u_tag/way[1]_i_2/O
+                         net (fo=71, routed)          3.977    11.186    u_dat/f_data_reg[0][0]_0
+    SLICE_X8Y30          LUT6 (Prop_lut6_I3_O)        0.124    11.310 r  u_dat/f_data[3][46]_i_2/O
+                         net (fo=1, routed)           1.994    13.303    u_dat/f_data[3][46]_i_2_n_0
+    SLICE_X30Y58         LUT6 (Prop_lut6_I1_O)        0.124    13.427 r  u_dat/f_data[3][46]_i_1/O
+                         net (fo=4, routed)           0.660    14.087    u_dat_n_17
+    SLICE_X30Y59         FDCE                                         r  f_data_reg[2][46]/D
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk rise edge)       20.000    20.000 r  
+                                                      0.000    20.000 r  clk (IN)
+                         net (fo=1174, unset)         0.924    20.924    clk
+    SLICE_X30Y59         FDCE                                         r  f_data_reg[2][46]/C
+                         clock pessimism              0.000    20.924    
+                         clock uncertainty           -0.035    20.889    
+    SLICE_X30Y59         FDCE (Setup_fdce_C_D)       -0.016    20.873    f_data_reg[2][46]
+  -------------------------------------------------------------------
+                         required time                         20.873    
+                         arrival time                         -14.087    
+  -------------------------------------------------------------------
+                         slack                                  6.786    
+
+Slack (MET) :             6.880ns  (required time - arrival time)
+  Source:                 u_tag/g_way[2].mem_reg/CLKBWRCLK
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Destination:            u_dat/g_way[2].mem_reg_6_1/ENBWREN
+                            (rising edge-triggered cell RAMB36E1 clocked by clk  {rise@0.000ns fall@10.000ns period=20.000ns})
+  Path Group:             clk
+  Path Type:              Setup (Max at Slow Process Corner)
+  Requirement:            20.000ns  (clk rise@20.000ns - clk rise@0.000ns)
+  Data Path Delay:        12.593ns  (logic 4.384ns (34.813%)  route 8.209ns (65.187%))
+  Logic Levels:           7  (CARRY4=1 LUT4=1 LUT5=2 LUT6=3)
+  Clock Path Skew:        -0.049ns (DCD - SCD + CPR)
+    Destination Clock Delay (DCD):    0.924ns = ( 20.924 - 20.000 ) 
+    Source Clock Delay      (SCD):    0.973ns
+    Clock Pessimism Removal (CPR):    0.000ns
+  Clock Uncertainty:      0.035ns  ((TSJ^2 + TIJ^2)^1/2 + DJ) / 2 + PE
+    Total System Jitter     (TSJ):    0.071ns
+    Total Input Jitter      (TIJ):    0.000ns
+    Discrete Jitter          (DJ):    0.000ns
+    Phase Error              (PE):    0.000ns
+
+    Location             Delay type                Incr(ns)  Path(ns)    Netlist Resource(s)
+  -------------------------------------------------------------------    -------------------
+                         (clock clk rise edge)        0.000     0.000 r  
+                                                      0.000     0.000 r  clk (IN)
+                         net (fo=1174, unset)         0.973     0.973    u_tag/clk
+    RAMB36_X2Y14         RAMB36E1                                     r  u_tag/g_way[2].mem_reg/CLKBWRCLK
+  -------------------------------------------------------------------    -------------------
+    RAMB36_X2Y14         RAMB36E1 (Prop_ramb36e1_CLKBWRCLK_DOBDO[15])
+                                                      2.454     3.427 r  u_tag/g_way[2].mem_reg/DOBDO[15]
+                         net (fo=2, routed)           1.472     4.899    u_tag/t_rd_tag[63]
+    SLICE_X71Y70         LUT6 (Prop_lut6_I2_O)        0.124     5.023 r  u_tag/ev_miss_INST_0_i_33/O
+                         net (fo=1, routed)           0.000     5.023    u_tag/ev_miss_INST_0_i_33_n_0
+    SLICE_X71Y70         CARRY4 (Prop_carry4_S[1]_CO[3])
+                                                      0.550     5.573 r  u_tag/ev_miss_INST_0_i_16/CO[3]
+                         net (fo=3, routed)           1.284     6.858    u_tag/st64_out
+    SLICE_X64Y70         LUT4 (Prop_lut4_I3_O)        0.152     7.010 r  u_tag/ev_miss_INST_0_i_4/O
+                         net (fo=1, routed)           0.434     7.443    u_tag/ev_miss_INST_0_i_4_n_0
+    SLICE_X64Y70         LUT5 (Prop_lut5_I4_O)        0.321     7.764 r  u_tag/ev_miss_INST_0_i_1/O
+                         net (fo=12, routed)          0.842     8.606    u_tag/hit_any
+    SLICE_X66Y75         LUT6 (Prop_lut6_I0_O)        0.332     8.938 r  u_tag/rd_pend_i_4/O
+                         net (fo=5, routed)           0.634     9.572    u_tag/cmp_iss
+    SLICE_X64Y74         LUT5 (Prop_lut5_I4_O)        0.119     9.691 r  u_tag/g_way[0].mem_reg_0_0_i_25/O
+                         net (fo=3, routed)           0.627    10.317    u_tag/g_way[0].mem_reg_0_0_i_25_n_0
+    SLICE_X62Y72         LUT6 (Prop_lut6_I5_O)        0.332    10.649 r  u_tag/g_way[0].mem_reg_6_0_i_1/O
+                         net (fo=16, routed)          2.917    13.566    u_dat/rd_en
+    RAMB36_X0Y21         RAMB36E1                                     r  u_dat/g_way[2].mem_reg_6_1/ENBWREN
+  -------------------------------------------------------------------    -------------------
+
+                         (clock clk rise edge)       20.000    20.000 r  
+                                                      0.000    20.000 r  clk (IN)
+                         net (fo=1174, unset)         0.924    20.924    u_dat/clk
+    RAMB36_X0Y21         RAMB36E1                                     r  u_dat/g_way[2].mem_reg_6_1/CLKBWRCLK
+                         clock pessimism              0.000    20.924    
+                         clock uncertainty           -0.035    20.889    
+    RAMB36_X0Y21         RAMB36E1 (Setup_ramb36e1_CLKBWRCLK_ENBWREN)
+                                                     -0.443    20.446    u_dat/g_way[2].mem_reg_6_1
+  -------------------------------------------------------------------
+                         required time                         20.446    
+                         arrival time                         -13.566    
+  -------------------------------------------------------------------
+                         slack                                  6.880    
+
+
+
+

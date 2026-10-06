@@ -1,0 +1,32 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
+| Date         : Tue Oct  6 21:31:20 2026
+| Host         : ARM-Windows running 64-bit major release  (build 9200)
+| Command      : report_utilization -hierarchical -file ./output/L2_256K_4w/utilization.rpt
+| Design       : CPU_L2
+| Device       : xc7a100tcsg324-1
+| Speed File   : -1
+| Design State : Routed
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Utilization Design Information
+
+Table of Contents
+-----------------
+1. Utilization by Hierarchy
+
+1. Utilization by Hierarchy
+---------------------------
+
++------------+------------------+------------+------------+---------+------+-----+--------+--------+------------+
+|  Instance  |      Module      | Total LUTs | Logic LUTs | LUTRAMs | SRLs | FFs | RAMB36 | RAMB18 | DSP Blocks |
++------------+------------------+------------+------------+---------+------+-----+--------+--------+------------+
+| CPU_L2     |            (top) |        975 |        927 |      48 |    0 | 991 |     68 |      0 |          0 |
+|   (CPU_L2) |            (top) |        437 |        389 |      48 |    0 | 991 |      0 |      0 |          0 |
+|   u_dat    | CACHE_DATA_ARRAY |        361 |        361 |       0 |    0 |   0 |     64 |      0 |          0 |
+|   u_tag    |     L2_TAG_ARRAY |        184 |        184 |       0 |    0 |   0 |      4 |      0 |          0 |
++------------+------------------+------------+------------+---------+------+-----+--------+--------+------------+
+* Note: The sum of lower-level cells may be larger than their parent cells total, due to cross-hierarchy LUT combining
+
+

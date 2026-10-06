@@ -1,0 +1,3 @@
+L2_256K_4w  (period 20.0 ns, I/O delay 6.0 ns each side)
+after synthesis: 1078 LUT, 991 FF, RAMB36 68, RAMB18 0 (tag 4, data 64 primitives), LUT RAM cells 12
+after routing: WNS 3.953 ns (register to register 5.977 ns), WHS 0.161 ns, 659 slices
