@@ -5,19 +5,25 @@
 #   tftp -g -r workload.sh 192.168.0.12 && sh workload.sh 192.168.0.12
 #
 # CoreMark fits in the caches (BENCH.md 13). This runs ordinary work that
-# does not, each one five times under perf stat:
+# does not, each one five times under perf stat. Only applets the BusyBox of
+# the SD card has (it has no gzip, sha256sum or find):
 #
-#   gzip       gzip -6 of 2 MB of the kernel Image   integer work, ~256 KB tables
-#   gunzip     the same back                         streaming, small working set
-#   sha256     sha256sum of 4 MB                     streaming reads
-#   find       find / -xdev and ls -lR of the root   kernel, VFS, dentry cache
-#   tar        tar of /bin /sbin /usr /etc /lib,      ext4 and the SD card
+#   gunzip     2 MB of the kernel Image, gzipped on   streaming, user mode
+#              the host (image2m.gz, make tftp)
+#   md5sum     md5sum of 4 MB                         streaming hash
+#   awk        an awk loop over a 5000 entry table    an interpreter: much code,
+#                                                     hash tables
+#   ls         ls -lR of the root                     kernel, VFS, lstat
+#   ext4read   cat of an 8 MB file on the SD card,    ext4, the SD card
 #              page cache dropped first
 #   sdread     dd of 16 MB of the root partition,     SD DMA through the D$
 #              page cache dropped first
 #   forkexec   100 x fork + exec of busybox uname     process creation, page
 #                                                     faults, TLB
 #   tftp       TFTP download of perf (3 MB)           Ethernet, IP stack
+#
+# Each command is run once first and has to succeed; one that does not is
+# reported as FAILED instead of being counted.
 #
 # Runs 1-4 count the 16 events of the core four at a time (there are four
 # programmable counters; cycles and instructions have their own), run 5
@@ -36,17 +42,18 @@ LOG=${WL_LOG:-/tmp/workload.log}
 mkdir -p "$DIR"
 cd "$DIR" || exit 1
 rm -f ./*.csv
-for f in perf Image; do
+for f in perf Image image2m.gz; do
     tftp -g -r "$f" -l "$f" "$SERVER" || { echo "workload.sh: cannot fetch $f from $SERVER"; exit 1; }
 done
 chmod 755 perf
 [ -d /sys/bus/event_source/devices/cpu ] ||
     { echo "workload.sh: the kernel has no PMU driver (CONFIG_RISCV_PMU_SBI)"; exit 1; }
 
-# the inputs, in /tmp (RAM)
-dd if=Image of=in2m bs=1024 count=2048 2> /dev/null
+# the inputs: in /tmp (RAM), and one file on the SD card (removed at the end)
 dd if=Image of=in4m bs=1024 count=4096 2> /dev/null
-gzip -6 -c in2m > in2m.gz
+SDFILE=/root/wl_file
+dd if=Image of=$SDFILE bs=65536 count=128 2> /dev/null
+sync
 
 : > "$LOG"
 echo "workload.sh: $(uname -r), $(date)" | tee -a "$LOG"
@@ -59,11 +66,11 @@ drop() {
 # the command of each workload (run by sh -c, so perf counts what it starts)
 cmd() {
     case $1 in
-    gzip)     echo "gzip -6 -c $DIR/in2m > /dev/null" ;;
-    gunzip)   echo "gunzip -c $DIR/in2m.gz > /dev/null" ;;
-    sha256)   echo "sha256sum $DIR/in4m > /dev/null" ;;
-    find)     echo "find / -xdev > /dev/null; ls -lR /bin /sbin /usr /etc /lib > /dev/null 2>&1" ;;
-    tar)      echo "tar cf - /bin /sbin /usr /etc /lib 2> /dev/null | cat > /dev/null" ;;
+    gunzip)   echo "gunzip -c $DIR/image2m.gz > /dev/null" ;;
+    md5sum)   echo "md5sum $DIR/in4m > /dev/null" ;;
+    awk)      echo "awk 'BEGIN { for (i = 0; i < 100000; i++) a[i % 5000] += i; print a[1] }' > /dev/null" ;;
+    ls)       echo "ls -lR /bin /sbin /usr /etc /root /lib > /dev/null" ;;
+    ext4read) echo "cat $SDFILE > /dev/null" ;;
     sdread)   echo "dd if=/dev/mmcblk0p2 of=/dev/null bs=65536 count=256 2> /dev/null" ;;
     forkexec) echo "i=0; while [ \$i -lt 100 ]; do /bin/busybox uname > /dev/null; i=\$((i+1)); done" ;;
     tftp)     echo "tftp -g -r perf -l $DIR/perf.copy $SERVER" ;;
@@ -71,18 +78,24 @@ cmd() {
 }
 
 EVSETS="r7,r8,r9,ra rb,rc,r11,rd r5,r6,r3,r4 re,rf,r10,r1"
-WORKLOADS="gzip gunzip sha256 find tar sdread forkexec tftp"
+WORKLOADS="gunzip md5sum awk ls ext4read sdread forkexec tftp"
+
+cold() { case $1 in ext4read|sdread) drop ;; esac; }
 
 for w in $WORKLOADS; do
     c=$(cmd $w)
     echo "=== $w: $c" | tee -a "$LOG"
+    if ! sh -c "$c" >> "$LOG" 2>&1; then
+        echo "workload.sh: $w FAILED (the command does not succeed; see $LOG)" | tee -a "$LOG"
+        continue
+    fi
     g=1
     for ev in $EVSETS; do
-        case $w in tar|sdread) drop ;; esac
+        cold $w
         ./perf stat -x, -o "$w.$g.csv" -e "cycles,instructions,$ev" sh -c "$c" 2>> "$LOG"
         g=$((g+1))
     done
-    case $w in tar|sdread) drop ;; esac
+    cold $w
     ./perf stat -x, -o "$w.5.csv" -e "cycles:u,r1:k,instructions:u,r2:k" sh -c "$c" 2>> "$LOG"
     cat "$w".*.csv | grep -v "^#\|^$" >> "$LOG"
 done
@@ -96,6 +109,10 @@ echo "kern %: kernel share of the cycles" | tee -a "$LOG"
 printf "%-9s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s\n" \
     workload Mcyc CPI 'I$' 'D$' ITLB DTLB exc 'D$w%' 'FE%' 'BE%' 'LU%' 'mis%' 'kern%' | tee -a "$LOG"
 for w in $WORKLOADS; do
+    if [ ! -f "$w.5.csv" ]; then
+        printf "%-9s FAILED\n" "$w"
+        continue
+    fi
     for g in 1 2 3 4 5; do
         grep -v "^#\|^$" "$w.$g.csv" | sed "s/^/$g,/"
     done | awk -F, -v w="$w" '
@@ -121,3 +138,4 @@ done | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 echo "CoreMark for comparison (perf.sh, BENCH.md 13): CPI 1.134, I\$ 0.49, D\$ 0.16, ITLB 0.002, DTLB 0.06," | tee -a "$LOG"
 echo "  D\$ wait 0.7 %, front end 4.8 %, back end 5.6 %, load use 2.0 %, wrong guesses 7.2 %" | tee -a "$LOG"
+rm -f "$SDFILE"

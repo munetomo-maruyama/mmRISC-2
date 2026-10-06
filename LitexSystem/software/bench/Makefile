@@ -95,14 +95,19 @@ out/dhrystone_zb: out/dhrystone
 out/micro: micro.c loops.h | out
 	$(CC) $(CFLAGS) -Wall -o $@ $<
 
-tftp: all
+# the input of workload.sh's gunzip: the board's BusyBox has no gzip
+out/image2m.gz: ../boot/Image | out
+	head -c 2097152 $< | gzip -6 -n > $@
+
+tftp: all out/image2m.gz
 	sudo cp out/coremark out/dhrystone out/micro out/coremark_zb out/dhrystone_zb \
 	    bench.sh $(TFTP_DIR)/
 	sudo chmod 644 $(TFTP_DIR)/coremark $(TFTP_DIR)/dhrystone $(TFTP_DIR)/micro \
 	    $(TFTP_DIR)/coremark_zb $(TFTP_DIR)/dhrystone_zb $(TFTP_DIR)/bench.sh
 	if [ -f out/perf ]; then \
-	    sudo cp out/perf perf.sh workload.sh $(TFTP_DIR)/ && \
-	    sudo chmod 644 $(TFTP_DIR)/perf $(TFTP_DIR)/perf.sh $(TFTP_DIR)/workload.sh; fi
+	    sudo cp out/perf perf.sh workload.sh out/image2m.gz $(TFTP_DIR)/ && \
+	    sudo chmod 644 $(TFTP_DIR)/perf $(TFTP_DIR)/perf.sh $(TFTP_DIR)/workload.sh \
+	        $(TFTP_DIR)/image2m.gz; fi
 	ls -l $(TFTP_DIR)
 
 clean:
