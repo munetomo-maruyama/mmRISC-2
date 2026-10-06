@@ -52,6 +52,9 @@ module DBG_DM
         input  logic                  hart_running,
         input  logic                  hart_resumed,   // pulse
         input  logic                  hart_in_reset,
+        // out of reset but not able to run yet (the L2 clears its tags):
+        // shown as unavailable, without havereset
+        input  logic                  hart_not_ready,
 
         // hart register access
         output logic                  reg_req,        // pulse
@@ -165,7 +168,7 @@ module DBG_DM
     assign dmactive_o      = dmactive;
     assign authenticated_o = authenticated;
 
-    assign hart_haltreq      = haltreq_r;
+    assign hart_haltreq      = haltreq_r | reset_halt_hold;
     assign hart_resethaltreq = resethaltreq_r;
     assign hart_hartreset    = hartreset_r;
     assign ndmreset          = ndmreset_r;
@@ -191,13 +194,34 @@ module DBG_DM
         endcase
     endfunction
 
+    //-----------------------------------------------------------------
+    // Halt out of reset. A hart whose haltreq is set while it is in reset
+    // has to halt "immediately" as it comes out (Debug Spec 3.2), and
+    // OpenOCD's reset halt counts on that: it clears haltreq at once.
+    // The core halts only at an instruction, and the first one can take
+    // long to come (the L2 clears its tags after reset), so the request is
+    // held here until the hart has halted, and the hart is shown
+    // unavailable until then: the debugger never sees it running between
+    // the reset and the halt. dmactive = 0 drops a held request.
+    //-----------------------------------------------------------------
+    logic reset_halt_hold;
+    logic hart_unavail;
+    assign hart_unavail = hart_in_reset | hart_not_ready | (reset_halt_hold & ~hart_halted);
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n)                                         reset_halt_hold <= 1'b0;
+        else if (!dmactive)                                 reset_halt_hold <= 1'b0;
+        else if ((hart_in_reset | hart_not_ready) & haltreq_r) reset_halt_hold <= 1'b1;
+        else if (hart_halted & ~hart_in_reset)              reset_halt_hold <= 1'b0;
+    end
+
     // selected hart status
     logic sel_exist;
     logic st_halted, st_running, st_unavail, st_havereset, st_resumeack;
     assign sel_exist    = (hartsel_r == 1'b0);
-    assign st_unavail   = sel_exist &  hart_in_reset;
-    assign st_halted    = sel_exist & ~hart_in_reset & hart_halted;
-    assign st_running   = sel_exist & ~hart_in_reset & hart_running;
+    assign st_unavail   = sel_exist &  hart_unavail;
+    assign st_halted    = sel_exist & ~hart_unavail & hart_halted;
+    assign st_running   = sel_exist & ~hart_unavail & hart_running;
     assign st_havereset = sel_exist & havereset_r;
     assign st_resumeack = sel_exist & resumeack_r;
 

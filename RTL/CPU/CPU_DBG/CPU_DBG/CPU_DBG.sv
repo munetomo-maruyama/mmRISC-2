@@ -48,6 +48,10 @@ module CPU_DBG
         input  logic        rst_n,           // system reset
         output logic        rst_bus_n,       // synchronized system reset (incl. ndmreset)
         output logic        ndmreset,
+        // the hart cannot run yet although its reset is over (the L2 clears
+        // its tags after reset): dmstatus shows it unavailable, as in reset.
+        // clk domain, level
+        input  logic        hart_not_ready,
 
         // JTAG / cJTAG pins
         input  logic        jtag_tck,
@@ -329,6 +333,7 @@ module CPU_DBG
             .hart_running      (running),
             .hart_resumed      (resumed),
             .hart_in_reset     (hart_rst),
+            .hart_not_ready    (hart_not_ready),
             .reg_req           (reg_req),
             .reg_wr            (reg_wr),
             .reg_regno         (reg_regno),

@@ -53,7 +53,9 @@ module tb_BIOS
         // makes the core fetch its first instructions UNCACHED over
         // AXI4-Lite, which is what the LiteX BIOS does: it runs from a ROM
         // at 0x1000_0000, below MEM_BASE.
-        parameter logic [39:0] RESET_ADDR = 40'h00_1000_0000
+        parameter logic [39:0] RESET_ADDR = 40'h00_1000_0000,
+        // L2 cache in bytes (-GL2_SIZE=0 : without it), as in the SoC
+        parameter int          L2_SIZE    = 256 * 1024
     );
 
     localparam int          SOC_ADDR_WIDTH = 40;
@@ -129,6 +131,7 @@ module tb_BIOS
             // as on the Arty (LitexSystem/cpu/mmrisc/core.py): mtime steps
             // every 100 cycles, the 500 kHz of timebase-frequency
             .CLINT_TICK_DIV  (100),
+            .L2_SIZE         (L2_SIZE),
             .USE_BFM         (0)
         )
     u_cpu_top

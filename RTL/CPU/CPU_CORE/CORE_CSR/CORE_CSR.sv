@@ -65,7 +65,7 @@ module CORE_CSR
         // PMU: counters mhpmcounter3 .. mhpmcounter(3+HPM_COUNTERS-1), and
         // the number of event inputs (event 0 is "nothing")
         parameter int          HPM_COUNTERS = 4,
-        parameter int          HPM_EVENTS   = 18
+        parameter int          HPM_EVENTS   = 20
     )
     (
         input  logic        clk,

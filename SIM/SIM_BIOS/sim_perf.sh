@@ -16,6 +16,8 @@ echo "== sim_perf: perf stat -v, four raw events in a group"
 perf stat -v -e '{r3,r4,r5,r6}' /bin/busybox ls / 2>&1 > /dev/null
 echo "== sim_perf: perf stat -x, (what perf.sh of the board reads)"
 perf stat -x, -e cycles,instructions,r7,r8,r9,ra /bin/busybox ls / 2>&1 > /dev/null
+echo "== sim_perf: the L2 (LLC-loads / LLC-load-misses = r12 / r13, CPU_L2_SPEC.md 7)"
+perf stat -x, -e LLC-loads,LLC-load-misses,r12,r13 /bin/busybox ls / 2>&1 > /dev/null
 echo "== sim_perf: perf record on r1"
 perf record -e r1 -c 20000 -o /tmp/perf.data /bin/busybox ls / 2>&1 > /dev/null
 # (a line of perf report that starts with "# " would look like the shell

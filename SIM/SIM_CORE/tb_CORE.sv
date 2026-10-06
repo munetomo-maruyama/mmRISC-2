@@ -141,6 +141,8 @@ module tb_CORE;
             .mtime         (mtime),
             .ev_ic_refill  (1'b0),            // no caches here
             .ev_dc_refill  (1'b0),
+            .ev_l2_read    (1'b0),
+            .ev_l2_miss    (1'b0),
             .trace_valid   (trace_valid),
             .trace_pc      (trace_pc),
             .trace_insn    (trace_insn),

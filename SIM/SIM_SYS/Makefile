@@ -29,6 +29,8 @@ RTL_SRCS := \
 	$(RTL_DIR)/CPU/CPU_DBG/DBG_CACHE/DBG_CACHE.sv \
 	$(RTL_DIR)/CPU/CPU_CACHE/CACHE_TAG_ARRAY/CACHE_TAG_ARRAY.sv \
 	$(RTL_DIR)/CPU/CPU_CACHE/CACHE_DATA_ARRAY/CACHE_DATA_ARRAY.sv \
+	$(RTL_DIR)/CPU/CPU_L2/L2_TAG_ARRAY.sv \
+	$(RTL_DIR)/CPU/CPU_L2/CPU_L2.sv \
 	$(RTL_DIR)/CPU/CPU_CACHE/ICACHE/ICACHE.sv \
 	$(RTL_DIR)/CPU/CPU_CACHE/DCACHE/DCACHE.sv \
 	$(RTL_DIR)/CPU/CPU_CACHE/CACHE_PORT_ARB/CACHE_PORT_ARB.sv \
@@ -74,6 +76,10 @@ TESTS    := t01_alu t02_branch t03_ldst t04_hazard t05_csr t07_trap t08_rvc \
             t24_predict t26_late t27_fence t30_trig t31_zicond t32_pmu
 TEST     ?= t01_alu
 PLUSARGS ?=
+# parameters of tb_SYS, e.g. PARAMS=-GL2_SIZE=0 (without the L2) or
+# PARAMS=-GBTB_ENTRIES=64; they are part of the hash below, so a change
+# rebuilds the model
+PARAMS   ?=
 
 .PHONY: all run run-all profile stall romboot riscv-tests lint clean FORCE bench
 
@@ -83,12 +89,12 @@ all: run-all
 # hash of the sources and not on their time (see SIM_CORE/Makefile)
 obj_dir/.srchash: FORCE
 	@mkdir -p obj_dir
-	@h=`cat $(SRCS) | md5sum | cut -d' ' -f1`; \
+	@h=`(cat $(SRCS); echo "$(PARAMS)") | md5sum | cut -d' ' -f1`; \
 	 if [ "`cat $@ 2>/dev/null`" != "$$h" ]; then \
 	     rm -f obj_dir/V$(TOP); echo "$$h" > $@; fi
 
 obj_dir/V$(TOP): obj_dir/.srchash
-	$(VERILATOR) $(VERILATOR_FLAGS) $(SRCS)
+	$(VERILATOR) $(VERILATOR_FLAGS) $(PARAMS) $(SRCS)
 
 tests/%.hex:
 	$(MAKE) -C ../SIM_CORE tests/$*.hex
@@ -145,12 +151,12 @@ riscv-tests: obj_dir/V$(TOP)
 # core: this run starts there, on a stub that jumps into main memory.
 obj_rom/.srchash: FORCE
 	@mkdir -p obj_rom
-	@h=`cat $(SRCS) | md5sum | cut -d' ' -f1`; \
+	@h=`(cat $(SRCS); echo "$(PARAMS)") | md5sum | cut -d' ' -f1`; \
 	 if [ "`cat $@ 2>/dev/null`" != "$$h" ]; then \
 	     rm -f obj_rom/V$(TOP); echo "$$h" > $@; fi
 
 obj_rom/V$(TOP): obj_rom/.srchash
-	$(VERILATOR) $(VERILATOR_FLAGS) -GRESET_ADDR=0x10000000 -Mdir obj_rom $(SRCS)
+	$(VERILATOR) $(VERILATOR_FLAGS) -GRESET_ADDR=0x10000000 -Mdir obj_rom $(PARAMS) $(SRCS)
 
 romboot: obj_rom/V$(TOP)
 	@$(MAKE) -s -C ../SIM_CORE tests > /dev/null

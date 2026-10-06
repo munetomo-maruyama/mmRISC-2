@@ -1,7 +1,7 @@
 # mmRISC-2 L2 キャッシュ 設計案
 
-- 版: Rev-1(2026-10-06)。段階 2(`CPU_L2` の RTL と単体検証 `SIM/SIM_L2`)まで済み。
-  実装で決めたことは 4 章・11 章に反映した。`CPU_TOP` への組み込み(段階 3)と実測の後に
+- 版: Rev-2(2026-10-06)。段階 3(`CPU_TOP` への組み込み、既存の回帰)まで済み。
+  実装で決めたことは 2・4・6・7 章と 11・12 章に反映した。実機の測定(段階 4)の後に
   仕様として確定する
 - 対象: `RTL/CPU/CPU_L2/`(`CPU_L2.sv`、`L2_TAG_ARRAY.sv`。データ配列は L1 の
   `CACHE_DATA_ARRAY` を使う)、`RTL/CPU/CPU_TOP/`(組み込み)、`SIM/SIM_L2/`(単体検証)
@@ -43,9 +43,12 @@ L1 のミス 1 回の重さは、理想的なメモリで 12〜13 サイクル(`
   CPU_TOP
   ┌───────────────────────────────────────────────────────────────┐
   │ CPU_CORE ─ i_* / d_* ─ CPU_CACHE(I$ / D$ ─ BUS_ARB)          │
-  │                               │ AXI4 64 bit(メモリバス)       │
+  │                               │ AXI4 64 bit(l1_axi4_*)       │
   │                               ▼                               │
-  │                        CPU_L2(新設) ────────────────────────────┼─ m_axi4 → LiteX
+  │                        CPU_L2(g_l2.u_cpu_l2)                  │
+  │                               │ (cc_axi4_*)                   │
+  │   BFM の生のバス ─────▶ BUS_ARB(u_bus_arb_cpu)                 │
+  │   デバッガの生のバス ─▶ BUS_ARB(u_bus_arb) ───────────────────────┼─ m_axi4 → LiteX
   │                                                               │   AXIUpConverter(64→128)
   │ CPU_DBG ─ DBG_CACHE ─▶ D$ の第 2 ポート                        │   → LiteDRAMAXI2Native
   │ DMA ポート ───────────▶ D$ の第 2 ポート                        │   → LiteDRAM(DDR3 16 bit)
@@ -53,17 +56,25 @@ L1 のミス 1 回の重さは、理想的なメモリで 12〜13 サイクル(`
   └───────────────────────────────────────────────────────────────┘
 ```
 
-- **`CPU_CACHE` のメモリバス(AXI4、64 ビット)と `CPU_TOP` の `m_axi4` の間**に、AXI4 の
-  スレーブとマスタを 1 つずつ持つブロックとして挟む。コア・L1・`BUS_ARB`・LiteX の側は何も
-  変えない(`core.py` も LiteX のチェックアウトも変更なし)。
+- **`CPU_CACHE` のメモリバス(AXI4、64 ビット)の直後**に、AXI4 のスレーブとマスタを 1 つずつ
+  持つブロックとして挟む(`CPU_TOP` の `g_l2`)。その後ろの調停(シミュレーション用 BFM の生の
+  バス、`DBG_VIA_CACHE = 0` のときのデバッガの生のバス)は L2 を通らない。どちらも L1 も通らない
+  経路で、L1 と同じく L2 とも一貫しない(実機の構成ではどちらも使わない)。コア・L1・`BUS_ARB`・
+  LiteX の側は何も変えない(`core.py` は RTL の一覧とパラメータを足しただけ)。
 - **主記憶へ行くものはすべてここを通る**: I$ / D$ の fill、D$ の書き戻し、SD カードの DMA
   (D$ の第 2 ポート経由)、デバッガのメモリアクセス(同)。ほかに主記憶を触る経路は無い
   (Ethernet のバッファは SoC の SRAM)。したがって **L2 は作りからして一貫している**。
   後始末(フラッシュの命令、無効化)は要らない。
 - LiteX 自身の L2(`--l2-size`)は SoC バスの側にあり、CPU のメモリバスはそれを通らない。
   使えない(`build_soc.sh` の注記、`BRINGUP.md`)。
-- `CPU_TOP` のパラメータ `L2_SIZE`(0 なら L2 なしでそのままつなぐ)。L2 の有無を比べる
-  ビルド、デバッグ論理の単体ビルド(`FPGA/ARTY_A7_100T`)のため。
+- `CPU_TOP` のパラメータ `L2_SIZE`(既定 256 KB。0 なら L2 なしでそのままつなぐ)、`L2_WAYS`(4)、
+  `L2_REPLACE_RANDOM`(0)。L2 の AXI ID: fill と一部の書き込みは L1 の ID のまま、追い出しの
+  書き出しは D$ の書き戻しと同じ `CACHE_AXI4_ID_DWB`。
+  - LiteX: `--cpu-l2-size`(既定 262144、0 で L2 なし。`core.py`)。LiteX 自身の `--l2-size 0` とは別物
+  - `RTL/TOP/TOP.sv`(デバッグ論理の実機立ち上げ用、RAM 64 KB): `L2_SIZE` 既定 0
+  - シミュレーション: SIM_SYS・SIM_BIOS・SIM_OCD は L2 あり(SIM_SYS / SIM_BIOS は `-GL2_SIZE=0` で
+    なしにできる)。SIM_CPU は L2 なし(BFM の生のバスと、L1 の後ろのメモリをバックドアで
+    確かめる試験のため)
 
 ---
 
@@ -191,21 +202,34 @@ LUT は見積もりの半分以下だった。データのウェイ選択(64 ビ
   `reset halt` の後、BIOS は空の L2 から始まる。BIOS は ROM(`0x1000_0000`、`MEM_BASE` 未満)
   で動くので L2 を通らず、消去(1,024 サイクル、50 MHz で約 20 µs)は BIOS が主記憶を使う
   前に終わる。
+- **`reset halt` と消去**(段階 3 で分かったこと): コアは命令が ID に来たところで halt するので、
+  主記憶から始まる構成(SIM_OCD、`RESET_VECTOR` = 0x8000_0000)では、リセット後の最初の命令が
+  消去の分(1,024 サイクル)遅れる。OpenOCD の `reset halt` はリセットを解いて dmstatus を 1 回
+  読んだらすぐ haltreq を下ろすので、ハートが走っているのを見て、dcsr を書くために halt させた
+  あと再開させてしまっていた。`CPU_L2` に `ready`(消去が済んだ)を足し、DM は (1) リセット中に
+  立った haltreq をハートが halt するまで保持し、(2) それまでと消去中はハートを unavailable と
+  見せる(`CPU_DBG_SPEC.md` 4.2)。デバッガからは「リセットから出たときには halt している」と
+  見え、仕様の「リセットから出てすぐ halt する」と同じになる。
 - **電源投入**: 同じく消去してから要求を受ける。
 
 ---
 
 ## 7. 性能カウンタ
 
-`CPU_CORE_SPEC.md` 決定 69 のイベントに 2 つ足す(`HPM_EVENTS` 18 → 20)。L2 から `CPU_TOP`
-経由でコアへ(L1 の `ev_ic_refill` / `ev_dc_refill` と同じ形)。
+`CPU_CORE_SPEC.md` 決定 69 のイベントに 2 つ足した(`HPM_EVENTS` 18 → 20)。L2 から `CPU_TOP`
+経由でコアへ(`ev_l2_read` / `ev_l2_miss`、L1 の `ev_ic_refill` / `ev_dc_refill` と同じ形)。
+`L2_SIZE = 0` では 0。
 
 | 番号 | イベント | perf |
 |---|---|---|
 | 18 | L2 への行の読み出し(L1 の fill) | `LLC-loads`(デバイスツリーの `pmu` ノードでキャッシュイベント 0x10010 に対応させる)、`r12` |
 | 19 | そのうち L2 のミス | `LLC-load-misses`(0x10011)、`r13` |
 
-`workload.sh` に L2 のヒット率の列を足す。
+デバイスツリー(`mmrisc_arty.dts` の `pmu`)に LLC の対応を足し、`fw_jump.bin` を作り直した。
+`workload.sh` は 5 回目の計測で r12 / r13 を数え、まとめの表に L2(1000 命令あたりの読み出し)と
+L2m%(ミス率)の列を足した。検査: SIM_SYS `d04_pmu` の 4 節(L1 の fill の数 = L2 の読み出しの数、
+初めての 8 行は 8 ミス、D$ から追い出された行は L2 でヒット。L2 なしのビルドでは両方 0)、
+SIM_BIOS `make linux-perf`(`perf stat -e LLC-loads,LLC-load-misses,r12,r13`)。
 
 ---
 
@@ -240,7 +264,7 @@ LUT は見積もりの半分以下だった。データのウェイ選択(64 ビ
 |---|---|---|
 | 1 | この設計案を決める | 9 章の未決事項 |
 | 2 | `CPU_L2` の RTL。単体の検証環境 `SIM/SIM_L2`: AXI4 のランダムな要求(行の読み書き、一部の書き込み、背圧)を、平らなメモリ像の参照モデルと突き合わせる。容量・ウェイのパラメータ掃引、バグ注入 | **済み(2026-10-06)**: 掃引 11 構成すべて PASS、変異 31 種すべて検出(11 章) |
-| 3 | `CPU_TOP` に組み込む(`L2_SIZE`)。SIM_SYS(自作試験、riscv-tests、バグ注入)、SIM_CACHE の DMA 混在試験の L2 あり版、SIM_OCD(デバッガ、`ndmreset`)、SIM_BIOS(BIOS、Linux の起動、`linux-perf`) | 既存の回帰がすべて通る |
+| 3 | `CPU_TOP` に組み込む(`L2_SIZE`)。SIM_SYS(自作試験、riscv-tests、バグ注入)、SIM_CACHE の DMA 混在試験の L2 あり版、SIM_OCD(デバッガ、`ndmreset`)、SIM_BIOS(BIOS、Linux の起動、`linux-perf`) | **済み(2026-10-06)**: 既存の回帰がすべて通る(12 章)。SIM_CACHE の L2 あり版は作らなかった(12 章) |
 | 4 | 実機: 資源、WNS、Linux 起動、`bench.sh`(CoreMark は変わらないこと)、**`workload.sh` の前後比較**、L2 のヒット率、`stress.sh` 120 分 | 1 章の見込みに届くか。スライスと WNS |
 | 5 | C2(FPU のパイプライン化)に残る LUT・スライスの予算を決める。足りなければ容量を 128 KB に、または `ROADMAP.md` の C2 の欄にある削減候補 | |
 | 6 | 必要なら 8 章の拡張(まず先読み) | 実測で効くものだけ |
@@ -282,4 +306,38 @@ R の ID、PMU のミス、2 ビート目の語、fill で行を無効のまま�
 
 ここで見ていないこと: 主記憶の番地の上位ビット(メモリのモデルが小さいので、タグの上位ビットは
 変わらない)、メモリからのエラー応答(`fill_err`)、L1 の本物の要求の並び(段階 3 の SIM_SYS)。
+
+---
+
+## 12. 組み込みの検証(段階 3)
+
+L2 あり(256 KB・4 ウェイ)の `CPU_TOP` で、既存の回帰をすべて流し直した(2026-10-06)。
+
+| 環境 | 中身 | 結果 |
+|---|---|---|
+| SIM_SYS `make` / `make stall` / `make romboot` | 自作試験 25 本と DMA・PMU などのプログラム 4 本(背圧あり、ROM から始める版も) | 全 PASS。`PARAMS=-GL2_SIZE=0`(L2 なし)でも全 PASS |
+| SIM_SYS `make riscv-tests` | riscv-tests | 133 PASS、既知の不合格 4(L2 なしと同じ) |
+| SIM_SYS `d04_pmu` 4 節 | L2 のイベント(7 章) | PASS(L2 あり / なし) |
+| SIM_SYS `./bug_inject.sh` | 16 種(L2 のイベント 2 種を追加) | 全て検出 |
+| SIM_CORE `make` / `stress` / `riscv-tests` | コア(`t32_pmu` はイベント 19 までを確かめるよう変更) | 全 PASS、riscv-tests 167 PASS |
+| SIM_OCD `make` / `make auth` | OpenOCD(L2 あり)。`reset halt` の後の halt、`ndmreset` をまたいだ RAM | PASS(DM の変更の後。6 章) |
+| SIM_DBG `make` / `./bug_inject.sh` | デバッグ論理(DM の変更の確認) | PASS / 全て検出 |
+| SIM_CPU `make` | CPU_TOP のバスと L1(L2 なし、2 章) | PASS 46,718 チェック |
+| SIM_L2 | 単体(`ready` を足した後) | PASS、変異 31 種すべて検出 |
+| SIM_BIOS `make check` / `make pmu-sbi` | LiteX BIOS / OpenSBI の PMU 拡張 | PASS / PASS |
+| SIM_BIOS `make linux-perf` | SD カードのモデルから Linux を起動し、`perf` で LLC イベント | シェルのプロンプトまで(12.4 億サイクル、5.6 億命令)。`perf stat` で `ls /` の LLC-loads 29,370 / LLC-load-misses 10,664(r12 / r13 も同じ数、L2 のヒット率 約 64 %)。ほかの `perf` の項目(固定カウンタ、生イベント 4 本、`perf record` 133 標本)も L2 なしの時と同じく動く |
+
+**シミュレーションでの速さ**: SIM_SYS のメモリのモデルは応答が速い(AR → R が数サイクル)ので、
+L2 はシミュレーションでは速くしない。ミスで +3 サイクル、各試験の始めに消去の 1,024 サイクル
+がかかる(L2 なしより 1,060 サイクルほど長い)。効果は実機(メモリの往復 30〜50 サイクル)で測る。
+
+**バグ注入で外したもの**(等価な変異): L2 の R FIFO にビートが残ったまま次の AR を受ける、
+L2 の fill の ID を誤る。`CPU_CACHE` の `BUS_ARB` が最後の R まで読み出しの経路を握り、応答を
+ID ではなく許可で振り分けるので、L1 の後ろではどちらも起きない。SIM_L2 は読み出し 2 本で両方を
+確かめている(`SIM_SYS/bug_inject.sh` の注記)。
+
+**SIM_CACHE の L2 あり版は作らなかった**。`tb_CACHE` は L1 の後ろのメモリをバックドアで確かめる
+(書き戻しを止めたとき、フラッシュの後)試験が多く、間に L2 を挟むとその検査の前提が崩れる。
+L1 と L2 を合わせた流れは SIM_SYS(プログラム、DMA)と SIM_BIOS(Linux の起動)で、L2 単体の
+細かい場合は SIM_L2 で見る。
 

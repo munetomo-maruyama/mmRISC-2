@@ -298,7 +298,12 @@ module tb_CPU_TOP;
             .AXI4_DATA_WIDTH (AXI4_DATA_WIDTH),
             .AXIL_ADDR_WIDTH (AXIL_ADDR_WIDTH),
             .AXIL_DATA_WIDTH (AXIL_DATA_WIDTH),
-            .NUM_IRQ         (NUM_IRQ)
+            .NUM_IRQ         (NUM_IRQ),
+            // without the L2: this bench checks the memory behind the L1
+            // caches through the back door (a flushed line must be there),
+            // and mixes cached accesses with the raw bus of the BFM, which
+            // passes by the L2. The L2 has SIM_L2, SIM_SYS and SIM_BIOS
+            .L2_SIZE         (0)
         )
     u_cpu_top
         (

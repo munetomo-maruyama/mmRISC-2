@@ -43,7 +43,9 @@ module tb_SYS
         // at 0x1000_0000, below MEM_BASE.
         parameter logic [39:0] RESET_ADDR = 40'h00_8000_0000,
         // for trying other sizes of the branch target buffer (-GBTB_ENTRIES)
-        parameter int          BTB_ENTRIES = 256
+        parameter int          BTB_ENTRIES = 256,
+        // L2 cache in bytes (-GL2_SIZE=0 : without it)
+        parameter int          L2_SIZE     = 256 * 1024
     );
 
     localparam int          SOC_ADDR_WIDTH = 40;
@@ -111,6 +113,7 @@ module tb_SYS
             .RESET_VECTOR    ({24'd0, RESET_ADDR}),
             .NUM_IRQ         (32),
             .BTB_ENTRIES     (BTB_ENTRIES),
+            .L2_SIZE         (L2_SIZE),
             .USE_BFM         (0)
         )
     u_cpu_top
@@ -293,6 +296,9 @@ module tb_SYS
         u_per.mem[0] = 64'h828202fe_0010029b;
         // the mailbox of the DMA model and the window it writes to
         for (int i = 256; i < 512; i++) u_per.mem[i] = 64'd0;
+        // what the programs may ask of the build: the size of the L2
+        // (d04_pmu), at 0x1000_07f8
+        u_per.mem[255] = 64'(L2_SIZE);
     end
 
     //=================================================================

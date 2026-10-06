@@ -45,7 +45,8 @@ module tb_OCD;
             .SIM         (1),
             .USE_BFM     (0),
             .SBA_TIMEOUT (1 << 20),
-            .POR_BITS    (8)
+            .POR_BITS    (8),
+            .L2_SIZE     (256 * 1024)
         )
     u_top
         (

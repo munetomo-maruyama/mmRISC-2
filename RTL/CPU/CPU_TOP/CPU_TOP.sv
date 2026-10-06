@@ -22,6 +22,7 @@
 //   DMA_CACHE: the DMA port of the SoC, through the data cache
 //   BUS_ARB  : arbitration of the debug bus master and the CPU
 //   CPU_CORE : the CPU core (USE_BFM=0)
+//   CPU_L2   : the L2 cache behind the L1 caches (L2_SIZE != 0)
 //   CPU_MMIO : the peripheral bus with the CLINT and the PLIC on it
 //   CPU_BFM  : temporary bus function model standing in for the CPU
 //              (simulation only, USE_BFM=1)
@@ -77,6 +78,13 @@ module CPU_TOP
         parameter logic [3:0]  CACHE_AXI4_ID_IFILL  = 4'd2,
         parameter logic [3:0]  CACHE_AXI4_ID_DFILL  = 4'd3,
         parameter logic [3:0]  CACHE_AXI4_ID_DWB    = 4'd4,
+
+        // L2 cache between the L1 caches and the memory bus
+        // (RTL/CPU/CPU_L2/CPU_L2_SPEC.md). L2_SIZE = 0 : no L2, the L1
+        // caches are connected straight through as before
+        parameter int          L2_SIZE           = 256 * 1024,
+        parameter int          L2_WAYS           = 4,
+        parameter int          L2_REPLACE_RANDOM = 0,
 
         // 1: memory bus accesses of the debugger go through the data cache
         parameter int          DBG_VIA_CACHE = 1,
@@ -420,7 +428,47 @@ module CPU_TOP
     logic                          bfm_axil_rvalid;
     logic                          bfm_axil_rready;
 
-    // L1 caches (CPU_CACHE)
+    // memory bus of the L1 caches (CPU_CACHE), in front of the L2
+    logic [AXI4_ID_WIDTH-1:0]      l1_axi4_awid;
+    logic [AXI4_ADDR_WIDTH-1:0]    l1_axi4_awaddr;
+    logic [7:0]                    l1_axi4_awlen;
+    logic [2:0]                    l1_axi4_awsize;
+    logic [1:0]                    l1_axi4_awburst;
+    logic                          l1_axi4_awlock;
+    logic [3:0]                    l1_axi4_awcache;
+    logic [2:0]                    l1_axi4_awprot;
+    logic [3:0]                    l1_axi4_awqos;
+    logic                          l1_axi4_awvalid;
+    logic                          l1_axi4_awready;
+    logic [AXI4_DATA_WIDTH-1:0]    l1_axi4_wdata;
+    logic [AXI4_DATA_WIDTH/8-1:0]  l1_axi4_wstrb;
+    logic                          l1_axi4_wlast;
+    logic                          l1_axi4_wvalid;
+    logic                          l1_axi4_wready;
+    logic [AXI4_ID_WIDTH-1:0]      l1_axi4_bid;
+    logic [1:0]                    l1_axi4_bresp;
+    logic                          l1_axi4_bvalid;
+    logic                          l1_axi4_bready;
+    logic [AXI4_ID_WIDTH-1:0]      l1_axi4_arid;
+    logic [AXI4_ADDR_WIDTH-1:0]    l1_axi4_araddr;
+    logic [7:0]                    l1_axi4_arlen;
+    logic [2:0]                    l1_axi4_arsize;
+    logic [1:0]                    l1_axi4_arburst;
+    logic                          l1_axi4_arlock;
+    logic [3:0]                    l1_axi4_arcache;
+    logic [2:0]                    l1_axi4_arprot;
+    logic [3:0]                    l1_axi4_arqos;
+    logic                          l1_axi4_arvalid;
+    logic                          l1_axi4_arready;
+    logic [AXI4_ID_WIDTH-1:0]      l1_axi4_rid;
+    logic [AXI4_DATA_WIDTH-1:0]    l1_axi4_rdata;
+    logic [1:0]                    l1_axi4_rresp;
+    logic                          l1_axi4_rlast;
+    logic                          l1_axi4_rvalid;
+    logic                          l1_axi4_rready;
+
+    // memory bus of the L1 caches, behind the L2 (the same as l1_axi4_*
+    // when L2_SIZE = 0)
     logic [AXI4_ID_WIDTH-1:0]      cc_axi4_awid;
     logic [AXI4_ADDR_WIDTH-1:0]    cc_axi4_awaddr;
     logic [7:0]                    cc_axi4_awlen;
@@ -458,6 +506,12 @@ module CPU_TOP
     logic                          cc_axi4_rlast;
     logic                          cc_axi4_rvalid;
     logic                          cc_axi4_rready;
+    logic                          ev_l2_read, ev_l2_miss;
+    // the L2 has cleared its tags after reset. Until then the first fetch
+    // cannot be answered, so the debugger is shown the hart as still in
+    // reset: OpenOCD's "reset halt" lets go of haltreq as soon as the hart
+    // is out of reset, and the core takes haltreq only at an instruction
+    logic                          l2_ready;
 
     logic [AXIL_ADDR_WIDTH-1:0]    cc_axil_awaddr;
     logic [2:0]                    cc_axil_awprot;
@@ -563,6 +617,7 @@ module CPU_TOP
             .rst_n           (rst_n),
             .rst_bus_n       (rst_bus_n),
             .ndmreset        (ndmreset),
+            .hart_not_ready  (~l2_ready),
             .jtag_tck        (jtag_tck),
             .jtag_tms_i      (jtag_tms_i),
             .jtag_tms_o      (jtag_tms_o),
@@ -834,43 +889,43 @@ module CPU_TOP
             .dbg_resp_valid  (p2_resp_valid),
             .dbg_resp_data   (p2_resp_data),
             .dbg_resp_error  (p2_resp_error),
-            .m_axi4_awid     (cc_axi4_awid),
-            .m_axi4_awaddr   (cc_axi4_awaddr),
-            .m_axi4_awlen    (cc_axi4_awlen),
-            .m_axi4_awsize   (cc_axi4_awsize),
-            .m_axi4_awburst  (cc_axi4_awburst),
-            .m_axi4_awlock   (cc_axi4_awlock),
-            .m_axi4_awcache  (cc_axi4_awcache),
-            .m_axi4_awprot   (cc_axi4_awprot),
-            .m_axi4_awqos    (cc_axi4_awqos),
-            .m_axi4_awvalid  (cc_axi4_awvalid),
-            .m_axi4_awready  (cc_axi4_awready),
-            .m_axi4_wdata    (cc_axi4_wdata),
-            .m_axi4_wstrb    (cc_axi4_wstrb),
-            .m_axi4_wlast    (cc_axi4_wlast),
-            .m_axi4_wvalid   (cc_axi4_wvalid),
-            .m_axi4_wready   (cc_axi4_wready),
-            .m_axi4_bid      (cc_axi4_bid),
-            .m_axi4_bresp    (cc_axi4_bresp),
-            .m_axi4_bvalid   (cc_axi4_bvalid),
-            .m_axi4_bready   (cc_axi4_bready),
-            .m_axi4_arid     (cc_axi4_arid),
-            .m_axi4_araddr   (cc_axi4_araddr),
-            .m_axi4_arlen    (cc_axi4_arlen),
-            .m_axi4_arsize   (cc_axi4_arsize),
-            .m_axi4_arburst  (cc_axi4_arburst),
-            .m_axi4_arlock   (cc_axi4_arlock),
-            .m_axi4_arcache  (cc_axi4_arcache),
-            .m_axi4_arprot   (cc_axi4_arprot),
-            .m_axi4_arqos    (cc_axi4_arqos),
-            .m_axi4_arvalid  (cc_axi4_arvalid),
-            .m_axi4_arready  (cc_axi4_arready),
-            .m_axi4_rid      (cc_axi4_rid),
-            .m_axi4_rdata    (cc_axi4_rdata),
-            .m_axi4_rresp    (cc_axi4_rresp),
-            .m_axi4_rlast    (cc_axi4_rlast),
-            .m_axi4_rvalid   (cc_axi4_rvalid),
-            .m_axi4_rready   (cc_axi4_rready),
+            .m_axi4_awid     (l1_axi4_awid),
+            .m_axi4_awaddr   (l1_axi4_awaddr),
+            .m_axi4_awlen    (l1_axi4_awlen),
+            .m_axi4_awsize   (l1_axi4_awsize),
+            .m_axi4_awburst  (l1_axi4_awburst),
+            .m_axi4_awlock   (l1_axi4_awlock),
+            .m_axi4_awcache  (l1_axi4_awcache),
+            .m_axi4_awprot   (l1_axi4_awprot),
+            .m_axi4_awqos    (l1_axi4_awqos),
+            .m_axi4_awvalid  (l1_axi4_awvalid),
+            .m_axi4_awready  (l1_axi4_awready),
+            .m_axi4_wdata    (l1_axi4_wdata),
+            .m_axi4_wstrb    (l1_axi4_wstrb),
+            .m_axi4_wlast    (l1_axi4_wlast),
+            .m_axi4_wvalid   (l1_axi4_wvalid),
+            .m_axi4_wready   (l1_axi4_wready),
+            .m_axi4_bid      (l1_axi4_bid),
+            .m_axi4_bresp    (l1_axi4_bresp),
+            .m_axi4_bvalid   (l1_axi4_bvalid),
+            .m_axi4_bready   (l1_axi4_bready),
+            .m_axi4_arid     (l1_axi4_arid),
+            .m_axi4_araddr   (l1_axi4_araddr),
+            .m_axi4_arlen    (l1_axi4_arlen),
+            .m_axi4_arsize   (l1_axi4_arsize),
+            .m_axi4_arburst  (l1_axi4_arburst),
+            .m_axi4_arlock   (l1_axi4_arlock),
+            .m_axi4_arcache  (l1_axi4_arcache),
+            .m_axi4_arprot   (l1_axi4_arprot),
+            .m_axi4_arqos    (l1_axi4_arqos),
+            .m_axi4_arvalid  (l1_axi4_arvalid),
+            .m_axi4_arready  (l1_axi4_arready),
+            .m_axi4_rid      (l1_axi4_rid),
+            .m_axi4_rdata    (l1_axi4_rdata),
+            .m_axi4_rresp    (l1_axi4_rresp),
+            .m_axi4_rlast    (l1_axi4_rlast),
+            .m_axi4_rvalid   (l1_axi4_rvalid),
+            .m_axi4_rready   (l1_axi4_rready),
             .m_axil_awaddr   (cc_axil_awaddr),
             .m_axil_awprot   (cc_axil_awprot),
             .m_axil_awvalid  (cc_axil_awvalid),
@@ -893,6 +948,140 @@ module CPU_TOP
             .ev_ic_refill    (ev_ic_refill),
             .ev_dc_refill    (ev_dc_refill)
         );
+
+    //=================================================================
+    // L2 cache (CPU_L2_SPEC.md 2): behind the L1 caches only. The raw bus
+    // of the BFM and the debug bus master (DBG_VIA_CACHE = 0) pass by it,
+    // as they pass by the L1 caches
+    //=================================================================
+    generate
+        if (L2_SIZE != 0) begin : g_l2
+            CPU_L2
+                #(
+                    .ADDR_WIDTH     (AXI4_ADDR_WIDTH),
+                    .ID_WIDTH       (AXI4_ID_WIDTH),
+                    .SIZE_BYTES     (L2_SIZE),
+                    .WAYS           (L2_WAYS),
+                    .REPLACE_RANDOM (L2_REPLACE_RANDOM),
+                    .DRAIN_ID       (AXI4_ID_WIDTH'(CACHE_AXI4_ID_DWB))
+                )
+            u_cpu_l2
+                (
+                    .clk            (clk),
+                    .rst_n          (rst_bus_n),
+                    .s_axi4_awid    (l1_axi4_awid),
+                    .s_axi4_awaddr  (l1_axi4_awaddr),
+                    .s_axi4_awlen   (l1_axi4_awlen),
+                    .s_axi4_awsize  (l1_axi4_awsize),
+                    .s_axi4_awburst (l1_axi4_awburst),
+                    .s_axi4_awvalid (l1_axi4_awvalid),
+                    .s_axi4_awready (l1_axi4_awready),
+                    .s_axi4_wdata   (l1_axi4_wdata),
+                    .s_axi4_wstrb   (l1_axi4_wstrb),
+                    .s_axi4_wlast   (l1_axi4_wlast),
+                    .s_axi4_wvalid  (l1_axi4_wvalid),
+                    .s_axi4_wready  (l1_axi4_wready),
+                    .s_axi4_bid     (l1_axi4_bid),
+                    .s_axi4_bresp   (l1_axi4_bresp),
+                    .s_axi4_bvalid  (l1_axi4_bvalid),
+                    .s_axi4_bready  (l1_axi4_bready),
+                    .s_axi4_arid    (l1_axi4_arid),
+                    .s_axi4_araddr  (l1_axi4_araddr),
+                    .s_axi4_arlen   (l1_axi4_arlen),
+                    .s_axi4_arsize  (l1_axi4_arsize),
+                    .s_axi4_arburst (l1_axi4_arburst),
+                    .s_axi4_arvalid (l1_axi4_arvalid),
+                    .s_axi4_arready (l1_axi4_arready),
+                    .s_axi4_rid     (l1_axi4_rid),
+                    .s_axi4_rdata   (l1_axi4_rdata),
+                    .s_axi4_rresp   (l1_axi4_rresp),
+                    .s_axi4_rlast   (l1_axi4_rlast),
+                    .s_axi4_rvalid  (l1_axi4_rvalid),
+                    .s_axi4_rready  (l1_axi4_rready),
+                    .m_axi4_awid    (cc_axi4_awid),
+                    .m_axi4_awaddr  (cc_axi4_awaddr),
+                    .m_axi4_awlen   (cc_axi4_awlen),
+                    .m_axi4_awsize  (cc_axi4_awsize),
+                    .m_axi4_awburst (cc_axi4_awburst),
+                    .m_axi4_awlock  (cc_axi4_awlock),
+                    .m_axi4_awcache (cc_axi4_awcache),
+                    .m_axi4_awprot  (cc_axi4_awprot),
+                    .m_axi4_awqos   (cc_axi4_awqos),
+                    .m_axi4_awvalid (cc_axi4_awvalid),
+                    .m_axi4_awready (cc_axi4_awready),
+                    .m_axi4_wdata   (cc_axi4_wdata),
+                    .m_axi4_wstrb   (cc_axi4_wstrb),
+                    .m_axi4_wlast   (cc_axi4_wlast),
+                    .m_axi4_wvalid  (cc_axi4_wvalid),
+                    .m_axi4_wready  (cc_axi4_wready),
+                    .m_axi4_bid     (cc_axi4_bid),
+                    .m_axi4_bresp   (cc_axi4_bresp),
+                    .m_axi4_bvalid  (cc_axi4_bvalid),
+                    .m_axi4_bready  (cc_axi4_bready),
+                    .m_axi4_arid    (cc_axi4_arid),
+                    .m_axi4_araddr  (cc_axi4_araddr),
+                    .m_axi4_arlen   (cc_axi4_arlen),
+                    .m_axi4_arsize  (cc_axi4_arsize),
+                    .m_axi4_arburst (cc_axi4_arburst),
+                    .m_axi4_arlock  (cc_axi4_arlock),
+                    .m_axi4_arcache (cc_axi4_arcache),
+                    .m_axi4_arprot  (cc_axi4_arprot),
+                    .m_axi4_arqos   (cc_axi4_arqos),
+                    .m_axi4_arvalid (cc_axi4_arvalid),
+                    .m_axi4_arready (cc_axi4_arready),
+                    .m_axi4_rid     (cc_axi4_rid),
+                    .m_axi4_rdata   (cc_axi4_rdata),
+                    .m_axi4_rresp   (cc_axi4_rresp),
+                    .m_axi4_rlast   (cc_axi4_rlast),
+                    .m_axi4_rvalid  (cc_axi4_rvalid),
+                    .m_axi4_rready  (cc_axi4_rready),
+                    .ready          (l2_ready),
+                    .ev_read        (ev_l2_read),
+                    .ev_miss        (ev_l2_miss)
+                );
+        end else begin : g_no_l2
+            assign cc_axi4_awid    = l1_axi4_awid;
+            assign cc_axi4_awaddr  = l1_axi4_awaddr;
+            assign cc_axi4_awlen   = l1_axi4_awlen;
+            assign cc_axi4_awsize  = l1_axi4_awsize;
+            assign cc_axi4_awburst = l1_axi4_awburst;
+            assign cc_axi4_awlock  = l1_axi4_awlock;
+            assign cc_axi4_awcache = l1_axi4_awcache;
+            assign cc_axi4_awprot  = l1_axi4_awprot;
+            assign cc_axi4_awqos   = l1_axi4_awqos;
+            assign cc_axi4_awvalid = l1_axi4_awvalid;
+            assign l1_axi4_awready = cc_axi4_awready;
+            assign cc_axi4_wdata   = l1_axi4_wdata;
+            assign cc_axi4_wstrb   = l1_axi4_wstrb;
+            assign cc_axi4_wlast   = l1_axi4_wlast;
+            assign cc_axi4_wvalid  = l1_axi4_wvalid;
+            assign l1_axi4_wready  = cc_axi4_wready;
+            assign l1_axi4_bid     = cc_axi4_bid;
+            assign l1_axi4_bresp   = cc_axi4_bresp;
+            assign l1_axi4_bvalid  = cc_axi4_bvalid;
+            assign cc_axi4_bready  = l1_axi4_bready;
+            assign cc_axi4_arid    = l1_axi4_arid;
+            assign cc_axi4_araddr  = l1_axi4_araddr;
+            assign cc_axi4_arlen   = l1_axi4_arlen;
+            assign cc_axi4_arsize  = l1_axi4_arsize;
+            assign cc_axi4_arburst = l1_axi4_arburst;
+            assign cc_axi4_arlock  = l1_axi4_arlock;
+            assign cc_axi4_arcache = l1_axi4_arcache;
+            assign cc_axi4_arprot  = l1_axi4_arprot;
+            assign cc_axi4_arqos   = l1_axi4_arqos;
+            assign cc_axi4_arvalid = l1_axi4_arvalid;
+            assign l1_axi4_arready = cc_axi4_arready;
+            assign l1_axi4_rid     = cc_axi4_rid;
+            assign l1_axi4_rdata   = cc_axi4_rdata;
+            assign l1_axi4_rresp   = cc_axi4_rresp;
+            assign l1_axi4_rlast   = cc_axi4_rlast;
+            assign l1_axi4_rvalid  = cc_axi4_rvalid;
+            assign cc_axi4_rready  = l1_axi4_rready;
+            assign l2_ready        = 1'b1;
+            assign ev_l2_read      = 1'b0;
+            assign ev_l2_miss      = 1'b0;
+        end
+    endgenerate
 
     //=================================================================
     // CPU side arbiter : s0 = L1 caches, s1 = temporary BFM (raw bus)
@@ -1508,6 +1697,8 @@ module CPU_TOP
                     .mtime         (mtime),
                     .ev_ic_refill  (ev_ic_refill),
                     .ev_dc_refill  (ev_dc_refill),
+                    .ev_l2_read    (ev_l2_read),
+                    .ev_l2_miss    (ev_l2_miss),
                     .trace_valid   (),
                     .trace_pc      (),
                     .trace_insn    (),

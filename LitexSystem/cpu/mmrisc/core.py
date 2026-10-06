@@ -63,6 +63,8 @@ RTL_SOURCES = [
     "CPU/CPU_DBG/DBG_CACHE/DBG_CACHE.sv",
     "CPU/CPU_CACHE/CACHE_TAG_ARRAY/CACHE_TAG_ARRAY.sv",
     "CPU/CPU_CACHE/CACHE_DATA_ARRAY/CACHE_DATA_ARRAY.sv",
+    "CPU/CPU_L2/L2_TAG_ARRAY.sv",
+    "CPU/CPU_L2/CPU_L2.sv",
     "CPU/CPU_CACHE/ICACHE/ICACHE.sv",
     "CPU/CPU_CACHE/DCACHE/DCACHE.sv",
     "CPU/CPU_CACHE/CACHE_PORT_ARB/CACHE_PORT_ARB.sv",
@@ -114,16 +116,23 @@ class MMRISC(CPU):
     jtag                 = "pmoda"
     # the key of the authentication (SW2 up), as in FPGA/ARTY_A7_100T
     auth_key             = 0xbeefcafe
+    # --cpu-l2-size : the L2 cache inside the CPU (RTL/CPU/CPU_L2), bytes;
+    # 0 builds without it. Not LiteX's own --l2-size, which sits on the SoC
+    # bus where this CPU never looks (build_soc.sh)
+    l2_size              = 256 * 1024
 
     @staticmethod
     def args_fill(parser):
         cpu_group = parser.add_argument_group(title="CPU options")
         cpu_group.add_argument("--cpu-jtag", default="pmoda", choices=["pmoda", "none"],
             help="Debug port of mmRISC-2: PMOD JA (JTAG / cJTAG) or tied off.")
+        cpu_group.add_argument("--cpu-l2-size", default=256 * 1024, type=int,
+            help="L2 cache of mmRISC-2 in bytes (between its L1 caches and LiteDRAM), 0 for none.")
 
     @staticmethod
     def args_read(args):
-        MMRISC.jtag = args.cpu_jtag
+        MMRISC.jtag    = args.cpu_jtag
+        MMRISC.l2_size = args.cpu_l2_size
 
     # mtime counts one step every CLINT_TICK_DIV cycles, so at 50 MHz this
     # gives the 500 kHz timebase the working Rocket build uses. The device
@@ -223,6 +232,7 @@ class MMRISC(CPU):
             # mtime counts at a fixed rate; the device tree says the same
             # number in timebase-frequency.
             p_CLINT_TICK_DIV = self.clint_tick_div,
+            p_L2_SIZE        = self.l2_size,
 
             # Clk / Rst.
             # rst_n resets the CPU; nSRST of the debugger joins it in

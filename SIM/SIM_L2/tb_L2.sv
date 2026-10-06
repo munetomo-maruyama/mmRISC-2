@@ -104,7 +104,7 @@ module tb_L2;
             .m_axi4_arvalid (m_arvalid), .m_axi4_arready (m_arready),
             .m_axi4_rid (m_rid), .m_axi4_rdata (m_rdata), .m_axi4_rresp (m_rresp),
             .m_axi4_rlast (m_rlast), .m_axi4_rvalid (m_rvalid), .m_axi4_rready (m_rready),
-            .ev_read (ev_read), .ev_miss (ev_miss)
+            .ready (), .ev_read (ev_read), .ev_miss (ev_miss)
         );
 
     AXI4_SLAVE_MEM #(.ID_WIDTH(IW), .ADDR_WIDTH(AW), .DATA_WIDTH(64), .DEPTH(WORDS),

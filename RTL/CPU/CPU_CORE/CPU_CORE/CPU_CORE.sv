@@ -85,9 +85,12 @@ module CPU_CORE
         input  logic                    irq_s_ext,
         input  logic [63:0]             mtime,
 
-        // PMU: refills of the caches (one pulse per line read)
+        // PMU: refills of the caches (one pulse per line read), and the L2
+        // (a pulse per line read it takes, and per read miss; 0 without L2)
         input  logic                    ev_ic_refill,
         input  logic                    ev_dc_refill,
+        input  logic                    ev_l2_read,
+        input  logic                    ev_l2_miss,
 
         // retirement trace (verification)
         output logic                    trace_valid,
@@ -737,7 +740,7 @@ module CPU_CORE
     //-----------------------------------------------------------------
     // PMU (CPU_CORE_SPEC.md decision 69): the events, one bit each, set in
     // the cycle they happen (assigned at the end of this file)
-    localparam int HPM_EVENTS = 18;
+    localparam int HPM_EVENTS = 20;
     logic [HPM_EVENTS-1:0]  hpm_ev;
     logic                   ev_itlb_miss, ev_dtlb_miss;
 
@@ -2264,5 +2267,7 @@ module CPU_CORE
     assign hpm_ev[15] = trap_en & ~trap_int_c;                 // exceptions
     assign hpm_ev[16] = trap_en &  trap_int_c;                 // interrupts
     assign hpm_ev[17] = ~id_issue & ~redirect_valid & stall_ex; // back end full
+    assign hpm_ev[18] = ev_l2_read;                            // L2 reads (L1 fills)
+    assign hpm_ev[19] = ev_l2_miss;                            // L2 read misses
 
 endmodule : CPU_CORE

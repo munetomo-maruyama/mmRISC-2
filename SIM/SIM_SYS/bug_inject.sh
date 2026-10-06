@@ -26,6 +26,11 @@
 #     line is then allocated and left dirty, which the CPU sees just as
 #     well; memory gets the value when the line is written back. The write
 #     through is there so that memory has it at once, not for coherence.
+#   - the L2 (CPU_L2) taking a read while beats of the last one still wait
+#     in its R FIFO, or answering with the wrong ID. BUS_ARB in CPU_CACHE
+#     holds the read channel until the last R beat and routes by its grant,
+#     not by ID, so the L2 never sees a second read early and nobody looks
+#     at the ID. SIM_L2 checks both with two readers of its own.
 #---------------------------------------------------------------------------
 cd "$(dirname "$0")"
 RTL=../../RTL
@@ -55,6 +60,8 @@ MUTATIONS=(
 "14#CPU_CACHE/CPU_CACHE/CPU_CACHE.sv#s%assign ev_ic_refill = ic_axi4_arvalid \& ic_axi4_arready;%assign ev_ic_refill = 1'b0;%#PMU: no I$ miss events (d04)"
 "15#CPU_MMU/CORE_MMU/CORE_MMU.sv#s%ptw_need \& ~kill \& ~d_need_walk;%ptw_need \& ~kill \&  d_need_walk;%#PMU: the ITLB miss event counts the walks of the data side (d04)"
 "16#CPU_MMU/CORE_MMU/CORE_MMU.sv#s%assign ev_dtlb_miss = ~grant \& lsu_idle \& ptw_need \& ~kill \&  d_need_walk;%assign ev_dtlb_miss = ptw_need \&  d_need_walk;%#PMU: a DTLB miss counted every cycle it waits for the walker (d04)"
+"17#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign hpm_ev\[18\] = ev_l2_read;%assign hpm_ev[18] = 1'b0;%#PMU: no L2 read events (d04)"
+"18#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign hpm_ev\[19\] = ev_l2_miss;%assign hpm_ev[19] = ev_l2_read;%#PMU: the L2 miss event counts every L2 read (d04)"
 )
 
 SEL=("$@")

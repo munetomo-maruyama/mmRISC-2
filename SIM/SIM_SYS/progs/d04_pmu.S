@@ -9,6 +9,12 @@
 //     identity), the first fetch and the first load each walk the table,
 //     the second load of the page does not; after sfence.vma the fetch
 //     walks again (and no load follows)
+//   4 the L2 (events 18 / 19), when tb_SYS has one (it puts L2_SIZE at
+//     0x1000_07f8): every L1 fill is one L2 read; eight lines never
+//     touched are eight L2 misses; eight lines 4 KB apart (one set of the
+//     4 way D$, eight sets of the L2) read again: at least four have left
+//     the D$, and each of those is an L2 read that hits. Without an L2
+//     both events stay 0
 #include "test.h"
 
 #define MHPMCOUNTER3  0xb03
@@ -20,6 +26,13 @@
 #define EV_DC_MISS    8
 #define EV_ITLB_MISS  9
 #define EV_DTLB_MISS  10
+#define EV_L2_READ    18
+#define EV_L2_MISS    19
+#define MHPMCOUNTER5  0xb05
+#define MHPMCOUNTER6  0xb06
+#define MHPMEVENT5    0x325
+#define MHPMEVENT6    0x326
+#define L2_SIZE_ADDR  0x100007f8
 
     .section .text.init
     .globl _start
@@ -71,6 +84,55 @@ _start:
     csrr x21, MHPMCOUNTER3
     sub  x21, x21, x20
     TEST_EQ(5, x21, 0)
+
+    //--------------------------------------------------------------
+    // 4 the L2. count8 gives the four counts of eight loads:
+    //   a2 L2 reads, a3 L2 misses, a4 I$ fills, a5 D$ fills
+    //--------------------------------------------------------------
+    li   t0, EV_L2_READ
+    csrw MHPMEVENT3, t0
+    li   t0, EV_L2_MISS
+    csrw MHPMEVENT4, t0
+    li   t0, EV_IC_MISS
+    csrw MHPMEVENT5, t0
+    li   t0, EV_DC_MISS
+    csrw MHPMEVENT6, t0
+    li   t0, L2_SIZE_ADDR
+    ld   s2, 0(t0)                        // 0: no L2
+    // the first call brings count8 itself into the I$ (lines are in the D$)
+    la   a0, lines
+    li   a1, 64
+    call count8
+    // 4a eight lines never touched
+    la   a0, lines_l2
+    li   a1, 64
+    call count8
+    beqz s2, 41f
+    TEST_EQ(10, a5, 8)                    // D$ fills
+    TEST_EQ(11, a2, 8)                    // one L2 read each (I$: a4 = 0)
+    TEST_EQ(12, a4, 0)
+    TEST_EQ(13, a3, 8)                    // and the L2 had none of them
+    j    42f
+41: or   a2, a2, a3
+    TEST_EQ(14, a2, 0)                    // no L2: nothing counted
+42:
+    // 4b eight lines 4 KB apart, twice
+    la   a0, far_lines
+    li   a1, 4096
+    call count8
+    la   a0, far_lines
+    li   a1, 4096
+    call count8
+    beqz s2, 43f
+    li   gp, 15
+    li   t0, 4
+    blt  a5, t0, fail                     // at least four left the D$
+    TEST_EQ_REG(16, a2, a5)               // every D$ fill read the L2
+    TEST_EQ(17, a3, 0)                    // and found the line there
+    j    44f
+43: or   a2, a2, a3
+    TEST_EQ(18, a2, 0)
+44:
 
     //--------------------------------------------------------------
     // 3 TLB misses, in S mode
@@ -144,6 +206,35 @@ m_trap:
     mv   x26, x29
     j    back_in_m
 
+    // eight loads, a1 apart from a0, between two reads of the counters
+    // 3 .. 6; the differences in a2 .. a5. Aligned and padded, so that the
+    // fetch of the code around it is not counted after its first call
+    .balign 64
+count8:
+    csrr t1, MHPMCOUNTER3
+    csrr t2, MHPMCOUNTER4
+    csrr t3, MHPMCOUNTER5
+    csrr t4, MHPMCOUNTER6
+    mv   t5, a0
+    li   t6, 8
+1:  ld   t0, 0(t5)
+    add  t5, t5, a1
+    addi t6, t6, -1
+    bnez t6, 1b
+    fence
+    nop
+    nop
+    csrr a2, MHPMCOUNTER3
+    csrr a3, MHPMCOUNTER4
+    csrr a4, MHPMCOUNTER5
+    csrr a5, MHPMCOUNTER6
+    sub  a2, a2, t1
+    sub  a3, a3, t2
+    sub  a4, a4, t3
+    sub  a5, a5, t4
+    ret
+    .fill 16, 4, 0x00000013
+
     // code no instruction has come near yet
     .balign 256
     .fill 64, 4, 0x00000013               // nops in front, to keep it apart
@@ -163,5 +254,10 @@ lines:
     .balign 4096
 page_table:
     .space 4096
+lines_l2:
+    .space 512
+    .balign 4096
+far_lines:
+    .space 8 * 4096
 
     TOHOST_SECTION

@@ -30,7 +30,9 @@ set -e
 # through that L2, which the CPU never sees. Data the SD card loads (the
 # kernel, OpenSBI) could stay in it, and the BIOS's flush_l2_cache() cannot
 # get it out: it reads main memory through the CPU, which bypasses the L2.
-# See docs/BRINGUP.md.
+# See docs/BRINGUP.md. The CPU has an L2 of its own instead, behind its L1
+# caches (RTL/CPU/CPU_L2, 256 KB); --cpu-l2-size 0 builds without it, to
+# compare.
 #
 # --with-ethernet --eth-dhcp : LiteEth on the PHY of the Arty (MII). The BIOS
 # takes its IP from DHCP and can boot over TFTP (netboot); the TFTP server

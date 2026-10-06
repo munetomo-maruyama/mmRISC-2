@@ -32,7 +32,10 @@ module TOP
         parameter int          MEM_WORDS    = 8192,     // 64KiB
         parameter int          PERI_WORDS   = 512,      // 4KiB
         parameter int          SBA_TIMEOUT  = 1 << 20,
-        parameter int          POR_BITS     = 16        // POR length 2^(POR_BITS-1) cycles
+        parameter int          POR_BITS     = 16,       // POR length 2^(POR_BITS-1) cycles
+        // L2 cache of CPU_TOP in bytes; 0 = none. The bring-up board build
+        // keeps it out (its RAM is 64KiB); SIM_OCD puts it in
+        parameter int          L2_SIZE      = 0
     )
     (
         input  logic       CLK100MHZ,     // E3
@@ -244,7 +247,8 @@ module TOP
     CPU_TOP
         #(
             .SBA_TIMEOUT (SBA_TIMEOUT),
-            .USE_BFM     (USE_BFM)
+            .USE_BFM     (USE_BFM),
+            .L2_SIZE     (L2_SIZE)
         )
     u_cpu_top
         (

@@ -4,6 +4,9 @@
   - 2026-09-19: `RTL/CPU_DBG/` を `RTL/CPU/CPU_DBG/` へ移動(CPU_TOP 配下にインスタンス化されるため)
   - 2026-09-19: メモリバスのデバッグアクセスを L1 データキャッシュ経由にした
     (`DBG_CACHE`、`CPU_CACHE_SPEC.md` 4.7)。周辺バスは従来どおり `DBG_BUSMST` 直結
+  - 2026-10-06: リセット中に立った haltreq を、ハートが halt するまで DM が保持し、それまで
+    ハートを unavailable と見せる(4.2)。L2 キャッシュのリセット後の消去で最初の命令が遅れ、
+    OpenOCD の `reset halt` が halt を取り逃していたため
 - 準拠仕様: **The RISC-V Debug Specification Version 1.0, Revised 2025-02-21: Ratified**
   (`Spec/riscv-debug-specification.pdf`)。以下、節番号はこの仕様書のもの。
 - 対象: `RTL/CPU/CPU_DBG/`(デバッグ論理)、`RTL/CPU/CPU_TOP/`(組み込み)、`RTL/TOP/`(FPGAトップ)
@@ -210,6 +213,19 @@ DTM・DMレジスタ・SBA・Access Memory は疑似ハートの時期に作っ�
   `dmstatus.ndmresetpending` を実装する。
 - ハート(CPU_CORE、BFM 構成では疑似ハート)は、ndmreset・hartreset・システムリセットでリセットされ、havereset がセットされる(ackhavereset でクリア)。
   resethaltreq が立っていれば、リセット解除後、最初の命令の手前で halted(cause=5)になる。
+- **リセットから出たらすぐ halt する**(2026-10-06)。仕様は、リセット中に haltreq が立っていればハートは
+  リセットから出てすぐ halt するとし、OpenOCD(riscv-openocd 0.12.0+dev)の `reset halt` はそれを当てに、
+  リセットを解いて dmstatus を 1 回読んだらすぐ haltreq を下ろす。このコアは命令が ID に来たところで
+  halt するので、最初の命令が届くまでは halt できない。L2 キャッシュ(`CPU_L2_SPEC.md`)はリセット後に
+  タグを消す(1,024 サイクル)ので、最初の命令はそれだけ遅れ、OpenOCD はハートが走っていると見て、
+  dcsr を書くために halt させたあと再開させていた。そこで DM は:
+  - リセット中(`hart_in_reset`、または `hart_not_ready` = L2 の消去中)に haltreq が立っていれば、その
+    要求を保持し(`reset_halt_hold`)、ハートが halt するまでハートへの haltreq を立て続ける。
+    dmactive=0 で捨てる
+  - 保持している間と L2 の消去中は、ハートを **unavailable** と見せる(running と見せない)。havereset は
+    本当のリセット(`hart_in_reset`)だけで立てる
+  
+  デバッガからは「リセットから出たときには halt している」ように見える。dcsr.cause は 3(haltreq)。
 
 ### 4.3 Abstract Command
 
@@ -311,7 +327,9 @@ CSR が存在しない、読み出し専用の CSR に書く、範囲外の regn
 | `hart_reg_ack` | ハート→DM | 応答(パルス)。`hart_reg_rdata[63:0]`、`hart_reg_err`(→ cmderr=3) |
 
 ハートのリセットは `CPU_TOP` の `rst_bus_n`(システムリセット・ndmreset・hartreset)で、
-DM はその同期版を `hart_in_reset` として見る。
+DM はその同期版を `hart_in_reset` として見る。`hart_not_ready`(`CPU_DBG` の入力)は、リセットは
+解けたがまだ走れないこと(L2 の消去中、`CPU_L2` の `ready` が 0)を表し、DM はその間ハートを
+unavailable と見せる(4.2)。
 
 ---
 

@@ -136,6 +136,11 @@ module CPU_L2
         input  logic                    m_axi4_rvalid,
         output logic                    m_axi4_rready,
 
+        // 1 once the tag walk after reset is done (until then no
+        // transaction is taken; CPU_TOP shows the hart to the debugger as
+        // not yet out of reset)
+        output logic                    ready,
+
         // PMU
         output logic                    ev_read,
         output logic                    ev_miss
@@ -510,6 +515,7 @@ module CPU_L2
     //-----------------------------------------------------------------
     // PMU
     //-----------------------------------------------------------------
+    assign ready   = (st != M_INIT);
     assign ev_read = acc_ar;
     assign ev_miss = (st == M_CMP) && !cur_write && !hit_any;
 

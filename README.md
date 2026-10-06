@@ -33,7 +33,9 @@ Ethernet・SD カードの同時照合)は、この版でも PASS(2026-10-06)。
 - L1 キャッシュ: I$ / D$ 各 16 KiB(4 ウェイ、64 B 行)、D$ はノンブロッキング・
   ライトバック。SoC の DMA も D$ を通るので一貫性はハードウェアで保つ
 - FPU(F / D): 積和 1 本、除算・平方根は反復
-- L2 キャッシュは無い(メモリバスは LiteDRAM へ直結)
+- L2 キャッシュ: 256 KB(4 ウェイ、64 B 行、書き戻し)を L1 と LiteDRAM の間に組み込んだ
+  (2026-10-06、シミュレーションで検証済み)。実機での測定はこれから。上の FPGA と性能の数字は
+  L2 の無い版のもの
 
 立ち上げの経緯は [`LitexSystem/docs/BRINGUP.md`](LitexSystem/docs/BRINGUP.md)、性能の作業と
 実機の内訳は [`LitexSystem/docs/BENCH.md`](LitexSystem/docs/BENCH.md)、次のテーマは
@@ -45,7 +47,7 @@ Ethernet・SD カードの同時照合)は、この版でも PASS(2026-10-06)。
 |---|---|
 | [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md) | CPU コア(命令セット、パイプライン、MMU、CSR、デバッグ、決定事項 1〜69) |
 | [`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`](RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md) | L1 キャッシュ(パラメータ、インタフェース、動作、検証結果) |
-| [`RTL/CPU/CPU_L2/CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md) | L2 キャッシュ(開発中: 方式、動作、単体検証の結果。まだ CPU_TOP に組み込んでいない) |
+| [`RTL/CPU/CPU_L2/CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md) | L2 キャッシュ(方式、動作、資源、単体と組み込みの検証結果。実機の測定はこれから) |
 | [`RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`](RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md) | デバッグ論理(JTAG/cJTAG DTM、DM、認証) |
 | [`LitexSystem/README.md`](LitexSystem/README.md) | LiteX の SoC に載せて Linux を動かす一式 |
 | [`LitexSystem/docs/BRINGUP.md`](LitexSystem/docs/BRINGUP.md) | 実機の立ち上げ記録(止まった場所、原因、修正)と手順 |
@@ -91,7 +93,7 @@ RTL/
 │   │   ├── CACHE_PORT_ARB/ D$ ポートの調停(CPU と第 2 ポート)
 │   │   ├── CACHE_TAG_ARRAY/    タグ + 有効 + ダーティ
 │   │   └── CACHE_DATA_ARRAY/   データ配列
-│   ├── CPU_L2/         L2 キャッシュ(開発中、未組み込み)  → CPU_L2_SPEC.md
+│   ├── CPU_L2/         L2 キャッシュ(256 KB、L1 の後ろ)  → CPU_L2_SPEC.md
 │   ├── CPU_DMA/        DMA ポート(SoC の DMA をデータキャッシュ経由でメモリへ)
 │   ├── CPU_MMIO/       内蔵の CLINT / PLIC への振り分け
 │   ├── CPU_CLINT/      CLINT(msip / mtime / mtimecmp)
@@ -144,9 +146,9 @@ LitexRocket/        Rocket 構成の LiteX 一式(ワークスペース、カー
 | `cd SIM/SIM_CORE && make riscv-tests-v` | 同じ試験を仮想記憶(Sv39)の環境で | 143 PASS、既知の不合格 4 |
 | `cd SIM/SIM_CORE && make mdu / clint / plic` | 乗除算器(参照モデル 20 万演算)、CLINT(4 ハート)、PLIC | PASS |
 | `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 297 種(背圧あり/なしの両方) | 全て検出 |
-| `cd SIM/SIM_SYS && make` | コア + 本物のキャッシュ + AXI + DMA ポート(自作試験 25 本、DMA・PMU などのプログラム 4 本) | 全 PASS |
+| `cd SIM/SIM_SYS && make` | コア + 本物の L1 / L2 キャッシュ + AXI + DMA ポート(自作試験 25 本、DMA・PMU などのプログラム 4 本)。`PARAMS=-GL2_SIZE=0` で L2 なし | 全 PASS(L2 あり / なし) |
 | `cd SIM/SIM_SYS && make riscv-tests` | riscv-tests を本物のキャッシュ越しに | 133 PASS、既知の不合格 4 |
-| `cd SIM/SIM_SYS && ./bug_inject.sh` | バグ注入 14 種 | 全て検出 |
+| `cd SIM/SIM_SYS && ./bug_inject.sh` | バグ注入 16 種 | 全て検出 |
 | `cd SIM/SIM_CACHE && make` | L1 キャッシュ全試験(CPU と DMA ポートを同じラインで同時にランダムに、取り消しを含む) | PASS 64,943 チェック |
 | `cd SIM/SIM_CACHE && ./bug_inject.sh` | バグ注入 40 種 | 全て検出 |
 | `cd SIM/SIM_L2 && make` / `./sweep.sh` / `./bug_inject.sh` | L2 キャッシュ(256 KB・4 ウェイ)/ 容量・ウェイ・置き換えの 11 構成 / バグ注入 31 種 | PASS 約 150 万チェック / 全 PASS / 全て検出 |
@@ -157,7 +159,7 @@ LitexRocket/        Rocket 構成の LiteX 一式(ワークスペース、カー
 | `cd SIM/SIM_BIOS && make check` | LiteX BIOS をそのまま実行(割り込み込み) | PASS |
 | `cd SIM/SIM_BIOS && make linux-sd` | SD カードのモデルから Linux を起動(実機と同じ fw_jump.bin と Image) | BusyBox のプロンプトまで |
 | `cd SIM/SIM_BIOS && make linux-perf` / `make pmu-sbi` | Linux 上の `perf` / OpenSBI の PMU の呼び出しを Linux と同じ手順で | 6 カウンタ同時、あふれ割り込みで標本 / PASS |
-| `cd SIM/SIM_OCD && make` | OpenOCD 協調シミュレーション(ブレークポイント、ウォッチポイントを含む) | PASS |
+| `cd SIM/SIM_OCD && make` | OpenOCD 協調シミュレーション(ブレークポイント、ウォッチポイント、L2 ありでの `reset halt` を含む) | PASS |
 
 必要なツール: Verilator 5.x、Icarus Verilog 12、GTKWave、riscv-openocd、
 riscv64-unknown-elf / riscv64-unknown-linux-gnu ツールチェイン(`/opt/riscv`、GCC 13.2)、
@@ -209,4 +211,4 @@ vivado -mode batch -source build.tcl
 | MMU (Sv39) と PMP | 完了 |
 | LiteX SoC 上の Linux | 実機で SD カードの ext4 から BusyBox まで。Ethernet、TFTP ネットブート。負荷試験 120 分 PASS |
 | 性能 | 2.747 CoreMark/MHz、1.482 DMIPS/MHz(実機、Linux 上)。性能カウンタと `perf` で実機の内訳を測れる |
-| 次のテーマ | L2 キャッシュ(256 KB、[`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md))。RTL と単体検証まで済み、次は CPU_TOP への組み込みと実機での前後比較([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |
+| 次のテーマ | L2 キャッシュ(256 KB、[`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md))。CPU_TOP への組み込みとシミュレーションの回帰まで済み、次は実機での前後比較([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |

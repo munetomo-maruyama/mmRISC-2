@@ -32,7 +32,9 @@ Linux を起動するための一式。
 始めは Rocket 構成とメモリマップがバイト単位で一致していたので、デバイスツリーは
 CPU ノードだけ書き換えれば済んだ。その後、次の 3 点が変わっている。
 
-- **L2 なし**(`--l2-size 0`)。mmRISC-2 はメモリバスを直接 LiteDRAM につなぐ。
+- **LiteX の L2 なし**(`--l2-size 0`)。mmRISC-2 はメモリバスを直接 LiteDRAM につなぐ。
+  代わりに CPU の中に L2 を持つ(2026-10-06、`RTL/CPU/CPU_L2`、256 KB)。
+  `build_soc.sh --cpu-l2-size 0` で外せる(前後の比較用)。
 - **DMA ポート**。SD カードや Ethernet の DMA を CPU のデータキャッシュ経由で
   メモリへ通す(`dma_bus`)。Linux が前提にする DMA の一貫性をハードウェアで保つ。
 - **Ethernet**(`--with-ethernet --eth-dhcp`)。ethmac / ethphy が CSR の先頭に

@@ -26,14 +26,15 @@
 # reported as FAILED instead of being counted.
 #
 # Runs 1-4 count the 16 events of the core four at a time (there are four
-# programmable counters; cycles and instructions have their own), run 5
-# splits cycles and instructions into user and kernel mode. rN is event N
-# of the core (CPU_CORE_SPEC.md decision 69). Each event is divided by the
-# cycles or instructions of its own run. The log is /tmp/workload.log, the
-# raw counts /tmp/wl/*.csv.
+# programmable counters; cycles and instructions have their own), run 5 the
+# L2 (r12 reads = L1 fills, r13 misses; both 0 on a bitstream without the
+# L2), run 6 splits cycles and instructions into user and kernel mode. rN
+# is event N of the core (CPU_CORE_SPEC.md decision 69). Each event is
+# divided by the cycles or instructions of its own run. The log is
+# /tmp/workload.log, the raw counts /tmp/wl/*.csv.
 #
 # Needs the PMU (bitstream, fw_jump.bin, Image with perf; perf.sh works).
-# About 10 minutes.
+# About 12 minutes.
 #---------------------------------------------------------------------------
 SERVER=${1:?usage: sh workload.sh <tftp server>}
 DIR=${WL_DIR:-/tmp/wl}
@@ -77,7 +78,7 @@ cmd() {
     esac
 }
 
-EVSETS="r7,r8,r9,ra rb,rc,r11,rd r5,r6,r3,r4 re,rf,r10,r1"
+EVSETS="r7,r8,r9,ra rb,rc,r11,rd r5,r6,r3,r4 re,rf,r10,r1 r12,r13"
 WORKLOADS="gunzip md5sum awk ls ext4read sdread forkexec tftp"
 
 cold() { case $1 in ext4read|sdread) drop ;; esac; }
@@ -96,7 +97,7 @@ for w in $WORKLOADS; do
         g=$((g+1))
     done
     cold $w
-    ./perf stat -x, -o "$w.5.csv" -e "cycles:u,r1:k,instructions:u,r2:k" sh -c "$c" 2>> "$LOG"
+    ./perf stat -x, -o "$w.6.csv" -e "cycles:u,r1:k,instructions:u,r2:k" sh -c "$c" 2>> "$LOG"
     cat "$w".*.csv | grep -v "^#\|^$" >> "$LOG"
 done
 
@@ -105,15 +106,15 @@ echo "" | tee -a "$LOG"
 echo "=== summary" | tee -a "$LOG"
 echo "per 1000 instructions: I\$ / D\$ misses (line fills), ITLB / DTLB misses (walks), exceptions" | tee -a "$LOG"
 echo "% of cycles: D\$ wait, front end empty, back end full, load use, MDU / FPU wait; wrong guesses % of branches" | tee -a "$LOG"
-echo "kern %: kernel share of the cycles" | tee -a "$LOG"
-printf "%-9s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s\n" \
-    workload Mcyc CPI 'I$' 'D$' ITLB DTLB exc 'D$w%' 'FE%' 'BE%' 'LU%' 'MDU%' 'mis%' 'kern%' | tee -a "$LOG"
+echo "kern %: kernel share of the cycles; L2: reads per 1000 instructions, misses % of the reads" | tee -a "$LOG"
+printf "%-9s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s\n" \
+    workload Mcyc CPI 'I$' 'D$' ITLB DTLB exc 'D$w%' 'FE%' 'BE%' 'LU%' 'MDU%' 'mis%' 'kern%' L2 'L2m%' | tee -a "$LOG"
 for w in $WORKLOADS; do
-    if [ ! -f "$w.5.csv" ]; then
+    if [ ! -f "$w.6.csv" ]; then
         printf "%-9s FAILED\n" "$w"
         continue
     fi
-    for g in 1 2 3 4 5; do
+    for g in 1 2 3 4 5 6; do
         grep -v "^#\|^$" "$w.$g.csv" | sed "s/^/$g,/"
     done | awk -F, -v w="$w" '
         # $1 group, $2 count, $4 event
@@ -130,9 +131,10 @@ for w in $WORKLOADS; do
             i = (ins[1] + ins[2] + ins[3] + ins[4]) / 4
             mis = (val["r5"] > 0) ? 100 * val["r6"] / val["r5"] : 0
             kern = (cu + ck > 0) ? 100 * ck / (cu + ck) : 0
-            printf "%-9s %6.0f %6.3f %6.2f %6.2f %6.3f %6.3f %6.3f %6.1f %6.1f %6.1f %6.1f %6.1f %6.1f %6.1f\n",
+            l2m = (val["r12"] > 0) ? 100 * val["r13"] / val["r12"] : 0
+            printf "%-9s %6.0f %6.3f %6.2f %6.2f %6.3f %6.3f %6.3f %6.1f %6.1f %6.1f %6.1f %6.1f %6.1f %6.1f %6.2f %6.1f\n",
                    w, c / 1e6, (i > 0) ? c / i : 0, k("r7"), k("r8"), k("r9"), k("ra"), k("rf"),
-                   p("rb"), p("rc"), p("r11"), p("rd"), p("re"), mis, kern
+                   p("rb"), p("rc"), p("r11"), p("rd"), p("re"), mis, kern, k("r12"), l2m
         }'
 done | tee -a "$LOG"
 echo "" | tee -a "$LOG"
