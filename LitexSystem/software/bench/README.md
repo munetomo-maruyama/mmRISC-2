@@ -11,6 +11,7 @@ CoreMark・Dhrystone・小さな測定(`micro`)を、静的リンクの Linux �
 | `bench.sh` | ボードで実行。3 つを TFTP で `/tmp` に取ってきて順に走らせ、MHz あたりの値を出す。コアが Zba / Zbb を持ち(`/proc/cpuinfo`)、サーバに `*_zb` があればそれも走らせる |
 | `micro.c` | 帯域(D$ に入る / 入らない)、依存ロードの遅延、不整列ロード、倍精度の積和 |
 | `dhry_shim.c` | riscv-tests の Dhrystone が裸の環境に求めるもの(タイマ、表示)を Linux で |
+| `workload.sh` | ボードで実行。CoreMark の外の負荷(gzip、sha256sum、find、tar、SD の読み出し、fork + exec、TFTP)を PMU で数え、1 行 1 負荷の表にする(下の「workload.sh」) |
 | `perf.sh` | ボードで実行。`perf` と CoreMark を TFTP で取ってきて、性能カウンタ(`CPU_CORE_SPEC.md` 決定 69)で CoreMark のサイクルの行き先を数える(下の「perf」) |
 
 コンパイラは `/opt/riscv/bin/riscv64-unknown-linux-gnu-gcc`(**GCC 13.2.0**、glibc 2.40)、
@@ -96,3 +97,37 @@ CoreMark を `perf stat` で 4 回(カウンタが 4 本なので 1 回に 4 イ
 `perf record` は Sscofpmf のあふれ割り込みで標本を取る。固定のサイクルカウンタはあふれ
 割り込みを出せないので、`-e r1`(`hpmcounter` で数えるサイクル)を使う。この `perf` は
 libelf なしで作ってあるので、関数名は出ない(`--sort dso` でどのバイナリかは分かる)。
+
+## workload.sh(CoreMark の外の負荷、2026-10-06)
+
+CoreMark はキャッシュに収まるので(`../../docs/BENCH.md` 13 章)、Linux の普通の仕事を同じ
+カウンタで数える(`ROADMAP.md` D1)。`perf` と、入力に使うカーネルの `Image` を TFTP で取ってきて
+`/tmp`(RAM)に置き、次の 8 つをそれぞれ `perf stat` で 5 回走らせる。
+
+| 負荷 | 中身 | 見たいもの |
+|---|---|---|
+| `gzip` / `gunzip` | 2 MB の圧縮と展開 | 整数の計算、数百 KB の表 |
+| `sha256` | 4 MB の `sha256sum` | 流れる読み出し |
+| `find` | `find / -xdev` と `ls -lR` | カーネル、VFS |
+| `tar` | `/bin /sbin /usr /etc /lib` の tar(ページキャッシュを捨ててから) | ext4、SD カード |
+| `sdread` | ルートパーティションを 16 MB `dd`(同上) | SD の DMA(D$ を通る) |
+| `forkexec` | `busybox uname` を 100 回 fork + exec | プロセス生成、ページフォルト、TLB |
+| `tftp` | `perf`(3 MB)の TFTP | Ethernet、IP スタック |
+
+1〜4 回目でイベント 16 種を 4 つずつ、5 回目でサイクルと命令のユーザ / カーネルの内訳を数える
+(各イベントは同じ回のサイクル・命令で割る)。約 10 分。ログは `/tmp/workload.log`、
+生の数は `/tmp/wl/*.csv`。
+
+```bash
+make tftp
+```
+
+```sh
+cd /tmp && tftp -g -r workload.sh 192.168.0.12 && sh workload.sh 192.168.0.12
+```
+
+最後の表の列: `Mcyc`(百万サイクル)、`CPI`、1000 命令あたりの I$ / D$ ミス(行の読み込み)・
+ITLB / DTLB ミス(ページテーブルを引いた回数)・例外、サイクルに対する D$ 待ち / フロントエンドが
+空 / バックエンドが詰まっている / ロードユースの割合、条件分岐の予測ミス率、カーネルの割合。
+CoreMark の同じ数字を最後に並べる。
+

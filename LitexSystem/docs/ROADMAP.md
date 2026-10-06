@@ -66,6 +66,7 @@ CoreMark のようにキャッシュに収まる負荷では、パイプライ�
 | # | テーマ | 規模 | 内容 |
 |---|---|---|---|
 | D1 | **Linux の実負荷を PMU で測る** | 小(実機の時間) | `perf.sh` と同じ形の `workload.sh` で、キャッシュに収まらない負荷を数える。たとえば `gzip` / `gunzip`(数 MB)、`sha256sum`、`find /` と `ls -lR`(カーネルとファイルシステム)、`tar`、SD からの読み出し、TFTP の転送。1000 命令あたりの I$ / D$ / TLB ミス、CPI、D$ 待ちとフロントエンドが空の割合を見る。E のどれをやるか(やらないか)をこれで決める |
+|  | → **用意した(2026-10-06、実機の測定待ち)** | | `software/bench/workload.sh`: gzip / gunzip / sha256 / find / tar / sdread / forkexec / tftp の 8 負荷を 5 回ずつ `perf stat` |
 | D2 | 関数名の出る `perf` | 小〜中 | いまの `perf` は libelf なしなので、`perf report` はバイナリ単位まで。elfutils(と zlib)を静的に作って足すと、カーネルとユーザの関数単位で見られる。D1 で「どこが遅いか」まで追うなら要る |
 
 ### E. メモリ階層(D1 の結果しだい)
