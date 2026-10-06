@@ -21,7 +21,8 @@
 //
 //  aw_hold = 1 keeps AWREADY low (from the next cycle on) until it is
 //  cleared: writes wait while reads go on, which is how a test holds a
-//  write-back in the queue of a cache.
+//  write-back in the queue of a cache. w_hold = 1 does the same to WREADY:
+//  a write whose address was taken waits for its data.
 //
 //  Protocol checks (counted in protocol_err):
 //    - a burst must not cross a 4KB address boundary
@@ -105,10 +106,12 @@ module AXI4_SLAVE_MEM
     //-----------------------------------------------------------------
     logic stall_en;         // 1 = inject random ready drops / valid delays
     logic aw_hold;          // 1 = no write address is accepted
+    logic w_hold;           // 1 = no write data is accepted
 
     initial begin
         stall_en = 1'b0;
         aw_hold  = 1'b0;
+        w_hold   = 1'b0;
     end
 
     // Number of AXI protocol violations detected (write + read channels)
@@ -190,7 +193,8 @@ module AXI4_SLAVE_MEM
     // ready: 75% probability when stalling
     wire aw_rdy_nx = aw_hold  ? 1'b0 :
                      stall_en ? (rnd_aw[1:0] != 2'b00) : 1'b1;
-    wire w_rdy_nx  = stall_en ? (rnd_w[1:0]  != 2'b00) : 1'b1;
+    wire w_rdy_nx  = w_hold   ? 1'b0 :
+                     stall_en ? (rnd_w[1:0]  != 2'b00) : 1'b1;
     wire ar_rdy_nx = stall_en ? (rnd_ar[1:0] != 2'b00) : 1'b1;
     // valid delay: 0..3 idle cycles when stalling
     wire [1:0] b_dly_nx = stall_en ? rnd_b[1:0] : 2'd0;

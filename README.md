@@ -45,6 +45,7 @@ Ethernet・SD カードの同時照合)は、この版でも PASS(2026-10-06)。
 |---|---|
 | [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md) | CPU コア(命令セット、パイプライン、MMU、CSR、デバッグ、決定事項 1〜69) |
 | [`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`](RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md) | L1 キャッシュ(パラメータ、インタフェース、動作、検証結果) |
+| [`RTL/CPU/CPU_L2/CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md) | L2 キャッシュ(開発中: 方式、動作、単体検証の結果。まだ CPU_TOP に組み込んでいない) |
 | [`RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`](RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md) | デバッグ論理(JTAG/cJTAG DTM、DM、認証) |
 | [`LitexSystem/README.md`](LitexSystem/README.md) | LiteX の SoC に載せて Linux を動かす一式 |
 | [`LitexSystem/docs/BRINGUP.md`](LitexSystem/docs/BRINGUP.md) | 実機の立ち上げ記録(止まった場所、原因、修正)と手順 |
@@ -90,6 +91,7 @@ RTL/
 │   │   ├── CACHE_PORT_ARB/ D$ ポートの調停(CPU と第 2 ポート)
 │   │   ├── CACHE_TAG_ARRAY/    タグ + 有効 + ダーティ
 │   │   └── CACHE_DATA_ARRAY/   データ配列
+│   ├── CPU_L2/         L2 キャッシュ(開発中、未組み込み)  → CPU_L2_SPEC.md
 │   ├── CPU_DMA/        DMA ポート(SoC の DMA をデータキャッシュ経由でメモリへ)
 │   ├── CPU_MMIO/       内蔵の CLINT / PLIC への振り分け
 │   ├── CPU_CLINT/      CLINT(msip / mtime / mtimecmp)
@@ -116,6 +118,7 @@ SIM/
 ├── SIM_MMU/        PMP の単体検証(参照モデル、バグ注入)
 ├── SIM_FPU/        FPU(Berkeley SoftFloat と突き合わせ)
 ├── SIM_CACHE/      L1 キャッシュ(参照モデル、CPU と DMA の同時ランダム、パラメータ掃引、バグ注入)
+├── SIM_L2/         L2 キャッシュ(参照モデル、同時ランダム、書き出しの停止、パラメータ掃引、バグ注入)
 ├── SIM_CPU/        CPU_TOP のバス検証
 ├── SIM_SYS/        コア + 本物のキャッシュ + AXI + DMA ポート(バグ注入、性能の内訳)
 ├── SIM_BIOS/       LiteX BIOS と Linux(OpenSBI → Linux → BusyBox、SD カードのモデル、perf)
@@ -146,6 +149,7 @@ LitexRocket/        Rocket 構成の LiteX 一式(ワークスペース、カー
 | `cd SIM/SIM_SYS && ./bug_inject.sh` | バグ注入 14 種 | 全て検出 |
 | `cd SIM/SIM_CACHE && make` | L1 キャッシュ全試験(CPU と DMA ポートを同じラインで同時にランダムに、取り消しを含む) | PASS 64,943 チェック |
 | `cd SIM/SIM_CACHE && ./bug_inject.sh` | バグ注入 40 種 | 全て検出 |
+| `cd SIM/SIM_L2 && make` / `./sweep.sh` / `./bug_inject.sh` | L2 キャッシュ(256 KB・4 ウェイ)/ 容量・ウェイ・置き換えの 11 構成 / バグ注入 31 種 | PASS 約 150 万チェック / 全 PASS / 全て検出 |
 | `cd SIM/SIM_MMU && make` / `./bug_inject.sh` | PMP を参照モデルと比較 / バグ注入 21 種 | PASS 20 万チェック / 全て検出 |
 | `cd SIM/SIM_FPU && make` / `./bug_inject.sh` | FPU を Berkeley SoftFloat と比較 / バグ注入 33 種 | PASS 約 58 万チェック / 全て検出 |
 | `cd SIM/SIM_DBG && make` / `./bug_inject.sh` | デバッグ論理 / バグ注入 15 種 | PASS 3,026 チェック / 全て検出 |
@@ -205,4 +209,4 @@ vivado -mode batch -source build.tcl
 | MMU (Sv39) と PMP | 完了 |
 | LiteX SoC 上の Linux | 実機で SD カードの ext4 から BusyBox まで。Ethernet、TFTP ネットブート。負荷試験 120 分 PASS |
 | 性能 | 2.747 CoreMark/MHz、1.482 DMIPS/MHz(実機、Linux 上)。性能カウンタと `perf` で実機の内訳を測れる |
-| 次のテーマ | CoreMark の外(Linux の実負荷)を PMU で測り、L2 キャッシュなどメモリ階層を決める([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |
+| 次のテーマ | L2 キャッシュ(256 KB、[`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md))。RTL と単体検証まで済み、次は CPU_TOP への組み込みと実機での前後比較([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |
