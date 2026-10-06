@@ -104,10 +104,10 @@ done
 echo "" | tee -a "$LOG"
 echo "=== summary" | tee -a "$LOG"
 echo "per 1000 instructions: I\$ / D\$ misses (line fills), ITLB / DTLB misses (walks), exceptions" | tee -a "$LOG"
-echo "% of cycles: D\$ wait, front end empty, back end full, load use; wrong guesses % of branches" | tee -a "$LOG"
+echo "% of cycles: D\$ wait, front end empty, back end full, load use, MDU / FPU wait; wrong guesses % of branches" | tee -a "$LOG"
 echo "kern %: kernel share of the cycles" | tee -a "$LOG"
-printf "%-9s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s\n" \
-    workload Mcyc CPI 'I$' 'D$' ITLB DTLB exc 'D$w%' 'FE%' 'BE%' 'LU%' 'mis%' 'kern%' | tee -a "$LOG"
+printf "%-9s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s\n" \
+    workload Mcyc CPI 'I$' 'D$' ITLB DTLB exc 'D$w%' 'FE%' 'BE%' 'LU%' 'MDU%' 'mis%' 'kern%' | tee -a "$LOG"
 for w in $WORKLOADS; do
     if [ ! -f "$w.5.csv" ]; then
         printf "%-9s FAILED\n" "$w"
@@ -130,9 +130,9 @@ for w in $WORKLOADS; do
             i = (ins[1] + ins[2] + ins[3] + ins[4]) / 4
             mis = (val["r5"] > 0) ? 100 * val["r6"] / val["r5"] : 0
             kern = (cu + ck > 0) ? 100 * ck / (cu + ck) : 0
-            printf "%-9s %6.0f %6.3f %6.2f %6.2f %6.3f %6.3f %6.3f %6.1f %6.1f %6.1f %6.1f %6.1f %6.1f\n",
+            printf "%-9s %6.0f %6.3f %6.2f %6.2f %6.3f %6.3f %6.3f %6.1f %6.1f %6.1f %6.1f %6.1f %6.1f %6.1f\n",
                    w, c / 1e6, (i > 0) ? c / i : 0, k("r7"), k("r8"), k("r9"), k("ra"), k("rf"),
-                   p("rb"), p("rc"), p("r11"), p("rd"), mis, kern
+                   p("rb"), p("rc"), p("r11"), p("rd"), p("re"), mis, kern
         }'
 done | tee -a "$LOG"
 echo "" | tee -a "$LOG"
