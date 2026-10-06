@@ -46,3 +46,16 @@ synth_l2.bat 262144 4 0 20 0     合成だけ
 全体(`BENCH.md` 13 章の版)ではブロック RAM 40.5 / 135、LUT 45,598(71.9 %)、スライス 88.6 %。
 L2 を足して 約 109 / 135 タイルになる見込み。スライスは単体の数がそのまま足されるわけでは
 ない(全体では周りの論理とスライスを分け合う)ので、目安として見る。
+
+## 4. 結果(2026-10-06、Vivado 2025.1、256 KB・4 ウェイ・疑似 LRU、50 MHz)
+
+```
+L2_256K_4w  (period 20.0 ns, I/O delay 6.0 ns each side)
+after synthesis: 1078 LUT, 991 FF, RAMB36 68, RAMB18 0 (tag 4, data 64 primitives), LUT RAM cells 12
+after routing: WNS 3.953 ns (register to register 5.977 ns), WHS 0.161 ns, 659 slices
+```
+
+配列はすべてブロック RAM(データ 64、タグ 4)、疑似 LRU は LUT RAM になった。LUT・FF は
+見込みの半分以下。最悪のレジスタ間の経路は、タグの読み出し → タグ比較 → ヒット → データ配列
+64 個の読み出し許可(13.5 ns、うち配線 9.1 ns)。読み方は `CPU_L2_SPEC.md` 5 章。
+
