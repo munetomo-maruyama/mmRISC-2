@@ -21,6 +21,7 @@ cache_test_image.bin
 # Vivado implementation artifacts
 # (TOP.bit / TOP.bin and the *.rpt reports are kept)
 FPGA/*/output/*.dcp
+FPGA/*/output/*/*.dcp
 FPGA/*/output/*.backup.*
 
 # test programs built from the .S files
