@@ -8,16 +8,16 @@ Linux を動かすプロジェクト。周辺回路は LiteX から持ってく�
 
 Arty A7-100T の実機(50 MHz)で、LiteX BIOS → OpenSBI → **Linux 7.2** が SD カードの ext4
 から BusyBox のシェルまで起動し、Ethernet(DHCP、TFTP)も動く。120 分の負荷試験(メモリ・
-Ethernet・SD カードの同時照合)は、この版でも PASS(2026-10-06)。
+Ethernet・SD カードの同時照合)は、L2 の前の版で PASS(2026-10-06)。
 
 | | |
 |---|---|
-| 性能(実機、Linux 上) | **2.747 CoreMark/MHz**(Zba/Zbb で作ったもの。rv64gc なら 2.462)、**1.482 DMIPS/MHz**。自作の始めの 1.584 / 0.823 から +73 % / +80 % |
+| 性能(実機、Linux 上) | **2.786 CoreMark/MHz**(Zba/Zbb で作ったもの。rv64gc なら 2.498)、**1.496 DMIPS/MHz**。自作の始めの 1.584 / 0.823 から +76 % / +82 %。L2 キャッシュでカーネルが主の負荷(TFTP、SD の読み出し、`ls -lR`)が 1.5〜1.7 倍 |
 | ISA | RV64IMAFDC、Zicsr、Zifencei、Zicntr、Zihpm、**Zba、Zbb、Zicond**、Zihintpause、Zihintntl、M / S / U、Sv39、PMP 8 エントリ |
 | 特権の拡張 | **Sstc**(S モードのタイマ)、**Sscofpmf**(性能カウンタのあふれ割り込み)、**Smcntrpmf**、**Sdtrig**(デバッグのトリガ 4 本)、特権仕様 1.12 |
-| 性能カウンタ | `hpmcounter3`〜`6`、イベント 17 種(キャッシュ・TLB のミス、分岐予測ミス、停止の理由)。Linux の `perf stat` / `perf record` で使える |
+| 性能カウンタ | `hpmcounter3`〜`6`、イベント 19 種(キャッシュ・L2・TLB のミス、分岐予測ミス、停止の理由)。Linux の `perf stat` / `perf record` で使える |
 | デバッグ | JTAG / cJTAG(Debug Spec 1.0)。OpenOCD / gdb で halt / step / レジスタ / メモリ、ソフトウェアとハードウェアのブレークポイント、ウォッチポイント(動いている Linux カーネルにも置ける) |
-| FPGA | 50 MHz で WNS +0.452 ns、LUT 45,598 / 63,400(71.9 %)、ブロック RAM 40.5 / 135 タイル |
+| FPGA | 50 MHz で WNS +0.159 ns、LUT 46,957 / 63,400(74.1 %)、スライス 91.4 %、ブロック RAM 108.5 / 135 タイル(L2 を含む) |
 
 **コアの構成**
 
@@ -33,9 +33,9 @@ Ethernet・SD カードの同時照合)は、この版でも PASS(2026-10-06)。
 - L1 キャッシュ: I$ / D$ 各 16 KiB(4 ウェイ、64 B 行)、D$ はノンブロッキング・
   ライトバック。SoC の DMA も D$ を通るので一貫性はハードウェアで保つ
 - FPU(F / D): 積和 1 本、除算・平方根は反復
-- L2 キャッシュ: 256 KB(4 ウェイ、64 B 行、書き戻し)を L1 と LiteDRAM の間に組み込んだ
-  (2026-10-06、シミュレーションで検証済み)。実機での測定はこれから。上の FPGA と性能の数字は
-  L2 の無い版のもの
+- L2 キャッシュ: 256 KB(4 ウェイ、64 B 行、書き戻し)を L1 と LiteDRAM の間に。ヒットは
+  L1 のミス 1 回を 31 → 14 サイクルにし、カーネルの負荷で 85〜95 % 当たる(2026-10-07、
+  [`BENCH.md`](LitexSystem/docs/BENCH.md) 15 章)
 
 立ち上げの経緯は [`LitexSystem/docs/BRINGUP.md`](LitexSystem/docs/BRINGUP.md)、性能の作業と
 実機の内訳は [`LitexSystem/docs/BENCH.md`](LitexSystem/docs/BENCH.md)、次のテーマは
@@ -47,7 +47,7 @@ Ethernet・SD カードの同時照合)は、この版でも PASS(2026-10-06)。
 |---|---|
 | [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md) | CPU コア(命令セット、パイプライン、MMU、CSR、デバッグ、決定事項 1〜69) |
 | [`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`](RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md) | L1 キャッシュ(パラメータ、インタフェース、動作、検証結果) |
-| [`RTL/CPU/CPU_L2/CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md) | L2 キャッシュ(方式、動作、資源、単体と組み込みの検証結果。実機の測定はこれから) |
+| [`RTL/CPU/CPU_L2/CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md) | L2 キャッシュ(方式、動作、資源、検証、実機の効果) |
 | [`RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`](RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md) | デバッグ論理(JTAG/cJTAG DTM、DM、認証) |
 | [`LitexSystem/README.md`](LitexSystem/README.md) | LiteX の SoC に載せて Linux を動かす一式 |
 | [`LitexSystem/docs/BRINGUP.md`](LitexSystem/docs/BRINGUP.md) | 実機の立ち上げ記録(止まった場所、原因、修正)と手順 |
@@ -211,4 +211,5 @@ vivado -mode batch -source build.tcl
 | MMU (Sv39) と PMP | 完了 |
 | LiteX SoC 上の Linux | 実機で SD カードの ext4 から BusyBox まで。Ethernet、TFTP ネットブート。負荷試験 120 分 PASS |
 | 性能 | 2.747 CoreMark/MHz、1.482 DMIPS/MHz(実機、Linux 上)。性能カウンタと `perf` で実機の内訳を測れる |
-| 次のテーマ | L2 キャッシュ(256 KB、[`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md))。CPU_TOP への組み込みとシミュレーションの回帰まで済み、次は実機での前後比較([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |
+| L2 キャッシュ | 完了(256 KB、[`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md))。実機でカーネルの負荷が 1.2〜1.7 倍 |
+| 次のテーマ | 2 段目の TLB(ユーザモードの負荷)、FPU のパイプライン化の前のタイミングの手当て([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |
