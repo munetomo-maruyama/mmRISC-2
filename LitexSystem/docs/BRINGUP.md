@@ -597,3 +597,26 @@ sd  424 424 0
 3 つが同時に走り、ロードアベレージは 3 前後。NG 0、カーネルの警告も無し。回数は
 14 回目(58 / 33 / 405)とほぼ同じ。
 
+## 17 回目: L2 キャッシュの版の長時間負荷試験(2026-10-09)
+
+L2 キャッシュ(`RTL/CPU/CPU_L2`、256 KB、`BENCH.md` 15 章、WNS +0.159 ns)を入れ、デバッグ
+モジュールのリセット後の halt の扱いも変えた版(`CPU_DBG_SPEC.md` 4.2)。起動は 15 回目と同じ
+ログで進み(OpenSBI の ISA 拡張、`riscv-pmu-sbi: 16 firmware and 6 hardware counters`、
+SD カードの ext4 は回復なしでマウント)、`stress.sh` を 120 分回した。
+
+```
+=== stress result (iterations, ok, ng) ===
+mem 77 77 0
+net 37 37 0
+sd  503 503 0
+=== new kernel messages that look like trouble ===
+(none)
+=== PASS ===
+```
+
+ロードアベレージは 16 回目と同じ 3 前後で、NG 0、カーネルの警告も無し。同じ 120 分で回った
+回数は 16 回目(60 / 32 / 424)より mem +28 %、net +16 %、sd +19 % 多い。どれもカーネルを
+多く通る仕事(ファイルの照合、TFTP、SD の読み書き)で、L2 の効き(`BENCH.md` 15 章)がそのまま
+回数に出ている。L2 は書き戻しで、DMA(SD・Ethernet)と CPU の両方の書き込みが通るが、2 時間の
+照合で食い違いは出ていない。
+

@@ -1,14 +1,23 @@
 # mmRISC-2
 
-64bit RISC-V CPU(RV64GC + Sv39 MMU、L1 キャッシュ、内蔵 CLINT/PLIC、JTAG/cJTAG
-オンチップデバッグ、性能カウンタ)を SystemVerilog で自作し、Digilent Arty A7-100T 上で
-Linux を動かすプロジェクト。周辺回路は LiteX から持ってくる。
+64bit RISC-V CPU を SystemVerilog で自作し、Digilent Arty A7-100T 上で Linux を動かす
+プロジェクト。周辺回路は LiteX から持ってくる。CPU が持つもの:
 
-## 現状(2026-10-06)
+- RV64GC(IMAFDC)+ Zba / Zbb / Zicond、M / S / U モード、Sv39 MMU(ITLB / DTLB、
+  ハードウェアのページテーブルウォーカ)、PMP
+- 8 段のインオーダ・パイプライン、分岐予測(BTB 256 エントリ、gshare、戻りアドレス
+  スタック)、FPU(単精度・倍精度)
+- L1 キャッシュ(I$ / D$ 各 16 KB、D$ はノンブロッキング・書き戻し)、**L2 キャッシュ
+  (256 KB)**。SoC の DMA も D$ を通し、一貫性をハードウェアで保つ
+- 内蔵の CLINT / PLIC、Sstc(S モードのタイマ)
+- JTAG / cJTAG のオンチップデバッグ(Debug Spec 1.0、ハードウェアトリガ 4 本)
+- 性能カウンタ(Zihpm、Sscofpmf。Linux の `perf` で使える)
+
+## 現状(2026-10-09)
 
 Arty A7-100T の実機(50 MHz)で、LiteX BIOS → OpenSBI → **Linux 7.2** が SD カードの ext4
 から BusyBox のシェルまで起動し、Ethernet(DHCP、TFTP)も動く。120 分の負荷試験(メモリ・
-Ethernet・SD カードの同時照合)は、L2 の前の版で PASS(2026-10-06)。
+Ethernet・SD カードの同時照合)は、L2 キャッシュを入れた版でも PASS(2026-10-09)。
 
 | | |
 |---|---|

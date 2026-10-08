@@ -1,7 +1,8 @@
 # mmRISC-2 L2 キャッシュ 設計案
 
 - 版: Rev-3(2026-10-07)。段階 4(実機の測定)まで済み。実機の結果は 1 章の終わりと
-  `LitexSystem/docs/BENCH.md` 15 章。残りは負荷試験 120 分と置き換えの比較(9 章)
+  `LitexSystem/docs/BENCH.md` 15 章、負荷試験 120 分は PASS(`BRINGUP.md` 17 回目)。残りは
+  置き換えの比較(9 章)
 - 対象: `RTL/CPU/CPU_L2/`(`CPU_L2.sv`、`L2_TAG_ARRAY.sv`。データ配列は L1 の
   `CACHE_DATA_ARRAY` を使う)、`RTL/CPU/CPU_TOP/`(組み込み)、`SIM/SIM_L2/`(単体検証)
 - 関連: `RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`(L1)、`LitexSystem/docs/BENCH.md` 14 章(動機)、
@@ -284,7 +285,7 @@ SIM_BIOS `make linux-perf`(`perf stat -e LLC-loads,LLC-load-misses,r12,r13`)。
 | 1 | この設計案を決める | 9 章の未決事項 |
 | 2 | `CPU_L2` の RTL。単体の検証環境 `SIM/SIM_L2`: AXI4 のランダムな要求(行の読み書き、一部の書き込み、背圧)を、平らなメモリ像の参照モデルと突き合わせる。容量・ウェイのパラメータ掃引、バグ注入 | **済み(2026-10-06)**: 掃引 11 構成すべて PASS、変異 31 種すべて検出(11 章) |
 | 3 | `CPU_TOP` に組み込む(`L2_SIZE`)。SIM_SYS(自作試験、riscv-tests、バグ注入)、SIM_CACHE の DMA 混在試験の L2 あり版、SIM_OCD(デバッガ、`ndmreset`)、SIM_BIOS(BIOS、Linux の起動、`linux-perf`) | **済み(2026-10-06)**: 既存の回帰がすべて通る(12 章)。SIM_CACHE の L2 あり版は作らなかった(12 章) |
-| 4 | 実機: 資源、WNS、Linux 起動、`bench.sh`(CoreMark は変わらないこと)、**`workload.sh` の前後比較**、L2 のヒット率、`stress.sh` 120 分 | **済み(2026-10-07)**: WNS +0.159 ns、スライス 91.4 %、ブロック RAM 108.5 / 135。カーネルの負荷 1.2〜1.7 倍(1 章)。`stress.sh` 120 分は未 |
+| 4 | 実機: 資源、WNS、Linux 起動、`bench.sh`(CoreMark は変わらないこと)、**`workload.sh` の前後比較**、L2 のヒット率、`stress.sh` 120 分 | **済み(2026-10-07)**: WNS +0.159 ns、スライス 91.4 %、ブロック RAM 108.5 / 135。カーネルの負荷 1.2〜1.7 倍(1 章)。`stress.sh` 120 分 PASS(2026-10-09、`BRINGUP.md` 17 回目) |
 | 5 | C2(FPU のパイプライン化)に残る LUT・スライスの予算を決める。足りなければ容量を 128 KB に、または `ROADMAP.md` の C2 の欄にある削減候補 | **見立て(2026-10-07)**: LUT は足りるがスライスが 95〜99 % になり、WNS も薄い。先にコアの止めの経路(`TIMING.md` 32 章)を手当てし、削減候補と範囲の絞り込みを組にする(`ROADMAP.md` C2) |
 | 6 | 必要なら 8 章の拡張(まず先読み) | 実測で効くものだけ |
 
