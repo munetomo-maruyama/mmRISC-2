@@ -138,7 +138,6 @@ SIM/
 
 LitexSystem/        LiteX の SoC に mmRISC-2 を載せ、Arty で Linux を動かす一式  → LitexSystem/README.md
 FPGA/ARTY_A7_100T/  LiteX なしの単体ビルド(デバッグ論理の確認用)、制約、OpenOCD 設定
-Spec/               RISC-V 公式仕様書(PDF)
 LitexRocket/        Rocket 構成の LiteX 一式(ワークスペース、カーネルのソース、BusyBox。リポジトリには含めない)
 ```
 
@@ -219,6 +218,23 @@ vivado -mode batch -source build.tcl
 | CPU コア | RV64GC + Zba / Zbb / Zicond、M / S / U、8 段パイプライン、分岐予測(gshare) |
 | MMU (Sv39) と PMP | 完了 |
 | LiteX SoC 上の Linux | 実機で SD カードの ext4 から BusyBox まで。Ethernet、TFTP ネットブート。負荷試験 120 分 PASS |
-| 性能 | 2.747 CoreMark/MHz、1.482 DMIPS/MHz(実機、Linux 上)。性能カウンタと `perf` で実機の内訳を測れる |
+| 性能 | 2.786 CoreMark/MHz、1.496 DMIPS/MHz(実機、Linux 上)。性能カウンタと `perf` で実機の内訳を測れる |
 | L2 キャッシュ | 完了(256 KB、[`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md))。実機でカーネルの負荷が 1.2〜1.7 倍 |
 | 次のテーマ | 2 段目の TLB(ユーザモードの負荷)、FPU のパイプライン化の前のタイミングの手当て([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |
+
+## 参考文献
+
+設計の拠り所にした仕様書と資料。版は参照したもの(各文書の最新版は配布元を参照)。
+
+| 文書 | 版 | 配布元 |
+|---|---|---|
+| The RISC-V Instruction Set Manual, Volume I: Unprivileged Architecture | 20260120 | [riscv/riscv-isa-manual](https://github.com/riscv/riscv-isa-manual/releases) |
+| The RISC-V Instruction Set Manual, Volume II: Privileged Architecture | 20260120 | [riscv/riscv-isa-manual](https://github.com/riscv/riscv-isa-manual/releases) |
+| The RISC-V Debug Specification | 1.0(2025-02-21 改訂、Ratified) | [riscv/riscv-debug-spec](https://github.com/riscv/riscv-debug-spec) |
+| RISC-V Platform-Level Interrupt Controller Specification | 1.0.0(2023-03) | [riscv/riscv-plic-spec](https://github.com/riscv/riscv-plic-spec) |
+| The RISC-V Advanced Interrupt Architecture | 1.0(20250312 改訂) | [riscv/riscv-aia](https://github.com/riscv/riscv-aia) |
+| RISC-V IOMMU Architecture Specification | 1.0.1(2026-02-22) | [riscv-non-isa/riscv-iommu](https://github.com/riscv-non-isa/riscv-iommu) |
+| RISC-V Profiles | 1.0(2023-04-02) | [riscv/riscv-profiles](https://github.com/riscv/riscv-profiles) |
+| RVA23 Profiles / RVB23 Profiles | 1.0(2024-10-17) | [riscv/riscv-profiles](https://github.com/riscv/riscv-profiles) |
+| Arty A7 Reference Manual、Arty A7 回路図 | | [Digilent Reference](https://digilent.com/reference/programmable-logic/arty-a7/start) |
+

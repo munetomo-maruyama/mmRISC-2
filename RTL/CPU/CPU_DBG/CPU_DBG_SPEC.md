@@ -8,7 +8,7 @@
     ハートを unavailable と見せる(4.2)。L2 キャッシュのリセット後の消去で最初の命令が遅れ、
     OpenOCD の `reset halt` が halt を取り逃していたため
 - 準拠仕様: **The RISC-V Debug Specification Version 1.0, Revised 2025-02-21: Ratified**
-  (`Spec/riscv-debug-specification.pdf`)。以下、節番号はこの仕様書のもの。
+  (トップの `README.md` の「参考文献」)。以下、節番号はこの仕様書のもの。
 - 対象: `RTL/CPU/CPU_DBG/`(デバッグ論理)、`RTL/CPU/CPU_TOP/`(組み込み)、`RTL/TOP/`(FPGAトップ)
 - 決定事項は 9章にまとめた。
 

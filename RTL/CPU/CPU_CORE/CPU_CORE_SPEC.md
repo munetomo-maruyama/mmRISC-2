@@ -6,7 +6,7 @@
 - 関連: `RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`(L1 キャッシュ)、
   `RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`(デバッグ論理)
 - 準拠: RISC-V Unprivileged ISA / Privileged Architecture / Debug Spec 1.0
-  (`Spec/*.pdf`)
+  (版はトップの `README.md` の「参考文献」)
 
 ---
 
