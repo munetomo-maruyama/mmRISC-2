@@ -657,7 +657,7 @@ CoreMark の答え(`crcfinal` 0xfcaf)はどれも同じ。SIM_SYS の Dhrystone 
 | sf `-flto` | 2.555 | 2.903 | 1.398 | 1.462 |
 
 - **CoreMark は sf**(`-O2` から +7.1 % / +8.4 %)。ループを全部ほどき、関数を展開し、分岐先を
-  4 バイトに揃える。`-flto` はかえって遅い(展開しすぎてコードが I$ に収まりにくくなる)。
+  4 バイトに揃える。`-flto` はかえって遅い(コードは sf の 32 KB に対して 26 KB と小さく、I$ の大きさではない。理由は調べていない)。
 - **Dhrystone は sf + `-mtune=sifive-7-series`**(+6.7 % / +2.8 %)。`-mtune` は命令の並べ方の
   モデルで、SiFive 7 系はこのコアと同じ 1 本ずつのインオーダ(Zba / Zbb の版では効きが小さい)。
 - **`-O2 -flto` の Dhrystone(+17 %)は規則の外**。Dhrystone の規則(`dhrystone.h`: 分割コンパイル、
