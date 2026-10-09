@@ -23,7 +23,7 @@ Ethernet・SD カードの同時照合)は、L2 キャッシュを入れた版�
 
 | | |
 |---|---|
-| 性能(実機、Linux 上) | **2.786 CoreMark/MHz**(Zba/Zbb で作ったもの。rv64gc なら 2.498)、**1.496 DMIPS/MHz**。自作の始めの 1.584 / 0.823 から +76 % / +82 %。L2 キャッシュでカーネルが主の負荷(TFTP、SD の読み出し、`ls -lR`)が 1.5〜1.7 倍 |
+| 性能(実機、Linux 上) | **2.786 CoreMark/MHz**(Zba/Zbb で作ったもの。rv64gc なら 2.498)、**1.496 DMIPS/MHz**。自作の始めの 1.584 / 0.823 から +76 % / +82 %。どちらも `-O2` での値で、速さを最大にするオプションで作ると **3.025 CoreMark/MHz**、1.542 DMIPS/MHz(`LitexSystem/docs/BENCH.md` 17 章)。浮動小数点は FIR 65.6 MFLOPS、行列積 41.2 MFLOPS(アセンブラ、50 MHz)。L2 キャッシュでカーネルが主の負荷(TFTP、SD の読み出し、`ls -lR`)が 1.5〜1.7 倍 |
 | ISA | RV64IMAFDC、Zicsr、Zifencei、Zicntr、Zihpm、**Zba、Zbb、Zicond**、Zihintpause、Zihintntl、M / S / U、Sv39、PMP 8 エントリ |
 | 特権の拡張 | **Sstc**(S モードのタイマ)、**Sscofpmf**(性能カウンタのあふれ割り込み)、**Smcntrpmf**、**Sdtrig**(デバッグのトリガ 4 本)、特権仕様 1.12 |
 | 性能カウンタ | `hpmcounter3`〜`6`、イベント 19 種(キャッシュ・L2・TLB のミス、分岐予測ミス、停止の理由)。Linux の `perf stat` / `perf record` で使える |
@@ -220,7 +220,7 @@ vivado -mode batch -source build.tcl
 | CPU コア | RV64GC + Zba / Zbb / Zicond、M / S / U、8 段パイプライン、分岐予測(gshare) |
 | MMU (Sv39) と PMP | 完了 |
 | LiteX SoC 上の Linux | 実機で SD カードの ext4 から BusyBox まで。Ethernet、TFTP ネットブート。負荷試験 120 分 PASS |
-| 性能 | 2.786 CoreMark/MHz、1.496 DMIPS/MHz(実機、Linux 上)。性能カウンタと `perf` で実機の内訳を測れる |
+| 性能 | 2.786 CoreMark/MHz、1.496 DMIPS/MHz(実機、Linux 上、`-O2`。最大の最適化で 3.025 / 1.542)。性能カウンタと `perf` で実機の内訳を測れる |
 | L2 キャッシュ | 完了(256 KB、[`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md))。実機でカーネルの負荷が 1.2〜1.7 倍 |
 | 次のテーマ | 2 段目の TLB(ユーザモードの負荷)、FPU のパイプライン化の前のタイミングの手当て([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |
 
