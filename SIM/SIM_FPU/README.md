@@ -93,7 +93,8 @@ SoftFloat との比較が落ちることを確かめる。
 ## パイプライン版 `FPU_PIPE`(ROADMAP C2、2026-10-09)
 
 `RTL/CPU/CPU_FPU/FPU_PIPE` は `CORE_FPU` と同じ演算を段に切り、毎サイクル 1 件受け付ける版
-(`CPU_CORE_SPEC.md` 10.11)。まだコアにはつないでいない。
+(`CPU_CORE_SPEC.md` 10.11)。2026-10-09 からコアが使っている(方式と測定のまとめは
+`RTL/CPU/CPU_FPU/README.md`)。
 
 | コマンド | 内容 |
 |---|---|
