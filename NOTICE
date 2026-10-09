@@ -1,0 +1,27 @@
+mmRISC-2
+Copyright 2026 Munetomo Maruyama
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE),
+except for the third-party files listed below, which keep their own licenses.
+
+LitexSystem/software/boot/Image
+    Linux kernel, built from https://github.com/litex-hub/linux
+    commit 4929f78c004ecab9b68bb41018a3d11749dcea62 (unmodified) with
+    LitexSystem/software/boot/linux.config.
+    License: GPL-2.0. How to obtain the corresponding source:
+    LitexSystem/software/boot/README.md.
+
+LitexSystem/software/boot/linux.config
+    Configuration of the Linux kernel above. License: GPL-2.0.
+
+LitexSystem/software/boot/fw_jump.bin
+    OpenSBI, https://github.com/riscv-software-src/opensbi
+    commit 3593a5facc4c6938b90429a6973ba9ee21fc5899, built with the patch in
+    LitexSystem/software/boot/opensbi_patches/.
+    License: BSD-2-Clause (LitexSystem/software/boot/COPYING.OpenSBI.BSD).
+
+LitexSystem/software/boot/opensbi_patches/
+    Patches to OpenSBI, offered under OpenSBI's own license, BSD-2-Clause.
+
+LitexSystem/software/rootfs/usr/share/udhcpc/default.script
+    BusyBox 1.36.1 examples/udhcp/simple.script, unchanged. License: GPL-2.0.

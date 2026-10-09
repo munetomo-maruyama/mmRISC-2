@@ -222,6 +222,24 @@ vivado -mode batch -source build.tcl
 | L2 キャッシュ | 完了(256 KB、[`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md))。実機でカーネルの負荷が 1.2〜1.7 倍 |
 | 次のテーマ | 2 段目の TLB(ユーザモードの負荷)、FPU のパイプライン化の前のタイミングの手当て([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |
 
+## ライセンス
+
+このリポジトリの自作のファイル(RTL、テストベンチ、スクリプト、文書)は
+[Apache License 2.0](LICENSE) で配布する。ソースを公開せずに使うこと、改変、再頒布、製品への
+組み込みは自由で、条件は LICENSE と [NOTICE](NOTICE) の写しを添えることと、改変したファイルに
+その旨を書くこと。
+
+次の他者のファイルはそれぞれのライセンスに従う(詳しくは [NOTICE](NOTICE)、
+[`LitexSystem/software/boot/README.md`](LitexSystem/software/boot/README.md)):
+
+| ファイル | 中身 | ライセンス |
+|---|---|---|
+| `LitexSystem/software/boot/Image`、`linux.config` | Linux カーネル(litex-hub/linux、変更なし)とその設定 | GPL-2.0 |
+| `LitexSystem/software/boot/fw_jump.bin`、`opensbi_patches/` | OpenSBI とそのパッチ | BSD-2-Clause |
+| `LitexSystem/software/rootfs/usr/share/udhcpc/default.script` | BusyBox の例のスクリプト(変更なし) | GPL-2.0 |
+
+LiteX、OpenSBI、Linux のソースそのものはリポジトリに含めず、ビルドのときに外から持ってくる。
+
 ## 参考文献
 
 設計の拠り所にした仕様書と資料。版は参照したもの(各文書の最新版は配布元を参照)。
