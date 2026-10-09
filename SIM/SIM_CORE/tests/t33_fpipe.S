@@ -6,7 +6,8 @@
 //     the second one measured: the first fetches the code, which with the
 //     caches of SIM_SYS (and their stalls) is not what is measured
 //   2 a chain of dependent operations, the last one's integer answer
-//     (FCVT.L.D) straight into an ADDI
+//     (FCVT.L.D) straight into an ADDI, and read again later (from the
+//     register file's bank the FPU wrote, not from its bypass)
 //   3 FSD of the answer of the operation just in front
 //   4 a register the FPU still owes written by FLD right behind (FDIV,
 //     then FADD): the load is the younger and must win
@@ -27,6 +28,8 @@
 //     but guessed not taken): thrown away, it must not count
 //  11 FP operations right behind loads: while MA waits for the memory the
 //     operation stands in MR and P0 of the FPU must wait with it
+//  12 FLD and then a use of the register 1 ... 5 instructions behind: one
+//     of them reads the file in ID in the cycle the load writes it in WB
 #include "test.h"
 
 #define MSTATUS_FS 0x6000
@@ -87,6 +90,10 @@ _start:
     fcvt.l.d x13, f26
     addi    x14, x13, 1
     TEST_EQ(6, x14, 18)
+    TEST_EQ(23, x13, 17)                  // read again later, from the file:
+    li      t6, 17                        // as rs1 and as rs2
+    li      gp, 24
+    bne     t6, x13, fail
 
     //--------------------------------------------------------------
     // 3 FSD of the answer just in front
@@ -207,6 +214,24 @@ smc:
     fcvt.l.d x29, f13
     TEST_EQ(20, x29, 6)
 
+    //--------------------------------------------------------------
+    // 12 an FP register read in ID as FLD writes it in WB (the write
+    //    first bypass of the file), at every distance
+    //--------------------------------------------------------------
+    li      gp, 25
+    .irp gap, 1, 2, 3, 4, 5
+    fmv.d   f7, f0                        // 1.0, then the load
+    fsd     f2, 56(x10)                   // 3.0
+    fld     f7, 56(x10)
+    .rept \gap
+    addi    x31, x31, 1
+    .endr
+    fadd.d  f8, f7, f0                    // 4.0 if the load is seen
+    fadd.d  f9, f2, f0                    // 4.0
+    feq.d   x30, f8, f9
+    beqz    x30, fail
+    .endr
+
     TEST_DONE
 
     .balign 4
@@ -228,5 +253,6 @@ data:
     .dword  0                             // 32 : FSD writes here
     .double 0.0                           // 40
     .double 0.5                           // 48
+    .dword  0                             // 56 : and here
 
     TOHOST_SECTION
