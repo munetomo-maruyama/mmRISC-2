@@ -30,7 +30,7 @@
 
 | ファイル | ソース | 作り方 | ライセンス |
 |---|---|---|---|
-| `Image` | Linux、[litex-hub/linux](https://github.com/litex-hub/linux) の commit `4929f78c004ecab9b68bb41018a3d11749dcea62`(7.2.0-rc2 ベース)。手は入れていない | この `Image` を作ったときの `.config` が同じディレクトリの `linux.config`(Rocket 構成の設定に `CONFIG_PERF_EVENTS`、`CONFIG_RISCV_PMU`、`CONFIG_RISCV_PMU_SBI` を足しただけ)。それを `.config` に置いて `make ARCH=riscv CROSS_COMPILE=riscv64-unknown-linux-gnu- Image`。コンパイラは riscv64-unknown-linux-gnu-gcc 13.2.0 | GPL-2.0。ソースは上の URL と commit(変更なし)と `linux.config` で全部そろう |
+| `Image` | Linux、[litex-hub/linux](https://github.com/litex-hub/linux) の commit `4929f78c004ecab9b68bb41018a3d11749dcea62`(7.2.0-rc2 ベース)。手は入れていない | この `Image` を作ったときの `.config` が同じディレクトリの `linux.config`(Rocket 構成の設定に `CONFIG_PERF_EVENTS`、`CONFIG_RISCV_PMU`、`CONFIG_RISCV_PMU_SBI` を足しただけ)。それを `.config` に置いて `make ARCH=riscv CROSS_COMPILE=riscv64-unknown-linux-gnu- Image`。コンパイラは riscv64-unknown-linux-gnu-gcc 13.2.0 | GPL-2.0。対応するソース一式(その commit の tar と `linux.config`)を GitHub の Release [`linux-src-4929f78c004e`](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/linux-src-4929f78c004e) に置いている |
 | `fw_jump.bin` | OpenSBI、[riscv-software-src/opensbi](https://github.com/riscv-software-src/opensbi) の commit `3593a5facc4c6938b90429a6973ba9ee21fc5899`(v1.9 系)。ソースには手を入れず、`opensbi_patches/` のパッチ(2026-10: `0001` 止まっているカウンタも RESET 付きの停止で解放する。これが無いと Linux の `perf` がカウンタを使い切る)をビルド用の写しに当てる | `scripts/build_opensbi.sh`(パッチを当て、`PLATFORM=generic`、デバイスツリー `../mmrisc_arty.dts` を `FW_FDT_PATH` で埋め込む) | BSD-2-Clause(`COPYING.OpenSBI.BSD`) |
 | `linux.config` | 上のカーネルの設定 | ― | GPL-2.0(カーネルの一部) |
 | `opensbi_patches/` | このリポジトリ(OpenSBI へのパッチ) | ― | OpenSBI に合わせて BSD-2-Clause |
@@ -41,7 +41,10 @@
 (大文字小文字を区別しない場所を経由してコピーしたときに起きる)。確かめたこと(2026-10-09):
 作業ツリーで「変更あり」と出るのは大文字小文字だけが違う 13 個だけで、どれも netfilter の
 ファイルと tools の試験で、`linux.config` では `CONFIG_NETFILTER` が無効なのでビルドに入らない。
-したがって `Image` は上の commit と `linux.config` からそのまま作れる。
+したがって `Image` は上の commit と `linux.config` からそのまま作れる。Release の tar と
+`linux.config` から作り直すと、大きさ(15,464,960 バイト)と `.config` が同じで、違うのは
+ビルドの時刻(バージョン表示、内蔵の initramfs の時刻)と一部のファイル名の `./`(ツリーの中か外で
+ビルドしたかの差)だけだった。
 
 ## 第 1 パーティションは Mac から書く(2026-10-05 から)
 

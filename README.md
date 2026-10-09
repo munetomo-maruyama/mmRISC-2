@@ -234,7 +234,7 @@ vivado -mode batch -source build.tcl
 
 | ファイル | 中身 | ライセンス |
 |---|---|---|
-| `LitexSystem/software/boot/Image`、`linux.config` | Linux カーネル(litex-hub/linux、変更なし)とその設定 | GPL-2.0 |
+| `LitexSystem/software/boot/Image`、`linux.config` | Linux カーネル(litex-hub/linux、変更なし)とその設定。ソース一式は Release [`linux-src-4929f78c004e`](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/linux-src-4929f78c004e) | GPL-2.0 |
 | `LitexSystem/software/boot/fw_jump.bin`、`opensbi_patches/` | OpenSBI とそのパッチ | BSD-2-Clause |
 | `LitexSystem/software/rootfs/usr/share/udhcpc/default.script` | BusyBox の例のスクリプト(変更なし) | GPL-2.0 |
 

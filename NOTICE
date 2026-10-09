@@ -8,8 +8,9 @@ LitexSystem/software/boot/Image
     Linux kernel, built from https://github.com/litex-hub/linux
     commit 4929f78c004ecab9b68bb41018a3d11749dcea62 (unmodified) with
     LitexSystem/software/boot/linux.config.
-    License: GPL-2.0. How to obtain the corresponding source:
-    LitexSystem/software/boot/README.md.
+    License: GPL-2.0. The corresponding source (a tarball of that commit and
+    the config) is published at
+    https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/linux-src-4929f78c004e
 
 LitexSystem/software/boot/linux.config
     Configuration of the Linux kernel above. License: GPL-2.0.
