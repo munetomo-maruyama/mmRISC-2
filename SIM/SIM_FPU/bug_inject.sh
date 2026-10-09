@@ -83,6 +83,11 @@ MUTATIONS=(
 "a negative value is not rounded up|CORE_FPU/CORE_FPU.sv|s|a_sign ? (inc_i ? v_neg_inc : v_neg)|a_sign ? v_neg|"
 "the largest value rounded up does not overflow|CORE_FPU/CORE_FPU.sv|s|((v == lmax) \&\& inc_i)|1'b0|"
 "a NaN converts without the invalid flag|CORE_FPU/CORE_FPU.sv|s/q_f2i_spec_nv  <= a_nan | a_inf;/q_f2i_spec_nv  <= a_inf;/"
+
+# the remainder of a square root: only the root of a double has few enough
+# bits below its precision (11) for a zero run there; tb_FPU has roots found
+# for that (sqrt_hard)
+"the remainder of a square root does not reach the sticky bit|CORE_FPU/CORE_FPU.sv|s%ds_sticky = |sq_rem;%ds_sticky = 1'b0;%"
 )
 
 FILTER=${1:-}

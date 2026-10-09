@@ -198,6 +198,20 @@ module tb_FPU;
         pool32[39] = {32'hFFFF_FFFF, 32'hCAFF_FFFF};   // -(2^23 - 0.5)
     end
 
+    // Square roots whose sticky bit decides the answer: the root has 64
+    // bits, 11 below the precision of a double, and for these all 11 are
+    // zero (inexact only through the remainder) or a lone guard bit (a tie
+    // broken by the remainder). Found by searching (math.isqrt), no
+    // operand of the pools comes near one.
+    localparam int NH = 8;
+    logic [63:0] sqrt_hard [0:NH-1];
+    initial begin
+        sqrt_hard[0] = 64'h1129FFA30B726F56;  sqrt_hard[1] = 64'h463D3A7DAB59B2B8;
+        sqrt_hard[2] = 64'h3B885FE32682DD2B;  sqrt_hard[3] = 64'h796F80A743A5D63C;
+        sqrt_hard[4] = 64'h210BA672DC1BBB58;  sqrt_hard[5] = 64'h4D7731DA23784584;
+        sqrt_hard[6] = 64'h3AD610687FDE5DAE;  sqrt_hard[7] = 64'h5B50227659F6589E;
+    end
+
     //-----------------------------------------------------------------
     int  errors, checks, shown;
     bit  verbose;
@@ -340,6 +354,10 @@ module tb_FPU;
                 end
             end
         end
+        if (sel_has(FOP_SQRT))
+            for (r = 0; r <= 4; r++)
+                for (i = 0; i < NH; i++)
+                    run_one(FOP_SQRT, 1, r, 0, 0, sqrt_hard[i], 64'd0, 64'd0);
 
         $display("");
         $display("==========================================================");

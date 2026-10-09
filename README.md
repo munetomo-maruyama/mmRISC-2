@@ -161,7 +161,8 @@ LitexRocket/        Rocket 構成の LiteX 一式(ワークスペース、カー
 | `cd SIM/SIM_CACHE && ./bug_inject.sh` | バグ注入 40 種 | 全て検出 |
 | `cd SIM/SIM_L2 && make` / `./sweep.sh` / `./bug_inject.sh` | L2 キャッシュ(256 KB・4 ウェイ)/ 容量・ウェイ・置き換えの 11 構成 / バグ注入 31 種 | PASS 約 150 万チェック / 全 PASS / 全て検出 |
 | `cd SIM/SIM_MMU && make` / `./bug_inject.sh` | PMP を参照モデルと比較 / バグ注入 21 種 | PASS 20 万チェック / 全て検出 |
-| `cd SIM/SIM_FPU && make` / `./bug_inject.sh` | FPU を Berkeley SoftFloat と比較 / バグ注入 33 種 | PASS 約 58 万チェック / 全て検出 |
+| `cd SIM/SIM_FPU && make` / `./bug_inject.sh` | FPU を Berkeley SoftFloat と比較 / バグ注入 34 種 | PASS 約 58 万チェック / 全て検出 |
+| `cd SIM/SIM_FPU && make pipe` / `./bug_inject_pipe.sh` | パイプライン版 FPU(開発中、毎サイクル 1 件)を SoftFloat と比較 / バグ注入 28 種 | PASS 約 70 万チェック / 全て検出 |
 | `cd SIM/SIM_DBG && make` / `./bug_inject.sh` | デバッグ論理 / バグ注入 15 種 | PASS 3,026 チェック / 全て検出 |
 | `cd SIM/SIM_CPU && make` | CPU_TOP のバスと L1 キャッシュ経路 | PASS 46,718 チェック |
 | `cd SIM/SIM_BIOS && make check` | LiteX BIOS をそのまま実行(割り込み込み) | PASS |

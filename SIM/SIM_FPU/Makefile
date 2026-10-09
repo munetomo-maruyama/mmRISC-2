@@ -30,6 +30,11 @@ RTL_SRCS := \
 	$(RTL_DIR)/CPU/CPU_FPU/FPU_ROUND/FPU_ROUND.sv \
 	$(RTL_DIR)/CPU/CPU_FPU/CORE_FPU/CORE_FPU.sv
 
+# the pipelined unit (ROADMAP C2) and its bench: make pipe
+PIPE_TOP  := tb_FPU_PIPE
+PIPE_SRCS := $(RTL_DIR)/CPU/CPU_FPU/FPU_ROUND/FPU_ROUND.sv \
+             $(RTL_DIR)/CPU/CPU_FPU/FPU_PIPE/FPU_PIPE.sv $(PIPE_TOP).sv sf_dpi.c
+
 SRCS     := $(RTL_SRCS) $(TOP).sv sf_dpi.c
 
 VERILATOR       := verilator
@@ -44,7 +49,7 @@ ifneq ($(OPS),)
 PLUSARGS += +ops=$(OPS)
 endif
 
-.PHONY: all run long lint clean
+.PHONY: all run long lint clean pipe pipe-long
 
 all: run
 
@@ -72,8 +77,25 @@ run: obj_dir/V$(TOP)
 long: obj_dir/V$(TOP)
 	./obj_dir/V$(TOP) $(PLUSARGS) +rand=20000
 
+obj_pipe/.srchash: FORCE
+	@mkdir -p obj_pipe
+	@h=`cat $(PIPE_SRCS) | md5sum | cut -d' ' -f1`; \
+	 if [ "`cat $@ 2>/dev/null`" != "$$h" ]; then \
+	     rm -f obj_pipe/V$(PIPE_TOP); echo "$$h" > $@; fi
+
+obj_pipe/V$(PIPE_TOP): obj_pipe/.srchash
+	@test -f $(SF_LIB) || (echo "SoftFloat not built: $(SF_LIB)"; exit 1)
+	$(VERILATOR) $(subst --top-module $(TOP),--top-module $(PIPE_TOP),$(VERILATOR_FLAGS)) \
+	    -Mdir obj_pipe $(PIPE_SRCS)
+
+pipe: obj_pipe/V$(PIPE_TOP)
+	./obj_pipe/V$(PIPE_TOP) $(PLUSARGS)
+
+pipe-long: obj_pipe/V$(PIPE_TOP)
+	./obj_pipe/V$(PIPE_TOP) $(PLUSARGS) +rand=4000 +ops2=2000000
+
 lint:
 	$(VERILATOR) --lint-only -Wall --timing --top-module $(TOP) $(RTL_SRCS) $(TOP).sv
 
 clean:
-	rm -rf obj_dir *.vcd
+	rm -rf obj_dir obj_pipe *.vcd
