@@ -632,3 +632,36 @@ CoreMark 2.498 / 2.785、Dhrystone 1.488 / 1.496、アセンブラの核(4.04 / 
 **7.2 倍**。50 MHz で 41 MFLOPS は、FLD と FMADD を 1 本ずつしか発行できないこのコアで核が
 出せる上限(約 1.7)の 7 割。`fploop` には 32×32 の
 ブロッキング版(24 KB で D$ に入らない、2.40、上限 2.52)を足した。
+
+## 17. 最大の最適化での CoreMark と Dhrystone(2026-10-09)
+
+これまでの値は比較の条件をそろえるため `-O2`(と Zba / Zbb)で作ったもの。それと並べて、
+このコアで一番速くなるオプションで作ったものも測る(`software/bench/README.md`「最大の最適化」)。
+
+**オプションの選び方**: `SIM/SIM_SYS/bench/optsweep.sh` が CoreMark(10 回)と Dhrystone(500 回)を
+10 通りのオプション × rv64gc / Zba・Zbb で作り、SIM_SYS で走らせてサイクルから比べる。
+CoreMark の答え(`crcfinal` 0xfcaf)はどれも同じ。SIM_SYS の Dhrystone は文字列関数が自前の
+簡単なもの(実機は glibc)なので値は実機より低く、見るのは順位:
+
+| オプション | CoreMark/MHz | + Zba・Zbb | DMIPS/MHz | + Zba・Zbb |
+|---|---|---|---|---|
+| `-O2`(これまで) | 2.558 | 2.845 | 1.282 | 1.288 |
+| `-O3` | 2.673 | 2.986 | 1.297 | 1.300 |
+| `-O3 -funroll-loops` | 2.669 | 2.991 | 1.312 | 1.324 |
+| **sf** = `-O3 -funroll-all-loops -finline-functions --param max-inline-insns-auto=20 -falign-{functions,jumps,loops}=4` | **2.739** | **3.084** | 1.314 | 1.276 |
+| sf `-fipa-pta` | 2.736 | 3.085 | 1.291 | 1.324 |
+| sf、整列を 8 に | 2.726 | 3.085 | 1.265 | 1.296 |
+| **sf `-mtune=sifive-7-series`** | 2.699 | 3.066 | **1.368** | **1.324** |
+| `-O2 -flto` | 2.500 | 2.819 | *1.502* | *1.510* |
+| `-O3 -flto` | 2.729 | 3.052 | 1.277 | 1.257 |
+| sf `-flto` | 2.555 | 2.903 | 1.398 | 1.462 |
+
+- **CoreMark は sf**(`-O2` から +7.1 % / +8.4 %)。ループを全部ほどき、関数を展開し、分岐先を
+  4 バイトに揃える。`-flto` はかえって遅い(展開しすぎてコードが I$ に収まりにくくなる)。
+- **Dhrystone は sf + `-mtune=sifive-7-series`**(+6.7 % / +2.8 %)。`-mtune` は命令の並べ方の
+  モデルで、SiFive 7 系はこのコアと同じ 1 本ずつのインオーダ(Zba / Zbb の版では効きが小さい)。
+- **`-O2 -flto` の Dhrystone(+17 %)は規則の外**。Dhrystone の規則(`dhrystone.h`: 分割コンパイル、
+  手続きを併合しない、それ以外の最適化は明記すれば可)に反する(2 つのファイルをまたいで
+  手続きを展開する)ので、`dhrystone_lto` として別に作り、要約に「outside the rules」と付けて出す。
+
+**実機**: 測定待ち(`bench.sh` が `-O2` の値と並べて出す)。

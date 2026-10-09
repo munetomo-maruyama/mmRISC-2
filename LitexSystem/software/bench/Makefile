@@ -1,7 +1,8 @@
 #---------------------------------------------------------------------------
 # Makefile : benchmarks for mmRISC-2 under Linux (static RISC-V binaries)
 #
-#   make            out/coremark, out/dhrystone, out/micro
+#   make            out/coremark, out/dhrystone, out/micro (and the _zb, _max
+#                   and _zb_max builds of the first two, and dhrystone_lto)
 #   make tftp       copy them and bench.sh to the TFTP server (sudo); also
 #                   perf.sh, workload.sh and out/perf when
 #                   ../../scripts/build_perf.sh has made it (perf on the
@@ -36,11 +37,28 @@ CFLAGS   := $(ARCH) $(OPT) -static
 # the same with the bit manipulation of Zba / Zbb (CPU_CORE_SPEC.md decision
 # 65): coremark_zb and dhrystone_zb. The C library stays rv64gc.
 ARCH_ZB  := -march=rv64imafdc_zba_zbb -mabi=lp64d
+# the flags that make each of them fastest on this core, for coremark_max,
+# dhrystone_max and their _zb_ twins (chosen in SIM_SYS among -O3,
+# unrolling, inlining, LTO and -mtune: SIM/SIM_SYS/bench/optsweep.sh,
+# ../../docs/BENCH.md 17; they are not the same for the two). The -O2 builds
+# stay the ones to hold against other CPUs.
+#
+# Dhrystone's own rules (dhrystone.h) ask for separate compilation and no
+# procedure merging, so OPT_MAX_DHRY has no -flto. What -flto would give
+# (it inlines across the two files) is built apart, dhrystone_lto, as a
+# number outside the rules.
+OPT_MAX     := -O3 -funroll-all-loops -finline-functions --param max-inline-insns-auto=20 \
+               -falign-functions=4 -falign-jumps=4 -falign-loops=4
+OPT_MAX_CM   := $(OPT_MAX)
+OPT_MAX_DHRY := $(OPT_MAX) -mtune=sifive-7-series
+OPT_LTO_DHRY := -O2 -flto
 
 DHRY_SRC := $(RVTESTS)/benchmarks/dhrystone
 
 .PHONY: all tftp clean
-all: out/coremark out/dhrystone out/micro out/coremark_zb out/dhrystone_zb
+all: out/coremark out/dhrystone out/micro out/coremark_zb out/dhrystone_zb \
+     out/coremark_max out/dhrystone_max out/coremark_zb_max out/dhrystone_zb_max \
+     out/dhrystone_lto out/dhrystone_zb_lto
 
 out:
 	mkdir -p out out/dhry
@@ -59,6 +77,16 @@ out/coremark: | out
 out/coremark_zb: | out
 	$(CC) $(ARCH_ZB) $(OPT) -static -I$(COREMARK)/posix -I$(COREMARK) \
 	    -DFLAGS_STR='"$(ARCH_ZB) $(OPT) -static"' -DITERATIONS=0 -DPERFORMANCE_RUN=1 \
+	    $(CM_SRCS) -lrt -o $@
+
+out/coremark_max: | out
+	$(CC) $(ARCH) $(OPT_MAX_CM) -static -I$(COREMARK)/posix -I$(COREMARK) \
+	    -DFLAGS_STR='"$(ARCH) $(OPT_MAX_CM) -static"' -DITERATIONS=0 -DPERFORMANCE_RUN=1 \
+	    $(CM_SRCS) -lrt -o $@
+
+out/coremark_zb_max: | out
+	$(CC) $(ARCH_ZB) $(OPT_MAX_CM) -static -I$(COREMARK)/posix -I$(COREMARK) \
+	    -DFLAGS_STR='"$(ARCH_ZB) $(OPT_MAX_CM) -static"' -DITERATIONS=0 -DPERFORMANCE_RUN=1 \
 	    $(CM_SRCS) -lrt -o $@
 
 # Dhrystone 2.2 of riscv-tests. In the copy of dhrystone.h the timer is
@@ -92,6 +120,22 @@ out/dhrystone_zb: out/dhrystone
 	$(CC) $(ARCH_ZB) $(OPT) -static -std=gnu89 -fno-common -fno-builtin-printf -w -Iout/dhry \
 	    out/dhry/dhrystone.c out/dhry/dhrystone_main.c dhry_shim.c -o $@
 
+out/dhrystone_max: out/dhrystone
+	$(CC) $(ARCH) $(OPT_MAX_DHRY) -static -std=gnu89 -fno-common -fno-builtin-printf -w -Iout/dhry \
+	    out/dhry/dhrystone.c out/dhry/dhrystone_main.c dhry_shim.c -o $@
+
+out/dhrystone_zb_max: out/dhrystone
+	$(CC) $(ARCH_ZB) $(OPT_MAX_DHRY) -static -std=gnu89 -fno-common -fno-builtin-printf -w -Iout/dhry \
+	    out/dhry/dhrystone.c out/dhry/dhrystone_main.c dhry_shim.c -o $@
+
+out/dhrystone_lto: out/dhrystone
+	$(CC) $(ARCH) $(OPT_LTO_DHRY) -static -std=gnu89 -fno-common -fno-builtin-printf -w -Iout/dhry \
+	    out/dhry/dhrystone.c out/dhry/dhrystone_main.c dhry_shim.c -o $@
+
+out/dhrystone_zb_lto: out/dhrystone
+	$(CC) $(ARCH_ZB) $(OPT_LTO_DHRY) -static -std=gnu89 -fno-common -fno-builtin-printf -w -Iout/dhry \
+	    out/dhry/dhrystone.c out/dhry/dhrystone_main.c dhry_shim.c -o $@
+
 out/micro: micro.c loops.h fpkern.S fpkern.c fpkern.h | out
 	$(CC) $(CFLAGS) -Wall -o $@ micro.c fpkern.c fpkern.S
 
@@ -101,9 +145,11 @@ out/image2m.gz: ../boot/Image | out
 
 tftp: all out/image2m.gz
 	sudo cp out/coremark out/dhrystone out/micro out/coremark_zb out/dhrystone_zb \
-	    bench.sh $(TFTP_DIR)/
-	sudo chmod 644 $(TFTP_DIR)/coremark $(TFTP_DIR)/dhrystone $(TFTP_DIR)/micro \
-	    $(TFTP_DIR)/coremark_zb $(TFTP_DIR)/dhrystone_zb $(TFTP_DIR)/bench.sh
+	    out/coremark_max out/dhrystone_max out/coremark_zb_max out/dhrystone_zb_max \
+	    out/dhrystone_lto out/dhrystone_zb_lto bench.sh $(TFTP_DIR)/
+	cd $(TFTP_DIR) && sudo chmod 644 coremark dhrystone micro coremark_zb dhrystone_zb \
+	    coremark_max dhrystone_max coremark_zb_max dhrystone_zb_max \
+	    dhrystone_lto dhrystone_zb_lto bench.sh
 	if [ -f out/perf ]; then \
 	    sudo cp out/perf perf.sh workload.sh out/image2m.gz $(TFTP_DIR)/ && \
 	    sudo chmod 644 $(TFTP_DIR)/perf $(TFTP_DIR)/perf.sh $(TFTP_DIR)/workload.sh \
