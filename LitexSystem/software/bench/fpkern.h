@@ -1,7 +1,7 @@
 /*---------------------------------------------------------------------------
- * fpkern.h : the kernels of fpkern.S, and the same sums in C to hold their
- * answers against (micro.c on the board, SIM/SIM_SYS/bench/fploop.c in the
- * simulation)
+ * fpkern.h : the kernels of fpkern.S and fpkern.c, and the same sums in C
+ * to hold their answers against (micro.c on the board,
+ * SIM/SIM_SYS/bench/fploop.c in the simulation)
  *-------------------------------------------------------------------------*/
 #ifndef FPKERN_H
 #define FPKERN_H
@@ -12,6 +12,13 @@ void   fpk_fir8(long n, const double *x, const double *h, double *y);
 void   fpk_dgemm4(long n, const double *a, const double *b, double *c);
 /* x[0]*y[0] + ... + x[n-1]*y[n-1] (n a multiple of 8) */
 double fpk_dot(long n, const double *x, const double *y);
+/* c[0..3][0..nc-1] += a[0..3][0..kc-1] * (a panel of b packed as
+ * fpkern.c packs it); rows lda / ldc apart, kc even, nc a multiple of 4 */
+void   fpk_mm4xn(long kc, long nc, const double *a, long lda, const double *pb,
+                 double *c, long ldc);
+/* c += a * b, n x n, row major, blocked for the D$ (fpkern.c; n a
+ * multiple of 4) */
+void   fpk_dgemm_blk(long n, const double *a, const double *b, double *c);
 
 static inline void ref_fir8(long n, const double *x, const double *h, double *y)
 {

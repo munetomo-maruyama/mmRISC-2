@@ -92,8 +92,8 @@ out/dhrystone_zb: out/dhrystone
 	$(CC) $(ARCH_ZB) $(OPT) -static -std=gnu89 -fno-common -fno-builtin-printf -w -Iout/dhry \
 	    out/dhry/dhrystone.c out/dhry/dhrystone_main.c dhry_shim.c -o $@
 
-out/micro: micro.c loops.h fpkern.S fpkern.h | out
-	$(CC) $(CFLAGS) -Wall -o $@ micro.c fpkern.S
+out/micro: micro.c loops.h fpkern.S fpkern.c fpkern.h | out
+	$(CC) $(CFLAGS) -Wall -o $@ micro.c fpkern.c fpkern.S
 
 # the input of workload.sh's gunzip: the board's BusyBox has no gzip
 out/image2m.gz: ../boot/Image | out

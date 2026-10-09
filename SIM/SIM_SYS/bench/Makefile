@@ -84,9 +84,9 @@ ldloop.elf: $(ENV) ldloop.c ../../../LitexSystem/software/bench/loops.h
 
 # the floating point kernels of micro.c (LitexSystem/software/bench/fpkern.S)
 FPK := ../../../LitexSystem/software/bench
-fploop.elf: $(ENV) fploop.c $(FPK)/fpkern.S $(FPK)/fpkern.h
+fploop.elf: $(ENV) fploop.c $(FPK)/fpkern.S $(FPK)/fpkern.c $(FPK)/fpkern.h
 	$(CC) $(CFLAGS) -I. -I$(COREMARK) crt.S minilib.c ee/ee_printf.c fploop.c \
-	    $(FPK)/fpkern.S -lgcc -o $@
+	    $(FPK)/fpkern.c $(FPK)/fpkern.S -lgcc -o $@
 
 clean:
 	rm -rf dhry ee *.elf *.bin *.hex *.dis *.tohost

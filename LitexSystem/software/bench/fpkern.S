@@ -12,6 +12,10 @@
 //                           (n a multiple of 8, x has n + 7 elements)
 //   fpk_dgemm4(n, a, b, c)  c += a * b, n x n, row major (n a multiple of 4)
 //   fpk_dot(n, x, y)        x[0]*y[0] + ... (n a multiple of 8)
+//   fpk_mm4xn(kc, nc, a, lda, pb, c, ldc)
+//                           the inner kernel of the blocked matrix multiply
+//                           (fpkern.c): four rows of c += four rows of a
+//                           times a packed panel of b
 //
 // The order of the additions is the kernels' own, so the results may differ
 // from a plain C loop in the last bits (the callers compare with a margin).
@@ -184,6 +188,84 @@ fpk_dgemm4:                         // a0 n, a1 a, a2 b, a3 c
     FLDR    \r, %(8 * (\r - 18)), sp
     .endr
     addi    sp, sp, 80
+    ret
+
+//---------------------------------------------------------------------------
+// the inner kernel of the blocked matrix multiply (fpkern.c)
+//
+//   fpk_mm4xn(kc, nc, a, lda, pb, c, ldc)
+//     c[0..3][0..nc-1] += a[0..3][0..kc-1] * b[0..kc-1][0..nc-1]
+//     a     four rows, lda apart, read where they are
+//     pb    the panel of b packed by fpkern.c, four columns at a time:
+//           b[k][j+s] at pb[(j * kc) + k * 4 + s]
+//     c     rows ldc apart; kc even, nc a multiple of 4
+//
+// For each four columns: the 4 x 4 block of c into the registers (the same
+// ones as fpk_dgemm4), then for each k four loads of pb (32 bytes in a row)
+// and one of each row of a, and sixteen multiply-adds. Two k a turn: 16
+// loads, 32 operations and 6 others per 32 multiply-adds, about 1.7 cycles.
+// The rows of a (kc * 32 bytes) and the panel stay in the D$ while the
+// columns go past.
+//---------------------------------------------------------------------------
+.macro MMN_K kb, ka
+    FLDR    24, %(\kb + 0), a4
+    FLDR    25, %(\kb + 8), a4
+    FLDR    26, %(\kb + 16), a4
+    FLDR    27, %(\kb + 24), a4
+    FLDR    28, \ka, t2
+    FLDR    29, \ka, t4
+    MM_ROW  0
+    FLDR    30, \ka, t5
+    MM_ROW  1
+    FLDR    31, \ka, a3
+    MM_ROW  2
+    MM_ROW  3
+.endm
+
+    .globl fpk_mm4xn
+fpk_mm4xn:                          // a0 kc, a1 nc, a2 a, a3 lda, a4 pb, a5 c, a6 ldc
+    addi    sp, sp, -96
+    .irp r, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27
+    FSDR    \r, %(8 * (\r - 18)), sp
+    .endr
+    sd      s0, 80(sp)
+    slli    a3, a3, 3               // a row of a, of c: bytes
+    slli    t6, a6, 3
+    add     a7, a2, a3              // rows 1, 2, 3 of a
+    add     t0, a7, a3
+    add     t1, t0, a3
+    slli    s0, a0, 3
+    add     s0, s0, a2              // the end of row 0
+    beqz    a0, 3f
+    beqz    a1, 3f
+1:  mv      t3, a5                  // the block of c into the registers
+    .irp r, 0, 1, 2, 3
+    MM_CROW FLDR, \r
+    .endr
+    mv      t2, a2
+    mv      t4, a7
+    mv      t5, t0
+    mv      a3, t1
+2:  MMN_K   0, 0
+    MMN_K   32, 8
+    addi    a4, a4, 64
+    addi    t2, t2, 16
+    addi    t4, t4, 16
+    addi    t5, t5, 16
+    addi    a3, a3, 16
+    bne     t2, s0, 2b
+    mv      t3, a5                  // and back
+    .irp r, 0, 1, 2, 3
+    MM_CROW FSDR, \r
+    .endr
+    addi    a5, a5, 32
+    addi    a1, a1, -4
+    bnez    a1, 1b
+3:  ld      s0, 80(sp)
+    .irp r, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27
+    FLDR    \r, %(8 * (\r - 18)), sp
+    .endr
+    addi    sp, sp, 96
     ret
 
 //---------------------------------------------------------------------------

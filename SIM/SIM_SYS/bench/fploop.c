@@ -18,10 +18,13 @@ int ee_printf(const char *fmt, ...);
 #define MN  16          /* matrix multiply: 16 x 16, 4096 multiply-adds */
 #define FN  256         /* FIR: 256 outputs, 2048 multiply-adds */
 #define DN  512         /* dot product: 512 multiply-adds */
+#define BN  32          /* blocked matrix multiply: 32 x 32 (24 KB, more
+                           than the D$), 32768 multiply-adds */
 
 static double a[MN * MN], b[MN * MN], c[MN * MN], c_ref[MN * MN];
 static double x[FN + 8], h[8], y[FN], y_ref[FN];
 static double u[DN], v[DN];
+static double ba[BN * BN], bb[BN * BN], bc[BN * BN];
 
 static inline unsigned long cycles(void)
 {
@@ -77,6 +80,27 @@ int main(void)
     report("dgemm 16x16, C -O2   ", c1 - c0, MN * MN * MN, 1650);
     for (int i = 0; i < MN * MN; i++)
         if (!fpk_close(c[i], c_ref[i])) bad++;
+
+    /* matrix multiply blocked for the D$ (fpkern.c); checked at 64 places,
+     * a whole C reference would take longer than the rest of the run */
+    for (int i = 0; i < BN * BN; i++) {
+        ba[i] = 1.0 + i * 0.0003;
+        bb[i] = 2.0 - i * 0.0002;
+    }
+    for (int r = 0; r < 2; r++) {
+        for (int i = 0; i < BN * BN; i++) bc[i] = 0.0;
+        c0 = cycles();
+        fpk_dgemm_blk(BN, ba, bb, bc);
+        c1 = cycles();
+    }
+    report("dgemm 32x32, blocked ", c1 - c0, BN * BN * BN, 252);
+    for (int t = 0; t < 64; t++) {
+        int i = (t * 7) % BN, j = (t * 13 + 5) % BN;
+        double s = 0.0;
+        for (int k = 0; k < BN; k++)
+            s += ba[i * BN + k] * bb[k * BN + j];
+        if (!fpk_close(s, bc[i * BN + j])) bad++;
+    }
 
     /* FIR */
     for (int r = 0; r < 2; r++) {

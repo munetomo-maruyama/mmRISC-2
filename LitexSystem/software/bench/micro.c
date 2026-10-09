@@ -19,7 +19,8 @@
  *   dgemm                 double precision multiply and add, in C
  *   fp kernels            (micro 50 fp for these alone) the kernels of
  *                         fpkern.S in assembler for the pipelined FPU:
- *                         matrix multiply in 4 x 4 blocks, FIR of 8 taps,
+ *                         matrix multiply in 4 x 4 blocks (as it is, and
+ *                         blocked for the D$: fpkern.c), FIR of 8 taps,
  *                         dot product; their answers held against C
  *   sweep                 (micro 50 sweep) the stride 64 load loop over
  *                         8 ... 256 lines, all within the D$
@@ -238,6 +239,12 @@ static void body_dgemm4(long n)
         fpk_dgemm4(DN, &A[0][0], &B[0][0], &C2[0][0]);
 }
 
+static void body_dgemm_blk(long n)
+{
+    for (long r = 0; r < n; r++)
+        fpk_dgemm_blk(DN, &A[0][0], &B[0][0], &C2[0][0]);
+}
+
 static void body_fir(long n)
 {
     for (long r = 0; r < n; r++)
@@ -278,6 +285,17 @@ static void fp_kernels(void)
     n = 1;
     t = timed(body_dgemm4, &n, 1.0);
     fp_report("dgemm 64x64 asm 4x4     ", t, (double)DN * DN * DN * n);
+
+    for (int i = 0; i < DN; i++)
+        for (int j = 0; j < DN; j++)
+            C2[i][j] = 0.0;
+    fpk_dgemm_blk(DN, &A[0][0], &B[0][0], &C2[0][0]);
+    for (int i = 0; i < DN; i++)
+        for (int j = 0; j < DN; j++)
+            if (!fpk_close(C[i][j], C2[i][j])) bad++;
+    n = 1;
+    t = timed(body_dgemm_blk, &n, 1.0);
+    fp_report("dgemm 64x64 asm blocked ", t, (double)DN * DN * DN * n);
 
     for (int i = 0; i < FIRN + 8; i++) fx[i] = (i % 17) * 0.25 - 2.0;
     for (int k = 0; k < 8; k++)        fh[k] = 0.125 * (k + 1);
