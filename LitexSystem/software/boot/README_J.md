@@ -13,9 +13,9 @@
 
 第 1 パーティションに置く 3 つは、すべてこのディレクトリ(`software/boot/`)にある。
 
-| ファイル | 出どころ | ロード先 | md5(2026-10-04) |
+| ファイル | 出どころ | ロード先 | md5(2026-10-10) |
 |---|---|---|---|
-| `fw_jump.bin` | `scripts/build_opensbi.sh` がここに作る(デバイスツリー入り) | 0x8000_0000 | `28461f3da61988ac2ee6e61d7ddf1570` |
+| `fw_jump.bin` | `scripts/build_opensbi.sh` がここに作る(デバイスツリー入り) | 0x8000_0000 | `2f8e1e041befba9b618a2f9b0697c050` |
 | `Image` | Linux カーネル。Rocket 構成で作ったものと同じ設定に、性能カウンタ(`perf`)のための `CONFIG_PERF_EVENTS` / `CONFIG_RISCV_PMU_SBI` を足して作り直したもの(2026-10、`CPU_CORE_SPEC.md` 決定 69) | 0x8020_0000 | `1d886448db1ae0b8e1629cfeba6b605b` |
 | `boot.json` | BIOS が読む配置表。Rocket 構成と同じ | ― | `a1c356008baa859fa615b879d0fa18f3` |
 

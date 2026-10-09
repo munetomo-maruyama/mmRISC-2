@@ -144,7 +144,8 @@ SIM/
 
 LitexSystem/        LiteX の SoC に mmRISC-2 を載せ、Arty で Linux を動かす一式  → LitexSystem/README.md
 FPGA/ARTY_A7_100T/  LiteX なしの単体ビルド(デバッグ論理の確認用)、制約、OpenOCD 設定
-LitexRocket/        Rocket 構成の LiteX 一式(ワークスペース、カーネルのソース、BusyBox。リポジトリには含めない)
+LitexRocket/        Rocket 構成の LiteX 一式(ワークスペース、OpenSBI とカーネルのソース。リポジトリには含めない。
+                    作り方は LitexSystem/README_J.md の「準備」)
 ```
 
 ## シミュレーション

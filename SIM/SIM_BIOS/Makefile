@@ -119,7 +119,7 @@ linux: obj_dir/V$(TOP) fw_jump.hex Image.hex
 # two cannot drift apart: the initramfs at 0x8200_0000, and bootargs that
 # run BusyBox init from it (/init; on the SD card /sbin/init, the same
 # program: its applet links are made at run time by inittab).
-INITRD_BIN := /home/taka/mmlitex_build/initrd_bb
+INITRD_BIN := $(HOME)/mmlitex_build/initrd_bb
 INITRD_ADDR := 0x82000000
 
 sim_initrd.dts: ../../LitexSystem/software/mmrisc_arty.dts $(INITRD_BIN)
@@ -149,7 +149,7 @@ linux-initrd: obj_dir/V$(TOP) fw_jump_initrd.hex Image.hex initrd.hex
 # of the inittab goes: there is no Ethernet model, and udhcpc would wait
 # several seconds of simulated time before going to the background.
 # 18 MiB, so the card reports a C_SIZE of 35.
-ROOTFS_SRC := /home/taka/mmlitex_build/initramfs
+ROOTFS_SRC := $(HOME)/mmlitex_build/initramfs
 OVERLAY    := ../../LitexSystem/software/rootfs
 
 # $(1): what is added to the tree before it is written (nothing for the

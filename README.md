@@ -146,7 +146,8 @@ SIM/
 
 LitexSystem/        mmRISC-2 in a LiteX SoC running Linux on the Arty  → LitexSystem/README.md
 FPGA/ARTY_A7_100T/  stand-alone build without LiteX (for checking the debug logic), constraints, OpenOCD configuration
-LitexRocket/        LiteX with the Rocket configuration (workspace, kernel source, BusyBox; not in the repository)
+LitexRocket/        LiteX with the Rocket configuration (workspace, OpenSBI and kernel source; not in the repository,
+                    built as in "Preparation" of LitexSystem/README.md)
 ```
 
 ## Simulation
