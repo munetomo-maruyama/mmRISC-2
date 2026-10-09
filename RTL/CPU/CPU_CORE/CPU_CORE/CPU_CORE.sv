@@ -790,6 +790,7 @@ module CPU_CORE
     //=================================================================
     logic [63:0] csr_rdata, csr_rmw;
     logic        csr_exists, csr_readonly, csr_denied;
+    logic        dbg_csr_exists, dbg_csr_readonly;   // for the debugger's rd_addr
     logic        csr_wr_en;
     logic        trap_en, trap_int_c;
     logic [4:0]  trap_cause_c;
@@ -883,9 +884,12 @@ module CPU_CORE
             .rd_addr     (dbg_csr_sel ? dbg_regno_q[11:0] : ex_csr_addr),
             .rd_data     (csr_rdata),
             .rmw_data    (csr_rmw),
-            .rd_exists   (csr_exists),
-            .rd_readonly (csr_readonly),
-            .rd_denied   (csr_denied),
+            .rd_exists   (dbg_csr_exists),
+            .rd_readonly (dbg_csr_readonly),
+            .ex_addr     (ex_csr_addr),
+            .ex_exists   (csr_exists),
+            .ex_readonly (csr_readonly),
+            .ex_denied   (csr_denied),
             .wr_en       (csr_wr_en | dbg_csr_we),
             .wr_addr     (dbg_csr_we ? dbg_regno_q[11:0] : ma_csr_addr),
             .wr_data     (dbg_csr_we ? dbg_rw_data       : ma_csr_wdata),
@@ -2249,8 +2253,8 @@ module CPU_CORE
     logic        dra_exists, dra_ro;
     always @(*) begin
         dra_old    = dra_gpr ? rf_rs1_data : dra_fpr ? frf_fs1_data : csr_rdata;
-        dra_exists = dra_gpr | dra_fpr | (dra_csr & csr_exists);
-        dra_ro     = dra_csr & csr_readonly;
+        dra_exists = dra_gpr | dra_fpr | (dra_csr & dbg_csr_exists);
+        dra_ro     = dra_csr & dbg_csr_readonly;
     end
 
     always_ff @(posedge clk or negedge rst_n) begin

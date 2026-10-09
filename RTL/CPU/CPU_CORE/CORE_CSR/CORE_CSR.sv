@@ -71,13 +71,20 @@ module CORE_CSR
         input  logic        clk,
         input  logic        rst_n,
 
-        // read port (EX)
+        // read port (EX, or the debugger while the hart is halted)
         input  logic [11:0] rd_addr,
         output logic [63:0] rd_data,
         output logic [63:0] rmw_data,      // what csrrs / csrrc start from
-        output logic        rd_exists,     // the CSR is implemented
-        output logic        rd_readonly,   // writing it is an illegal instruction
-        output logic        rd_denied,     // not allowed at the current level
+        output logic        rd_exists,     // the CSR is implemented (for dbg_access)
+        output logic        rd_readonly,   // writing it is an error
+
+        // the checks of the CSR instruction in EX. They look at its own
+        // address, not at rd_addr, so that the debugger's register number
+        // (rd_addr while halted) is not on the path to the exception.
+        input  logic [11:0] ex_addr,
+        output logic        ex_exists,     // the CSR is implemented
+        output logic        ex_readonly,   // writing it is an illegal instruction
+        output logic        ex_denied,     // not allowed at the current level
 
         // write port (commit, one cycle)
         input  logic        wr_en,
@@ -466,12 +473,81 @@ module CORE_CSR
     //-----------------------------------------------------------------
     // read
     //
-    //   `rd_exists` says the address is implemented, `rd_denied` that the
-    //   current level may not touch it. Both end up as an illegal
-    //   instruction; they are separate only to keep the reasons readable.
+    //   `csr_check` says whether an address is implemented and whether the
+    //   current level may touch it (both end up as an illegal instruction;
+    //   they are separate only to keep the reasons readable). It is used
+    //   twice: on the address of the instruction in EX, and on rd_addr for
+    //   the debugger. rd_data itself does not need to know either.
     //-----------------------------------------------------------------
-    logic        ctr_denied;
-    logic [4:0]  ctr_bit;
+    function automatic logic [1:0] csr_check     // {exists, denied}
+        (
+            input logic [11:0] a,
+            input logic        dbg,              // the debugger asks
+            input logic [1:0]  lvl,              // the current level
+            input logic [31:0] mcen,             // mcounteren
+            input logic [31:0] scen,             // scounteren
+            input logic        stce,             // menvcfg.STCE
+            input logic        tvm               // mstatus.TVM
+        );
+        logic ex, dn, ctr_dn;
+        int   cs, ai;
+        // cycle / time / instret / hpmcounterN are readable below M only
+        // when the level above says so in its counteren
+        ctr_dn = (lvl != PRIV_M) &
+                 (~mcen[a[4:0]] | ((lvl == PRIV_U) & ~scen[a[4:0]]));
+        ex = 1'b1;
+        dn = 1'b0;
+        case (a)
+            CSR_FFLAGS, CSR_FRM, CSR_FCSR,
+            CSR_SSTATUS, CSR_SIE, CSR_STVEC, CSR_SCOUNTEREN, CSR_SSCRATCH,
+            CSR_SEPC, CSR_SCAUSE, CSR_STVAL, CSR_SIP, CSR_SENVCFG,
+            CSR_MENVCFG, CSR_MCOUNTINHIBIT, CSR_MCYCLECFG, CSR_MINSTRETCFG,
+            CSR_SCOUNTOVF,
+            CSR_MSTATUS, CSR_MISA, CSR_MEDELEG, CSR_MIDELEG, CSR_MIE,
+            CSR_MTVEC, CSR_MCOUNTEREN, CSR_MSCRATCH, CSR_MEPC, CSR_MCAUSE,
+            CSR_MTVAL, CSR_MIP, CSR_MCYCLE, CSR_MINSTRET,
+            CSR_MVENDORID, CSR_MARCHID, CSR_MIMPID, CSR_MHARTID,
+            CSR_TSELECT, CSR_TDATA1, CSR_TDATA2, CSR_TDATA3, CSR_TINFO,
+            CSR_TCONTROL  : ;
+            // below M only with STCE and with the time counter allowed
+            CSR_STIMECMP  : dn = (lvl != PRIV_M) & (~stce | ~mcen[1]);
+            // TVM traps the supervisor reading or writing satp
+            CSR_SATP      : dn = (lvl == PRIV_S) & tvm;
+            CSR_CYCLE, CSR_TIME, CSR_INSTRET : dn = ctr_dn;
+            CSR_DCSR, CSR_DPC, CSR_DSCRATCH0, CSR_DSCRATCH1 : ex = dbg;
+            default       : begin
+                // mhpmcounter3-31 (0xB03-), hpmcounter3-31 (0xC03-),
+                // mhpmevent3-31 (0x323-), and the PMP registers
+                cs = int'(a) - int'(CSR_PMPCFG0);
+                ai = int'(a) - int'(CSR_PMPADDR0);
+                ex = ((a[4:0] >= 5'd3) &&
+                      ((a[11:5] == 7'h58) || (a[11:5] == 7'h60) || (a[11:5] == 7'h19))) ||
+                     ((PMP_CSRS > 0) && (cs >= 0) && (cs < 16) && (cs % 2 == 0) &&
+                      ((cs / 2) * 8 < PMP_CSRS)) ||
+                     ((PMP_CSRS > 0) && (ai >= 0) && (ai < PMP_CSRS));
+                // hpmcounterN like cycle / instret
+                if (a[11:5] == 7'h60) dn = ctr_dn;
+            end
+        endcase
+        // bits 9:8 of the address are the lowest level that may use it
+        if (a[9:8] > lvl) dn = 1'b1;
+        return {ex, dn};
+    endfunction
+
+    // the debugger is not subject to the level
+    /* verilator lint_off UNUSEDSIGNAL */
+    logic        rd_denied_unused;
+    /* verilator lint_on UNUSEDSIGNAL */
+    assign {ex_exists, ex_denied} = csr_check(ex_addr, 1'b0, priv_r, mcounteren,
+                                              scounteren, menvcfg_stce, mstatus_tvm);
+    assign {rd_exists, rd_denied_unused} = csr_check(rd_addr, dbg_access, priv_r,
+                                              mcounteren, scounteren, menvcfg_stce,
+                                              mstatus_tvm);
+
+    // the two top bits of the address say whether the CSR can be written
+    assign ex_readonly = (ex_addr[11:10] == 2'b11);
+    assign rd_readonly = (rd_addr[11:10] == 2'b11);
+
     logic        hpm_rd_hit;
     logic [63:0] hpm_rdata;
     int          rd_hpm_idx;
@@ -496,7 +572,6 @@ module CORE_CSR
             end
         end
     end
-    logic        pmp_hit;
     logic [63:0] pmp_rdata;
 
     // pmpcfg0 / pmpcfg2 / ... : even numbered only on RV64, eight entries each
@@ -506,7 +581,6 @@ module CORE_CSR
     int rd_cfg_sel, rd_cfg_base, rd_addr_idx;
 
     always @(*) begin
-        pmp_hit     = 1'b0;
         pmp_rdata   = 64'd0;
         rd_cfg_sel  = int'(rd_addr) - int'(CSR_PMPCFG0);
         rd_cfg_base = (rd_cfg_sel / 2) * 8;
@@ -514,33 +588,18 @@ module CORE_CSR
         if (PMP_CSRS > 0) begin
             if ((rd_cfg_sel >= 0) && (rd_cfg_sel < 16) && (rd_cfg_sel % 2 == 0) &&
                 (rd_cfg_base < PMP_CSRS)) begin
-                pmp_hit = 1'b1;
                 for (int i = 0; i < 8; i++)
                     if (rd_cfg_base + i < PMP_ENTRIES)
                         pmp_rdata[8*i +: 8] = pmpcfg[rd_cfg_base + i];
             end else if ((rd_addr_idx >= 0) && (rd_addr_idx < PMP_CSRS)) begin
-                pmp_hit = 1'b1;
                 if (rd_addr_idx < PMP_ENTRIES)
                     pmp_rdata = {10'd0, pmpaddr[rd_addr_idx]};
             end
         end
     end
 
-    // cycle / time / instret are readable below M only when the level above
-    // says so in its counteren
-    assign ctr_bit    = rd_addr[4:0];
-    always @(*) begin
-        ctr_denied = 1'b0;
-        if (priv_r != PRIV_M) begin
-            if (!mcounteren[ctr_bit]) ctr_denied = 1'b1;
-            else if ((priv_r == PRIV_U) && !scounteren[ctr_bit]) ctr_denied = 1'b1;
-        end
-    end
-
     always @(*) begin
         rd_data   = 64'd0;
-        rd_exists = 1'b1;
-        rd_denied = 1'b0;
         case (rd_addr)
             CSR_FFLAGS    : rd_data = {59'd0, fflags};
             CSR_FRM       : rd_data = {61'd0, frm};
@@ -555,11 +614,7 @@ module CORE_CSR
             CSR_STVAL     : rd_data = stval;
             CSR_SIP       : rd_data = sip_val;
             CSR_SENVCFG   : rd_data = 64'd0;
-            CSR_STIMECMP  : begin
-                rd_data   = stimecmp;
-                // below M only with STCE and with the time counter allowed
-                rd_denied = (priv_r != PRIV_M) & (~menvcfg_stce | ~mcounteren[1]);
-            end
+            CSR_STIMECMP  : rd_data = stimecmp;
             CSR_MENVCFG   : rd_data = {menvcfg_stce, 63'd0};
             CSR_MCOUNTINHIBIT: rd_data = {32'd0, hpm_inh[31:3], inhibit_ir, 1'b0, inhibit_cy};
             CSR_MCYCLECFG : rd_data = {1'b0, cy_minh, cy_sinh, cy_uinh, 60'd0};
@@ -568,11 +623,7 @@ module CORE_CSR
             // it read that counter
             CSR_SCOUNTOVF : rd_data = {32'd0, hpm_ovf &
                                        ((priv_r == PRIV_M) ? 32'hFFFF_FFFF : mcounteren)};
-            CSR_SATP      : begin
-                rd_data   = satp;
-                // TVM traps the supervisor reading or writing satp
-                rd_denied = (priv_r == PRIV_S) & mstatus_tvm;
-            end
+            CSR_SATP      : rd_data = satp;
             CSR_MSTATUS   : rd_data = mstatus_val;
             CSR_MISA      : rd_data = MISA;
             CSR_MEDELEG   : rd_data = medeleg;
@@ -587,42 +638,28 @@ module CORE_CSR
             CSR_MIP       : rd_data = mip_val;
             CSR_MCYCLE    : rd_data = mcycle;
             CSR_MINSTRET  : rd_data = minstret;
-            CSR_CYCLE     : begin rd_data = mcycle;   rd_denied = ctr_denied; end
-            CSR_TIME      : begin rd_data = mtime;    rd_denied = ctr_denied; end
-            CSR_INSTRET   : begin rd_data = minstret; rd_denied = ctr_denied; end
+            CSR_CYCLE     : rd_data = mcycle;
+            CSR_TIME      : rd_data = mtime;
+            CSR_INSTRET   : rd_data = minstret;
             CSR_MVENDORID : rd_data = 64'd0;
             CSR_MARCHID   : rd_data = 64'd0;
             CSR_MIMPID    : rd_data = 64'd0;
             CSR_MHARTID   : rd_data = HART_ID;
-            CSR_DCSR      : begin
-                rd_data   = {32'd0, 4'd4, 12'd0, dcsr_ebreakm_r, 1'b0,
-                             dcsr_ebreaks_r, dcsr_ebreaku_r, 3'b000, dcsr_cause,
-                             3'b000, dcsr_step_r, dcsr_prv};
-                rd_exists = dbg_access;
-            end
+            CSR_DCSR      : rd_data = {32'd0, 4'd4, 12'd0, dcsr_ebreakm_r, 1'b0,
+                                       dcsr_ebreaks_r, dcsr_ebreaku_r, 3'b000, dcsr_cause,
+                                       3'b000, dcsr_step_r, dcsr_prv};
             CSR_TSELECT   : rd_data = 64'(tselect);
             CSR_TDATA1    : rd_data = tdata1_val;
             CSR_TDATA2    : rd_data = t_data2[tselect];
             CSR_TDATA3    : rd_data = 64'd0;     // no textra
             CSR_TINFO     : rd_data = 64'd4;     // type 2 only
             CSR_TCONTROL  : rd_data = {56'd0, tc_mpte, 3'd0, tc_mte, 3'd0};
-            CSR_DPC       : begin rd_data = dpc;       rd_exists = dbg_access; end
-            CSR_DSCRATCH0 : begin rd_data = dscratch0; rd_exists = dbg_access; end
-            CSR_DSCRATCH1 : begin rd_data = dscratch1; rd_exists = dbg_access; end
-            default       : begin
-                rd_data   = hpm_rd_hit ? hpm_rdata : pmp_rdata;
-                rd_exists = pmp_hit | hpm_rd_hit;
-                // hpmcounterN like cycle / instret
-                if (rd_addr[11:5] == 7'h60) rd_denied = ctr_denied;
-            end
+            CSR_DPC       : rd_data = dpc;
+            CSR_DSCRATCH0 : rd_data = dscratch0;
+            CSR_DSCRATCH1 : rd_data = dscratch1;
+            default       : rd_data = hpm_rd_hit ? hpm_rdata : pmp_rdata;
         endcase
-
-        // bits 9:8 of the address are the lowest level that may use it
-        if (rd_addr[9:8] > priv_r) rd_denied = 1'b1;
     end
-
-    // the two top bits of the address say whether the CSR can be written
-    assign rd_readonly = (rd_addr[11:10] == 2'b11);
 
     //-----------------------------------------------------------------
     // interrupts

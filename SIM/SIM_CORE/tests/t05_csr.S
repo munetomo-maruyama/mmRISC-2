@@ -177,6 +177,14 @@ _start:
     csrr x11, mscratch                   // this one exists : no trap
     TEST_EQ(31, x29, 0)
 
+    // the debug CSRs exist only for the debugger, even in M mode
+    li   x29, 0
+    csrr x11, 0x7B1                      // dpc
+    TEST_EQ(302, x29, 1)
+    li   x29, 0
+    csrw 0x7B2, x0                       // dscratch0
+    TEST_EQ(303, x29, 1)
+
     // reading a read only CSR is allowed
     li   x29, 0
     csrr x11, 0xC00

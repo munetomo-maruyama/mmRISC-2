@@ -100,7 +100,7 @@ WNS is +0.113 ns. Before adding logic with a large theme, deal with the paths th
 
 | # | Theme | Size | Contents |
 |---|---|---|---|
-| T1 | Separate EX's CSR checks from the debugger's number | Small | The worst path today (section 34 of `TIMING.md`). The read address of the CSR file goes through a "debugger's number / EX's instruction" multiplexer, and EX's exception checks are behind it. The debugger reads CSRs only while halted, so build EX's exception from `ex_csr_addr` alone and give the debugger checks of its own |
+| T1 | Separate EX's CSR checks from the debugger's number | Small | **RTL done (2026-10-10, decision 70 of `CPU_CORE_SPEC.md`), board timing pending.** The worst path today (section 34 of `TIMING.md`). The read address of the CSR file goes through a "debugger's number / EX's instruction" multiplexer, and EX's exception checks are behind it. The debugger reads CSRs only while halted, so build EX's exception from `ex_csr_addr` alone and give the debugger checks of its own |
 | T2 | Separate EX's stall from the DTLB compare | Medium | "Forwarding from MA → EX's address add → DTLB compare → stall" of section 32 of `TIMING.md`. A DTLB miss only needs to be known in MR. What taking back the D$ request involves when the stall comes a cycle later needs study |
 | T3 | Duplicate `ma_mem` | Small | Reduce the fanout of the first level (72). A small measure whose effect depends on placement |
 

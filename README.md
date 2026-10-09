@@ -161,7 +161,7 @@ official tests, down to confirming that the tests find deliberately broken RTL (
 | `cd SIM/SIM_CORE && make riscv-tests` | The official riscv-tests (rv64ui / um / ua / uc / uf / ud / uzba / uzbb / uzicond / mi / si) | 167 PASS, 4 known failures (tests that need unimplemented features) |
 | `cd SIM/SIM_CORE && make riscv-tests-v` | The same tests in the virtual memory (Sv39) environment | 143 PASS, 4 known failures |
 | `cd SIM/SIM_CORE && make mdu / clint / plic` | Multiply / divide (reference model, 200,000 operations), CLINT (4 harts), PLIC | PASS |
-| `cd SIM/SIM_CORE && ./bug_inject.sh` | 315 bug injections (with and without back pressure) | All detected |
+| `cd SIM/SIM_CORE && ./bug_inject.sh` | 317 bug injections (with and without back pressure) | All detected |
 | `cd SIM/SIM_SYS && make` | Core + real L1 / L2 caches + AXI + DMA port (25 home-made tests, 4 programs for DMA, PMU and others). `PARAMS=-GL2_SIZE=0` for no L2 | All PASS (with / without L2) |
 | `cd SIM/SIM_SYS && make riscv-tests` | riscv-tests through the real caches | 133 PASS, 4 known failures |
 | `cd SIM/SIM_SYS && ./bug_inject.sh` | 17 bug injections (including the cycle bounds of the floating point kernels, `bench/fploop`) | All detected |
