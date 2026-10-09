@@ -1,5 +1,7 @@
 # mmRISC-2 L2 キャッシュ 設計案
 
+[English](CPU_L2_SPEC.md)
+
 - 版: Rev-3(2026-10-07)。段階 4(実機の測定)まで済み。実機の結果は 1 章の終わりと
   `LitexSystem/docs/BENCH.md` 15 章、負荷試験 120 分は PASS(`BRINGUP.md` 17 回目)。残りは
   置き換えの比較(9 章)

@@ -1,5 +1,7 @@
 # Arty A7-100T 合成結果の解析（第 1 回ビットストリーム）
 
+[English](TIMING.md)
+
 対象: `LitexSystem/build/gateware/` 2026-09-21 の Vivado 2025.1 実行
 デバイス: xc7a100tcsg324-1 / システムクロック 50 MHz (`main_clkout0`, 周期 20 ns)
 

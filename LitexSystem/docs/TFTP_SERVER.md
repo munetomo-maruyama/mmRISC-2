@@ -1,52 +1,58 @@
 <!--
-  mmRISC-2 の LiteX BIOS の TFTP ネットブート(LitexSystem/software/boot/README.md
-  の「LiteX BIOS の TFTP ネットブート」)で、TFTP サーバを Mac の Parallels Desktop 上の
-  Ubuntu に立てたときのノウハウ。別の Claude のチャット「Parallels Desktop の Ubuntu への
-  TFTP アクセス」でまとめたもの(2026-09-26)を、そのまま記録する。
+  Know-how from setting up the TFTP server for the TFTP netboot of mmRISC-2's LiteX BIOS
+  (LitexSystem/software/boot/README.md, "TFTP netboot of the LiteX BIOS") on Ubuntu in Parallels
+  Desktop on a Mac. Summarized in another Claude chat, "TFTP access to Ubuntu on Parallels
+  Desktop" (2026-09-26), and recorded here as it was.
 
-  このボードでの補足:
-  - クライアントは Arty の LiteX BIOS(`netboot`)。BIOS は `blksize 1024` を要求する
-    (下の tcpdump の例と同じ)。置くファイルは Image、fw_jump.bin、boot.json。
-  - 実機で最初に netboot が失敗したのは、下の 3 章の ufw で UDP 69 が閉じていたため。
-  - ボード側の Linux にも BusyBox の tftp クライアントがあり、外部機器からの確認に使える:
-    `tftp -g -b 1024 -r <FILE> <SERVER_IP>`
+  Notes for this board:
+  - The client is the Arty's LiteX BIOS (`netboot`). The BIOS asks for `blksize 1024` (as in the
+    tcpdump example below). The files to put there are Image, fw_jump.bin and boot.json.
+  - The first netboot on the board failed because ufw had UDP 69 closed (section 3 below).
+  - Linux on the board also has BusyBox's tftp client, which can be used to check from an outside
+    machine: `tftp -g -b 1024 -r <FILE> <SERVER_IP>`
 -->
 
-# Mac (Parallels Desktop) 上の Ubuntu で TFTP サーバを外部公開する手順
+# Serving TFTP to the LAN from Ubuntu on a Mac (Parallels Desktop)
 
-Mac 上の Parallels Desktop で動く Ubuntu に TFTP サーバを立て、同一 LAN 上の外部機器（評価ボードなど）からアクセスできるようにするための手順と、つまずきやすいポイントをまとめたものです。
+[日本語](TFTP_SERVER_J.md)
 
-## 表記
+How to run a TFTP server on Ubuntu in Parallels Desktop on a Mac so that outside machines on the same
+LAN (an evaluation board, for example) can reach it, and the points where it is easy to get stuck.
 
-本文中のプレースホルダは環境に合わせて読み替えてください。
+## Notation
 
-| 表記 | 意味 | 例 |
+Read the placeholders in the text as fits your setup.
+
+| Placeholder | Meaning | Example |
 |---|---|---|
-| `<SERVER_IP>` | Ubuntu（TFTP サーバ）の IP アドレス | 192.168.x.y |
-| `<CLIENT_IP>` | 外部機器（TFTP クライアント）の IP アドレス | 192.168.x.z |
-| `<LAN_SUBNET>` | LAN のサブネット | 192.168.x.0/24 |
-| `<IFACE>` | Ubuntu のネットワークインターフェース名 | enp0s5 など |
-| `<FILE>` | 取得するファイル名 | boot.bin など |
+| `<SERVER_IP>` | IP address of Ubuntu (the TFTP server) | 192.168.x.y |
+| `<CLIENT_IP>` | IP address of the outside machine (the TFTP client) | 192.168.x.z |
+| `<LAN_SUBNET>` | LAN subnet | 192.168.x.0/24 |
+| `<IFACE>` | Ubuntu's network interface | enp0s5, for example |
+| `<FILE>` | File to fetch | boot.bin, for example |
 
-## 1. Parallels：ブリッジネットワークにする
+## 1. Parallels: use a bridged network
 
-VM の「構成」→「ハードウェア」→「ネットワーク」で、ソースを「ブリッジネットワーク」にし、外部機器がつながっている Mac のインターフェース（Wi-Fi / Ethernet / USB-Ethernet）を明示的に選びます。
+In the VM's "Configuration" → "Hardware" → "Network", set the source to "Bridged Network" and choose
+explicitly the Mac interface the outside machine is connected to (Wi-Fi / Ethernet / USB-Ethernet).
 
-共有ネットワーク（NAT）でもポート転送は設定できますが、TFTP は最初の要求だけ UDP 69 を使い、データ転送はサーバ側がエフェメラルポートから応答するため、NAT 越しでは不安定になりやすいです。ブリッジのほうが確実です。
+Port forwarding can be set up with the shared network (NAT) too, but TFTP uses UDP 69 only for the
+first request, and the server answers the data transfer from an ephemeral port, so it tends to be
+unreliable through NAT. A bridge is the sure way.
 
-設定後、Ubuntu が LAN のアドレスを持っていることを確認します。
+After setting it, check that Ubuntu has a LAN address.
 
 ```bash
 ip -4 addr
 ```
 
-## 2. Ubuntu：tftpd-hpa をインストール・設定
+## 2. Ubuntu: install and configure tftpd-hpa
 
 ```bash
 sudo apt install tftpd-hpa tftp-hpa
 ```
 
-`/etc/default/tftpd-hpa`：
+`/etc/default/tftpd-hpa`:
 
 ```
 TFTP_USERNAME="tftp"
@@ -55,7 +61,8 @@ TFTP_ADDRESS=":69"
 TFTP_OPTIONS="--secure"
 ```
 
-クライアントからのアップロード（put）で新規ファイル作成を許可する場合は `--create` を、ログを詳しく見たい場合は `-v -v` を `TFTP_OPTIONS` に追加します。
+To allow uploads (put) from clients to create new files, add `--create` to `TFTP_OPTIONS`; for a more
+detailed log, add `-v -v`.
 
 ```bash
 sudo mkdir -p /srv/tftp
@@ -64,44 +71,49 @@ sudo chmod 775 /srv/tftp
 sudo systemctl restart tftpd-hpa
 ```
 
-待ち受けを確認します。`0.0.0.0:69`（または `*:69`）なら OK です。`127.0.0.1:69` だと外部から届きません。
+Check what it listens on. `0.0.0.0:69` (or `*:69`) is fine. With `127.0.0.1:69` nothing from outside
+reaches it.
 
 ```bash
 sudo ss -ulnp | grep ':69'
 ```
 
-## 3. Ubuntu：ufw で UDP 69 を許可する
+## 3. Ubuntu: allow UDP 69 in ufw
 
-ufw が有効で既定が `deny (incoming)` の場合、UDP 69 への要求は応答なしで黙って破棄されます。Ubuntu のインストール直後や SSH だけ許可した状態ではこうなっていることが多いので、LAN からの TFTP を許可します。
+When ufw is enabled with the default `deny (incoming)`, requests to UDP 69 are silently dropped with no
+answer. That is often the state right after installing Ubuntu or after allowing only SSH, so allow TFTP
+from the LAN.
 
 ```bash
 sudo ufw allow from <LAN_SUBNET> to any port 69 proto udp comment 'TFTP'
 sudo ufw status verbose
 ```
 
-期待される表示：
+What you should see:
 
 ```
 69/udp                     ALLOW IN    <LAN_SUBNET>               # TFTP
 ```
 
-許可が必要なのは 69/udp だけです。データ転送はサーバ側から先にエフェメラルポートで送信する流れなので、クライアントからの ACK は conntrack により ESTABLISHED として通過します。
+Only 69/udp needs to be allowed. The data transfer is started by the server, sending first from an
+ephemeral port, so the ACKs from the client pass as ESTABLISHED through conntrack.
 
-## 4. 動作確認
+## 4. Checking it
 
-Ubuntu 側でパケットを監視しながら、外部機器から get します。
+Watch the packets on Ubuntu while getting a file from the outside machine.
 
 ```bash
 sudo tcpdump -ni any host <CLIENT_IP>
 ```
 
-外部機器側：
+On the outside machine:
 
 ```bash
 tftp <SERVER_IP> -c get <FILE>
 ```
 
-成功時は、RRQ に対して Ubuntu から OACK / DATA が `Out` で出ていきます（ポート番号は環境により異なります）。
+When it works, OACK / DATA go `Out` from Ubuntu in answer to the RRQ (the port numbers depend on the
+setup).
 
 ```
 In  IP <CLIENT_IP>.<cport> > <SERVER_IP>.69: TFTP, RRQ "<FILE>" octet blksize 1024
@@ -110,28 +122,34 @@ In  IP <CLIENT_IP>.<cport> > <SERVER_IP>.<sport>: TFTP, ACK ...
 Out IP <SERVER_IP>.<sport> > <CLIENT_IP>.<cport>: TFTP, DATA ...
 ```
 
-## 注意点
+## Cautions
 
-**Ubuntu 自身からのテストでは外部経路を確認できない。** Ubuntu 上で自分の IP 宛てに tftp を実行しても通信は loopback 経由で処理されるため、ufw が外向けインターフェース側で落としていても成功してしまいます。必ず外部機器（少なくとも Mac）から試してください。
+**A test from Ubuntu itself does not check the outside path.** Running tftp on Ubuntu to its own IP goes
+through loopback, so it succeeds even when ufw drops the packets on the outward interface. Always try
+from an outside machine (at least from the Mac).
 
-**ping が通っても TFTP が通るとは限らない。** ping（ICMP）と TFTP（UDP 69）はファイアウォールの扱いが別です。また、ping に応答しているのが本当に Ubuntu かどうかは、クライアント側の `arp -a` の MAC アドレスと Ubuntu の `ip link` の MAC アドレスを突き合わせて確認できます。
+**ping working does not mean TFTP works.** ping (ICMP) and TFTP (UDP 69) are treated separately by the
+firewall. Whether it really is Ubuntu that answers the ping can be checked by matching the MAC address
+in `arp -a` on the client with the MAC address in Ubuntu's `ip link`.
 
-**tcpdump の「In」はファイアウォール通過を意味しない。** tcpdump は netfilter より手前でパケットを捕まえるため、表示されていても ufw で破棄されている場合があります。
+**"In" in tcpdump does not mean the packet passed the firewall.** tcpdump catches packets before
+netfilter, so a packet it shows may still be dropped by ufw.
 
-**`udp` だけでフィルタすると ICMP を見落とす。** tftpd が待ち受けていない場合はカーネルが ICMP port unreachable を返しますが、`tcpdump ... udp` では表示されません。切り分け時は `host` だけで絞ってください。
+**Filtering on `udp` alone hides ICMP.** When tftpd is not listening, the kernel answers with ICMP port
+unreachable, which `tcpdump ... udp` does not show. When narrowing it down, filter on `host` only.
 
-## tcpdump の結果による切り分け
+## Narrowing it down from what tcpdump shows
 
-| tcpdump の様子 | 原因の候補 |
+| What tcpdump shows | Likely causes |
 |---|---|
-| RRQ すら見えない | Mac（pf、セキュリティソフト）、Parallels のネットワーク設定、IP の重複 |
-| RRQ は見えるが応答がまったく出ない | Ubuntu のファイアウォール（ufw / iptables / nftables）で破棄 |
-| RRQ に対して ICMP port unreachable が返る | tftpd が待ち受けていない（`TFTP_ADDRESS` の設定など） |
-| DATA は出ているがクライアントが失敗 | クライアント側のファイアウォール（Windows など）や途中の機器 |
+| Not even the RRQ | The Mac (pf, security software), the network settings of Parallels, a duplicate IP |
+| The RRQ, but no answer at all | Dropped by Ubuntu's firewall (ufw / iptables / nftables) |
+| ICMP port unreachable in answer to the RRQ | tftpd is not listening (`TFTP_ADDRESS` and the like) |
+| DATA goes out but the client fails | The client's firewall (Windows, for example) or a device on the way |
 
-### 確認用コマンド
+### Commands for checking
 
-Ubuntu：
+Ubuntu:
 
 ```bash
 sudo ufw status verbose
@@ -140,7 +158,7 @@ sudo nft list ruleset
 sudo journalctl -u tftpd-hpa -f
 ```
 
-Mac：
+Mac:
 
 ```bash
 /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
@@ -148,12 +166,13 @@ sudo pfctl -s info
 sudo pfctl -s rules
 ```
 
-外部から UDP 69 の見え方を確認（nmap がある場合）：
+How UDP 69 looks from outside (if nmap is available):
 
 ```bash
 sudo nmap -sU -p 69 <SERVER_IP>
 ```
 
-## 補足
+## Note
 
-NFS や DHCP など別のサービスを Ubuntu 上で外部公開する場合も、同様に `sudo ufw allow` で個別にポートを開ける必要があります。
+To make other services on Ubuntu (NFS, DHCP and so on) reachable from outside, open their ports one by
+one with `sudo ufw allow` in the same way.

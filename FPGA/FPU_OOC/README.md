@@ -1,49 +1,58 @@
-# FPU 単体の論理合成(out of context)
+# Out-of-context synthesis of the FPU alone
 
-`RTL/CPU/CPU_FPU` の FPU を 1 つだけ Vivado で合成・配置配線し、資源とタイミングを見る。
-パイプライン版 `FPU_PIPE`(ROADMAP C2、`CPU_CORE_SPEC.md` 10.11)と、いまコアが使っている
-`CORE_FPU` を同じ条件で比べ、パイプライン化の値段を知るため。
+[日本語](README_J.md)
 
-## 実行(Windows、Vivado 2025.1)
+Synthesizes, places and routes one FPU of `RTL/CPU/CPU_FPU` alone in Vivado to see its resources and
+timing. The purpose is to compare the pipelined `FPU_PIPE` (ROADMAP C2, `CPU_CORE_SPEC.md` 10.11) with
+`CORE_FPU`, the one the core used at the time, under the same conditions, and so learn the price of
+pipelining.
+
+## Running it (Windows, Vivado 2025.1)
 
 ```
-synth_fpu.bat                 FPU_PIPE、50 MHz、配置配線まで
-synth_fpu.bat CORE_FPU        比べるために今の FPU
-synth_fpu.bat FPU_PIPE 15     66 MHz で(余裕を見る)
+synth_fpu.bat                 FPU_PIPE, 50 MHz, through place and route
+synth_fpu.bat CORE_FPU        the earlier FPU, for comparison
+synth_fpu.bat FPU_PIPE 15     at 66 MHz (to see the margin)
 ```
 
-引数は順に トップ(`FPU_PIPE` / `CORE_FPU`)・クロック周期(ns)・配置配線(1 / 0)。結果は
-`output/<トップ>/summary.txt`(LUT、FF、DSP、LUT RAM、WNS、レジスタ間の WNS、WHS、スライス)。
+The arguments are, in order: top (`FPU_PIPE` / `CORE_FPU`), clock period (ns), place and route
+(1 / 0). The results are in `output/<top>/summary.txt` (LUT, FF, DSP, LUT RAM, WNS, register-to-register
+WNS, WHS, slices).
 
-ポートの両側に周期の 30 % を入出力遅延として与える(`FPGA/L2_OOC` と同じ考え方)。コアでは
-オペランドが EX の転送の多重化器を通って来るので、入力側が厳しい。どちらの FPU も最初のサイクルで
-オペランドを写し取るので、レジスタ間の WNS(`timing_reg2reg.rpt`)が FPU そのものの余裕。
+Both sides of each port get 30 % of the period as input / output delay (the same idea as
+`FPGA/L2_OOC`). In the core the operands come through the forwarding multiplexers of EX, so the input
+side is the tight one. Both FPUs copy their operands in the first cycle, so the register-to-register
+WNS (`timing_reg2reg.rpt`) is the margin of the FPU itself.
 
-## 見たいこと
+## What to look at
 
-- **LUT・FF の増え方**: 段ごとに制御と待つ答え(束)を持たせた分。FF は増えるが LUT は大きくは
-  増えない見込み(各段の論理は `CORE_FPU` の状態と同じ)。全体はいまスライス 91.4 %(`TIMING.md`
-  32 章)なので、ここで増える分が組み込みの予算になる
-- **DSP**: 変わらないはず(部分積は `CORE_FPU` でも 1 サイクルで全部出していた)
-- **レジスタ間の WNS**: `CORE_FPU` と同じくらいのはず(段の切れ目が状態の切れ目と同じ)
+- **How LUTs and FFs grow**: the control and the waiting answers ("bundles") each stage carries. FFs
+  were expected to grow but LUTs not by much (the logic of each stage is that of a `CORE_FPU` state).
+  The whole design was at 91.4 % of the slices (section 32 of `TIMING.md`), so what grows here is the
+  budget of the integration
+- **DSP**: should not change (`CORE_FPU` also produced all partial products in one cycle)
+- **Register-to-register WNS**: should be about the same as `CORE_FPU` (the stage boundaries are the
+  state boundaries)
 
-## 結果(2026-10-09、Vivado 2025.1、50 MHz)
+## Results (2026-10-09, Vivado 2025.1, 50 MHz)
 
-| | `CORE_FPU`(今) | `FPU_PIPE`(パイプライン版) | 差 |
+| | `CORE_FPU` (earlier) | `FPU_PIPE` (pipelined) | Difference |
 |---|---|---|---|
 | LUT | 9,757 | **9,060** | −697 |
 | FF | 2,008 | 2,631 | +623 |
-| LUT RAM / SRL | 0 | 177 | 待つ答え(束)の遅延が SRL になった |
-| DSP | 16 | 16 | 同じ |
-| スライス | 2,260 | 2,309 | **+49** |
-| レジスタ間の WNS | +3.427 ns | **+3.758 ns** | +0.33 ns |
-| 全体の WNS / WHS | +2.722 / +0.124 ns | +3.758 / +0.036 ns | |
+| LUT RAM / SRL | 0 | 177 | The delay of the waiting answers (bundles) became SRLs |
+| DSP | 16 | 16 | Same |
+| Slices | 2,260 | 2,309 | **+49** |
+| Register-to-register WNS | +3.427 ns | **+3.758 ns** | +0.33 ns |
+| Overall WNS / WHS | +2.722 / +0.124 ns | +3.758 / +0.036 ns | |
 
-**パイプライン化はほぼ只だった。** LUT は減り(状態機械の、状態ごとにレジスタの書き込みを選ぶ
-多重化器が消えた)、FF は段ごとの制御の分だけ増え、P3〜P5 で待つ答えは Vivado が SRL(LUT を
-使ったシフトレジスタ)にまとめた。スライスは +49。最悪の経路はどちらも丸めの前半(`q_rexp` →
-`FPU_ROUND` の切り上げ判定)で、論理は 23 段から 17 段に減った。
+**Pipelining came almost for free.** LUTs went down (the multiplexers of the state machine, which chose
+per state what to write into each register, disappeared), FFs grew by the control of each stage, and
+Vivado packed the answers waiting in P3 to P5 into SRLs (shift registers built from LUTs). Slices +49.
+In both the worst path is the first half of the rounding (`q_rexp` → the round-up decision of
+`FPU_ROUND`), and its logic went from 23 levels down to 17.
 
-全体(スライス 91.4 %、残り 1,369)から見て、FPU 本体の増分は無視できる。段階 2 の予算は
-コア側(結果待ちのビット、結果の受け渡し、FP レジスタファイルの 2 つ目の書き込みポート)で決まる。
+Seen from the whole design (91.4 % of the slices, 1,369 left), the growth of the FPU itself is
+negligible. The budget of stage 2 is decided on the core side (the pending bits, the passing of
+results, the second write port of the FP register file).
 

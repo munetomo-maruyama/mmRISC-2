@@ -1,123 +1,133 @@
-# SIM_FPU — FPU 単体の検証
+# SIM_FPU — verification of the FPU alone
 
-`RTL/CPU/CPU_FPU` を **Berkeley SoftFloat**(RISC-V 特殊化)と突き合わせる。
-仕様は [`../../RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](../../RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md) 10 章。
+[日本語](README_J.md)
 
-浮動小数点で間違えるのは丸めと特殊値なので、参照モデルは自作せず、RISC-V 仕様
-自身が指している SoftFloat をそのまま使う。RISCV 特殊化を選ぶと canonical NaN、
-NaN の伝播規則、**tininess は丸めの後で判定**という RISC-V の約束がそのまま入る。
+Checks `RTL/CPU/CPU_FPU` against **Berkeley SoftFloat** (RISC-V specialization).
+The specification is section 10 of [`../../RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](../../RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md).
 
-## 使い方
+What goes wrong in floating point is rounding and special values, so there is no home-made reference
+model: SoftFloat, which the RISC-V specification itself points to, is used as it is. Choosing the RISCV
+specialization brings in RISC-V's conventions as they are: the canonical NaN, the NaN propagation rules,
+and **tininess detected after rounding**.
 
-| コマンド | 内容 |
+## Usage
+
+| Command | What it does |
 |---|---|
-| `make` | 既定のベクタで全演算を比較 |
-| `make long` | ランダムベクタを 40 倍にして流す |
-| `make OPS=0,1,2 run` | 指定した演算だけ(番号は `CORE_FPU` の `FOP_*`) |
+| `make` | Compares all operations with the default vectors |
+| `make long` | Runs 40 times the random vectors |
+| `make OPS=0,1,2 run` | Only the given operations (the numbers are the `FOP_*` of `CORE_FPU`) |
 | `make lint` | Verilator lint |
-| `./bug_inject.sh` | バグ注入。段の切れ目を狙う(下記) |
-| `./bug_inject.sh <文字列>` | 名前に含まれるものだけ |
+| `./bug_inject.sh` | Bug injection, aimed at the stage boundaries (below) |
+| `./bug_inject.sh <string>` | Only those whose name contains the string |
 
-プラスアーグ: `+ops=<list>` `+rand=<n>` `+seed=<n>` `+verbose`
+Plusargs: `+ops=<list>` `+rand=<n>` `+seed=<n>` `+verbose`
 
-## SoftFloat の用意
+## Preparing SoftFloat
 
-リポジトリには含めない。一度だけビルドしておく。
+It is not in the repository. Build it once.
 
 ```
 git clone https://github.com/ucb-bar/berkeley-softfloat-3 ~/RISCV/berkeley-softfloat-3
 cd ~/RISCV/berkeley-softfloat-3/build
-cp -r Linux-x86_64-GCC Linux-aarch64-RISCV-GCC          # 使う環境に合わせる
+cp -r Linux-x86_64-GCC Linux-aarch64-RISCV-GCC          # to suit the machine you use
 sed -i 's/^SPECIALIZE_TYPE ?= .*/SPECIALIZE_TYPE ?= RISCV/' Linux-aarch64-RISCV-GCC/Makefile
 make -C Linux-aarch64-RISCV-GCC
 ```
 
-場所を変えるときは `make SOFTFLOAT=... SF_BUILD=...`。
+To use another location: `make SOFTFLOAT=... SF_BUILD=...`.
 
-## 何を突き合わせているか
+## What is compared
 
-- 全演算(算術・FMA・除算・平方根・比較・変換・符号操作・分類・転送)
-- 単精度と倍精度
-- **丸め 5 モード全部**(RNE / RTZ / RDN / RUP / RMM)
-- 結果のビットパターンと**例外フラグの 5 ビット全部**
+- All operations (arithmetic, FMA, divide, square root, compare, convert, sign injection, classify,
+  move)
+- Single and double precision
+- **All 5 rounding modes** (RNE / RTZ / RDN / RUP / RMM)
+- The bit pattern of the result and **all 5 bits of the exception flags**
 
-オペランドのプールは、浮動小数点が壊れる場所を狙って並べてある。
+The pool of operands is chosen to hit the places where floating point breaks.
 
-| 種類 | 例 |
+| Kind | Examples |
 |---|---|
-| ゼロ | ±0 |
-| subnormal | 最小・最大・中間 |
-| 正規数の境界 | 最小正規数、最大正規数、その ±1ulp |
-| 丸め境界 | 1±1ulp、2^52、2^53、2^23、2^24 |
-| 同点(最近接偶数) | 0.5、±1.5、2.5、−2.5、2^23 − 0.5 |
-| 整数の範囲の端 | 2^31、2^63、2^31 − 0.5、2^32 − 0.5、−2^31 − 0.5(切り上げて初めて範囲を越える) |
-| 無限大 | ±inf |
-| NaN | canonical、signalling(正負) |
-| NaN-boxing されていない単精度 | 上位が 0 や任意の値 |
+| Zero | ±0 |
+| Subnormal | Smallest, largest, in between |
+| Normal boundaries | Smallest normal, largest normal, ±1 ulp from them |
+| Rounding boundaries | 1±1 ulp, 2^52, 2^53, 2^23, 2^24 |
+| Ties (round to nearest even) | 0.5, ±1.5, 2.5, −2.5, 2^23 − 0.5 |
+| Edges of the integer ranges | 2^31, 2^63, 2^31 − 0.5, 2^32 − 0.5, −2^31 − 0.5 (out of range only after rounding up) |
+| Infinity | ±inf |
+| NaN | Canonical, signalling (both signs) |
+| Single precision not NaN-boxed | Upper half 0 or any value |
 
-これらの総当たり(40×40)に、ランダムなビットパターンを重ねている。
+All pairs of these (40×40), with random bit patterns on top.
 
-`make` で約 58 万チェック、`make long` でその約 10 倍。
+About 580,000 checks with `make`, about 10 times that with `make long`.
 
-**平方根の sticky**(2026-10-09 に追加): 倍精度の平方根は 64 ビットの根のうち精度の下に 11 ビット
-しか残らず、その 11 ビットが全部 0(剰余だけで不正確)や guard ビットだけ(剰余で決まる同点)に
-なる値では、剰余から作る sticky ビットが答えを決める。プールの値はそこに当たらないので、
-探して見つけた 8 個(`sqrt_hard`、Python の `math.isqrt` で根を計算)を全丸めモードで流す。
-除算の商は精度の下に 75 ビット(単精度は 40)あり、そこが全部 0 になることはないので要らない。
+**The sticky bit of the square root** (added 2026-10-09): of the 64-bit root of a double precision
+square root, only 11 bits remain below the precision, and for values where those 11 bits are all 0
+(inexact only through the remainder) or only the guard bit (a tie decided by the remainder), the sticky
+bit made from the remainder decides the answer. The values of the pool do not hit that, so 8 values
+found by search (`sqrt_hard`, roots computed with Python's `math.isqrt`) are run in all rounding modes.
+The quotient of a divide has 75 bits below the precision (40 for single), which are never all 0, so
+the divide does not need this.
 
-## バグ注入
+## Bug injection
 
-34 種。sticky のマスク、浮動小数点 → 整数変換の 2 サイクルへの分割
-(`LitexSystem/docs/TIMING.md` 22 章)の 9 種を含む。
+34 mutations, including the sticky masks and 9 on the split of the floating point → integer
+conversion into 2 cycles (section 22 of `LitexSystem/docs/TIMING.md`).
 
-`CORE_FPU` は 1 件ずつ受けて答えるユニットで、答えは複数のサイクルにまたがる
-レジスタを通って出てくる ―― オペランドの写し、桁合わせの結果、丸め器への入力。
-**ある状態で書いて別の状態で読むレジスタ**は、間違った所につないでも lint に
-掛からないし、波形を見ても気づきにくい。そこを狙って 1 か所ずつ壊し、
-SoftFloat との比較が落ちることを確かめる。
+`CORE_FPU` is a unit that takes one operation at a time and answers it, and the answer comes out through
+registers that span several cycles: the copy of the operands, the result of the alignment, the input of
+the rounder. **A register written in one state and read in another** does not trip lint when it is
+wired to the wrong place, and is hard to notice in a waveform. Those are what is broken, one place at a
+time, to confirm that the comparison with SoftFloat fails.
 
 ```
 ./bug_inject.sh
 ```
 
-各ミューテーションは RTL を作業ディレクトリに写して `sed` を 1 つ当て、
-比較を流す。**FAIL になれば「検出」**。`NOT APPLIED` が出たら、RTL が変わって
-`sed` のパターンが当たらなくなった合図なので、ミューテーションの側を直す。
+Each mutation copies the RTL to a work directory, applies one `sed` and runs the comparison. **A FAIL
+means "detected".** `NOT APPLIED` means the RTL changed and the `sed` pattern no longer matches, so fix
+the mutation.
 
-載せていないもの:
+Not listed:
 
-- オペランドの写しを常にバイパスする(`u_a = a`)。EX は演算中も値を保持し、
-  ベンチも保持するので、写しと生の値は一致する。写しは**答えのためではなく
-  クロックのために**あるので、答えを見ている限り検出できない。
+- Always bypassing the copy of the operands (`u_a = a`). EX holds its values during the operation and so
+  does the bench, so the copy and the raw value are the same. The copy is there **for the clock, not for
+  the answer**, so as long as only the answer is looked at it cannot be detected.
 
-## パイプライン版 `FPU_PIPE`(ROADMAP C2、2026-10-09)
+## The pipelined `FPU_PIPE` (ROADMAP C2, 2026-10-09)
 
-`RTL/CPU/CPU_FPU/FPU_PIPE` は `CORE_FPU` と同じ演算を段に切り、毎サイクル 1 件受け付ける版
-(`CPU_CORE_SPEC.md` 10.11)。2026-10-09 からコアが使っている(方式と測定のまとめは
-`RTL/CPU/CPU_FPU/README.md`)。
+`RTL/CPU/CPU_FPU/FPU_PIPE` cuts the same operations as `CORE_FPU` into stages and takes one operation
+every cycle (`CPU_CORE_SPEC.md` 10.11). The core has used it since 2026-10-09 (how it works and what it
+measures: `RTL/CPU/CPU_FPU/README.md`).
 
-| コマンド | 内容 |
+| Command | What it does |
 |---|---|
-| `make pipe` | `tb_FPU_PIPE`: 下の 3 段階(約 70 万チェック、10 秒) |
-| `make pipe-long` | 同じことを `+rand=4000 +ops2=2000000` で |
-| `./bug_inject_pipe.sh` | バグ注入 28 種(下記) |
+| `make pipe` | `tb_FPU_PIPE`: the 3 phases below (about 700,000 checks, 10 seconds) |
+| `make pipe-long` | The same with `+rand=4000 +ops2=2000000` |
+| `./bug_inject_pipe.sh` | Bug injection, 28 mutations (below) |
 
-`tb_FPU_PIPE` は演算を**毎サイクル 1 件**流し、答えを受け取った順に SoftFloat と比べる。
+`tb_FPU_PIPE` sends **one operation every cycle** and compares the answers with SoftFloat in the order
+they come back.
 
-1. `tb_FPU` と同じプール(全演算・両精度・丸め 5 モード・総当たりとランダム)と平方根の
-   難しい値を、間を空けずに流す。除算・平方根(エンジンを使うもの)以外は**どれも受け付けて
-   ちょうど 9 サイクル後に**答えが出ること、つまり 1 サイクルに 1 件流れることも確かめる。
-2. 全種類のランダムな演算に、コアがするのと同じことを混ぜる: 受け付けの間を空ける、前の 2 段を
-   止める(`hold0`、`hold1` は `hold0` と一緒に)、取り消す(`kill0`、`kill1` は `kill0` と
-   一緒に)、ときどき 60〜200 サイクル止め続ける(D$ の長いミスで MA が止まる場合)。取り消した
-   演算の答えは出てはいけず、残りは順番どおりに出ること。答えが出たあとの演算を取り消して
-   いないことも見る。
-3. 除算・平方根を P1 に 300 サイクル止めておき(エンジンは途中で終わる)、そのあと進める /
-   取り消す。取り消したものの答えは出ず、そのあとも普通に受け付けること。
+1. The same pool as `tb_FPU` (all operations, both precisions, 5 rounding modes, all pairs and random)
+   and the hard square root values, with no gaps. It also checks that every operation except divide and
+   square root (those that use the engine) **has its answer exactly 9 cycles after it is accepted**,
+   that is, that one operation a cycle flows through.
+2. Random operations of every kind, mixed with what the core does: gaps between offers, holding the
+   first 2 stages (`hold0`, and `hold1` together with `hold0`), taking them back (`kill0`, and `kill1`
+   together with `kill0`), and now and then holding for 60 to 200 cycles (MA stopped by a long D$
+   miss). A taken-back operation must not produce an answer, and the rest must come out in order. It
+   also checks that no operation is taken back after its answer is out.
+3. A divide or square root is held in P1 for 300 cycles (the engine finishes meanwhile), then moved on
+   or taken back. A taken-back one must not produce an answer, and the unit must accept normally after
+   it.
 
-`./bug_inject_pipe.sh` は算術ではなくパイプラインが足したものを狙う: 前の 2 段の停止と取り消し、
-除算・平方根のエンジン(受け付けの止め、答えを入れる時期、取り消し)、段から段へ渡す制御
-(タグ、丸めモード、丸める精度、FMA の指数と加数)。28 種すべて検出。等価なため載せていない
-もの(エンジンを P0 のうちに始める、P1 で取り消されたのにエンジンを止めない)は、スクリプトの
-注記に理由を書いた。
+`./bug_inject_pipe.sh` aims at what the pipeline added, not at the arithmetic: holding and taking back
+the first 2 stages, the divide / square root engine (blocking new offers, when the answer goes in,
+taking it back), and the control passed from stage to stage (tag, rounding mode, rounding precision,
+exponent and addend of FMA). All 28 are detected. Those left out because they are equivalent (starting
+the engine while still in P0, not stopping the engine when taken back in P1) have their reasons in the
+notes of the script.
 

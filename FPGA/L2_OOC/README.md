@@ -1,53 +1,58 @@
-# L2 キャッシュ単体の論理合成(out of context)
+# Out-of-context synthesis of the L2 cache alone
 
-`RTL/CPU/CPU_L2` だけを Vivado で合成・配置配線し、資源とタイミングを見る。`CPU_TOP` に組み込む
-(`CPU_L2_SPEC.md` 10 章の段階 3)前に、設計案 5 章の見積もりを確かめるため。
+[日本語](README_J.md)
 
-## 1. 実行(Windows、Vivado 2025.1)
+Synthesizes, places and routes `RTL/CPU/CPU_L2` alone in Vivado to see its resources and timing. The
+purpose was to check the estimates of section 5 of the design proposal before integrating the cache
+into `CPU_TOP` (stage 3 of section 10 of `CPU_L2_SPEC.md`).
 
-このディレクトリで(共有フォルダ越しに):
+## 1. Running it (Windows, Vivado 2025.1)
+
+In this directory (over the shared folder):
 
 ```
-synth_l2.bat                     256 KB・4 ウェイ・疑似 LRU、50 MHz、配置配線まで
+synth_l2.bat                     256 KB, 4 ways, pseudo-LRU, 50 MHz, through place and route
 synth_l2.bat 131072              128 KB
-synth_l2.bat 262144 4 1          乱数置き換え
-synth_l2.bat 262144 4 0 12.5     80 MHz で(余裕を見る)
-synth_l2.bat 262144 4 0 20 0     合成だけ
+synth_l2.bat 262144 4 1          random replacement
+synth_l2.bat 262144 4 0 12.5     at 80 MHz (to see the margin)
+synth_l2.bat 262144 4 0 20 0     synthesis only
 ```
 
-引数は順に 容量(バイト)・ウェイ数・置き換え(1 = 乱数)・クロック周期(ns)・配置配線(1 / 0)。
-結果は `output/L2_<KB>K_<ウェイ>w[_rnd]/` に出る。
+The arguments are, in order: capacity (bytes), number of ways, replacement (1 = random), clock period
+(ns), place and route (1 / 0). The results go to `output/L2_<KB>K_<ways>w[_rnd]/`.
 
-| ファイル | 中身 |
+| File | Contents |
 |---|---|
-| `summary.txt` | 数字のまとめ(LUT、FF、ブロック RAM、LUT RAM、WNS、レジスタ間の WNS、WHS、スライス) |
-| `utilization_synth.rpt` / `utilization.rpt` | モジュールごとの資源(合成後 / 配線後) |
-| `ram_utilization.rpt` | 配列がブロック RAM・LUT RAM のどちらになったか |
-| `timing_summary.rpt`、`timing_paths.rpt`、`timing_reg2reg.rpt` | 配線後のタイミング(最後のものはレジスタからレジスタだけ) |
+| `summary.txt` | The numbers in brief (LUT, FF, block RAM, LUT RAM, WNS, register-to-register WNS, WHS, slices) |
+| `utilization_synth.rpt` / `utilization.rpt` | Resources per module (after synthesis / after routing) |
+| `ram_utilization.rpt` | Whether each array became block RAM or LUT RAM |
+| `timing_summary.rpt`, `timing_paths.rpt`, `timing_reg2reg.rpt` | Timing after routing (the last one only register to register) |
 
-## 2. 制約の考え方
+## 2. How the constraints are set
 
-単体なので AXI のポートにはピンが無い。ポートの両側に周期の 30 % ずつを入力・出力遅延として
-与える(`CPU_CACHE` と LiteX の側の論理の分の大まかな見積もり)。入力から出力へ素通しの経路
-(AXI の READY / VALID、一部の書き込みの W)には周期の 40 % が残る。**組み込んだ後の本当の値は
-段階 3 の全体の合成で決まる**ので、ここではレジスタ間の WNS(`timing_reg2reg.rpt`)を主に見る。
+On its own the cache has no pins for its AXI ports. Both sides of each port get 30 % of the period as
+input and output delay (a rough estimate of the logic on the `CPU_CACHE` side and on the LiteX side).
+Paths that go straight from an input to an output (AXI READY / VALID, part of the W of a write) are left
+with 40 % of the period. **The real values after integration are decided by the full synthesis of
+stage 3**, so here the register-to-register WNS (`timing_reg2reg.rpt`) is what to look at.
 
-## 3. 見込み(`CPU_L2_SPEC.md` 5 章)と確かめること
+## 3. Expectations (section 5 of `CPU_L2_SPEC.md`) and what to check
 
-| 項目 | 見込み(256 KB・4 ウェイ) | 確かめること |
+| Item | Expected (256 KB, 4 ways) | What to check |
 |---|---|---|
-| データ配列 | RAMB36 64 個(1 ウェイ 8,192 語 × 64 ビット = 16 個) | `ram_utilization.rpt` でブロック RAM になっていること。FF が 2 万を超えたらスクリプトが止める(配列が FF になった) |
-| タグ配列 | RAMB36 4 個(1 ウェイ 1,024 × 26 ビット)。設計案の「2 タイル」より多い | 同上 |
-| 疑似 LRU | LUT RAM(1,024 × 3 ビット) | `summary.txt` の LUT RAM の数が 0 でないこと(0 なら FF になっている) |
-| LUT | 2,500〜4,000 | |
-| FF | 1,500〜2,500(追い出しバッファ 512、R の FIFO 約 280 を含む) | |
-| WNS(50 MHz) | 正 | 遅い経路があれば、どこか(`timing_reg2reg.rpt`)。候補はブロック RAM の出力 → タグ比較 → ウェイ選択 → R の FIFO(`M_CMP`) |
+| Data array | 64 RAMB36 (one way is 8,192 words × 64 bits = 16) | That it became block RAM, in `ram_utilization.rpt`. The script stops when there are more than 20,000 FFs (the array became flip-flops) |
+| Tag array | 4 RAMB36 (one way 1,024 × 26 bits). More than the "2 tiles" of the proposal | Same |
+| Pseudo-LRU | LUT RAM (1,024 × 3 bits) | That the LUT RAM count in `summary.txt` is not 0 (0 means it became flip-flops) |
+| LUT | 2,500 to 4,000 | |
+| FF | 1,500 to 2,500 (including the 512 of the eviction buffer and about 280 of the R FIFO) | |
+| WNS (50 MHz) | Positive | If there is a slow path, where it is (`timing_reg2reg.rpt`). The candidate is block RAM output → tag compare → way select → R FIFO (`M_CMP`) |
 
-全体(`BENCH.md` 13 章の版)ではブロック RAM 40.5 / 135、LUT 45,598(71.9 %)、スライス 88.6 %。
-L2 を足して 約 109 / 135 タイルになる見込み。スライスは単体の数がそのまま足されるわけでは
-ない(全体では周りの論理とスライスを分け合う)ので、目安として見る。
+The whole design (the version of section 13 of `BENCH.md`) uses 40.5 / 135 block RAM tiles, 45,598 LUTs
+(71.9 %) and 88.6 % of the slices. With the L2 it was expected to reach about 109 / 135 tiles. Slices
+of a design on its own do not simply add to the whole (in the full design it shares slices with the
+logic around it), so treat that number as a guide only.
 
-## 4. 結果(2026-10-06、Vivado 2025.1、256 KB・4 ウェイ・疑似 LRU、50 MHz)
+## 4. Results (2026-10-06, Vivado 2025.1, 256 KB, 4 ways, pseudo-LRU, 50 MHz)
 
 ```
 L2_256K_4w  (period 20.0 ns, I/O delay 6.0 ns each side)
@@ -55,7 +60,8 @@ after synthesis: 1078 LUT, 991 FF, RAMB36 68, RAMB18 0 (tag 4, data 64 primitive
 after routing: WNS 3.953 ns (register to register 5.977 ns), WHS 0.161 ns, 659 slices
 ```
 
-配列はすべてブロック RAM(データ 64、タグ 4)、疑似 LRU は LUT RAM になった。LUT・FF は
-見込みの半分以下。最悪のレジスタ間の経路は、タグの読み出し → タグ比較 → ヒット → データ配列
-64 個の読み出し許可(13.5 ns、うち配線 9.1 ns)。読み方は `CPU_L2_SPEC.md` 5 章。
+All arrays became block RAM (data 64, tag 4) and the pseudo-LRU became LUT RAM. LUTs and FFs are less
+than half of the estimate. The worst register-to-register path is tag read → tag compare → hit → read
+enable of the 64 data array blocks (13.5 ns, of which 9.1 ns is routing). How to read this: section 5 of
+`CPU_L2_SPEC.md`.
 

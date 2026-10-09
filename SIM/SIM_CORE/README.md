@@ -1,109 +1,112 @@
-# SIM_CORE — CPU コア単体の検証
+# SIM_CORE — verification of the CPU core alone
 
-`RTL/CPU/CPU_CORE` を単体で動かす環境。実キャッシュの代わりに
-`CORE_MEM_MODEL.sv`(キャッシュポートのプロトコルを持つメモリモデル)を
-つなぎ、アセンブラ試験と公式 riscv-tests を走らせる。CLINT
-(`RTL/CPU/CPU_CLINT`)はモデルの隣に置き、本来のアドレスに見える。
+[日本語](README_J.md)
 
-アドレス:
+An environment that runs `RTL/CPU/CPU_CORE` on its own. In place of the real caches it connects
+`CORE_MEM_MODEL.sv` (a memory model that speaks the protocol of the cache ports) and runs assembler
+tests and the official riscv-tests. The CLINT (`RTL/CPU/CPU_CLINT`) sits next to the model and appears
+at its proper address.
 
-| 範囲 | 内容 |
+Addresses:
+
+| Range | Contents |
 |---|---|
-| 0x8000_0000 + 64KiB | メモリ(プログラムとデータ) |
+| 0x8000_0000 + 64KiB | Memory (program and data) |
 | 0x0200_0000 + 64KiB | CLINT |
-| 0x0300_0000 | テストベンチのレジスタ。bit0 が外部割り込み線 |
-| それ以外 | 応答なし = アクセスフォールト |
+| 0x0300_0000 | Testbench register. bit0 is the external interrupt line |
+| Anything else | No response = access fault |
 
-仕様は [`../../RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](../../RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md) 12.3 と 12.4。
+The specification is in 12.3 and 12.4 of [`../../RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](../../RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md).
 
-## 使い方
+## Usage
 
-| コマンド | 内容 |
+| Command | What it does |
 |---|---|
-| `make` | 試験プログラムを作って全部走らせる(Verilator) |
-| `make TEST=t03_ldst run` | 1 本だけ走らせる |
-| `make stress` | 両キャッシュポートに背圧(ready を 40% のサイクルで落とす)を入れて全部走らせる |
-| `make trace` | リタイアトレース付きで 1 本走らせる |
-| `make wave` | VCD を出す |
-| `make iverilog` | Icarus Verilog で同じ試験 |
-| `make mdu` | `CORE_MDU` を参照モデルと突き合わせる(`tb_MDU.sv`、既定 20 万演算)。境界値のオペランド、サイクル数(MUL / MULW は 1、MULH 系は 2)、答えを遅れて受け取る場合、途中の kill。プログラムからは選べないものを見る |
-| `make clint` | `CPU_CLINT` を 4 ハート構成で直接叩く(`tb_CLINT.sv`)。単一コアのプログラムからは届かないレジスタマップの検査 |
-| `make plic` | `CPU_PLIC` のレジスタポートを直接叩く(`tb_PLIC.sv`) |
-| `make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / uzba / uzbb / uzicond / mi / si)。`RVTESTS` でリポジトリの場所を指定 |
-| `make riscv-tests-v` | 同じ試験を仮想記憶の環境(`-v`、Sv39 でページを割り当てながら走る)で |
-| `make bugs` / `./bug_inject.sh` | バグ注入 315 種(背圧あり/なしの両方で判定。M211〜M231 はデバッグモード、M298〜M314 はトリガ、M320〜M340 は性能カウンタ、M341〜M358 はパイプライン化した FPU の接続とレジスタファイル、M240 以降は EX からの早出し。`CORE_MDU` の変異は `tb_MDU` でも判定) |
+| `make` | Builds the test programs and runs them all (Verilator) |
+| `make TEST=t03_ldst run` | Runs one only |
+| `make stress` | Runs them all with back pressure on both cache ports (ready dropped in 40 % of the cycles) |
+| `make trace` | Runs one with a retirement trace |
+| `make wave` | Writes a VCD |
+| `make iverilog` | The same tests on Icarus Verilog |
+| `make mdu` | Checks `CORE_MDU` against a reference model (`tb_MDU.sv`, 200,000 operations by default): boundary operands, cycle counts (1 for MUL / MULW, 2 for the MULH family), answers taken late, kills midway. What a program cannot choose |
+| `make clint` | Drives `CPU_CLINT` directly in a 4-hart configuration (`tb_CLINT.sv`). Checks the parts of the register map a single-core program cannot reach |
+| `make plic` | Drives the register port of `CPU_PLIC` directly (`tb_PLIC.sv`) |
+| `make riscv-tests` | The official riscv-tests (rv64ui / um / ua / uc / uf / ud / uzba / uzbb / uzicond / mi / si). `RVTESTS` gives the location of the repository |
+| `make riscv-tests-v` | The same tests in the virtual memory environment (`-v`, running under Sv39 while pages are allocated) |
+| `make bugs` / `./bug_inject.sh` | Bug injection, 315 mutations (judged both with and without back pressure. M211 to M231 are debug mode, M298 to M314 triggers, M320 to M340 performance counters, M341 to M358 the connection of the pipelined FPU and the register files, M240 and later the early issue from EX. Mutations of `CORE_MDU` are also judged with `tb_MDU`) |
 | `make lint` | Verilator lint |
 
-プラスアーグ:
+Plusargs:
 
-| 引数 | 内容 |
+| Argument | Meaning |
 |---|---|
-| `+hex=<file>` `+name=<name>` | プログラムイメージと試験名 |
-| `+tohost=<addr>` | tohost の番地(既定 0x8000_2000。riscv-tests では ELF から取る) |
-| `+trace` | リタイアした命令(PC、命令語、書き込みレジスタ)とトラップを出す |
-| `+dtrace` | データポートの要求/応答を出す |
-| `+ftrace` | FPU に渡した演算・書式・丸めモード・オペランドを出す |
-| `+istall=<n>` `+dstall=<n>` | 命令/データポートの `ready` を約 n% のサイクルで落とす |
-| `+maxcycles=<n>` | ウォッチドッグ(既定 200000) |
+| `+hex=<file>` `+name=<name>` | Program image and test name |
+| `+tohost=<addr>` | Address of tohost (default 0x8000_2000; taken from the ELF for riscv-tests) |
+| `+trace` | Prints retired instructions (PC, instruction word, register written) and traps |
+| `+dtrace` | Prints requests / responses of the data port |
+| `+ftrace` | Prints the operations handed to the FPU, with format, rounding mode and operands |
+| `+istall=<n>` `+dstall=<n>` | Drops `ready` of the instruction / data port in about n % of the cycles |
+| `+maxcycles=<n>` | Watchdog (default 200000) |
 
-## 試験プログラム
+## Test programs
 
-`tests/*.S` を `/opt/riscv/bin/riscv64-unknown-elf-gcc` で組み立てる。既定は
-`-march=rv64ima_zicsr_zifencei`(C なし)で、命令の幅が分かっている方が
-「トラップした命令を 4 足して飛ばす」ハンドラを書きやすいため。圧縮命令の
-試験 `t08_rvc` だけ `MARCH_t08_rvc` で C 付きにしている。公式 riscv-tests は
-全セットを C 付きでビルドするので、そちらが混在命令列の試験になる。`tests/link.ld` は `.text` を 0x8000_0000、`.data` を 0x8000_1000、
-`.tohost` を 0x8000_2000 に置く。
+`tests/*.S` are assembled with `/opt/riscv/bin/riscv64-unknown-elf-gcc`. The default is
+`-march=rv64ima_zicsr_zifencei` (no C), because knowing the width of every instruction makes it easier
+to write handlers that "skip the trapping instruction by adding 4". Only the compressed instruction test
+`t08_rvc` is built with C, through `MARCH_t08_rvc`. The official riscv-tests are all built with C, so
+they are the tests of mixed instruction streams. `tests/link.ld` puts `.text` at 0x8000_0000, `.data` at
+0x8000_1000 and `.tohost` at 0x8000_2000.
 
-riscv-tests と同じ約束で、`tohost` に 1 を書けば合格、`(チェック番号 << 1) | 1`
-を書けば不合格。テストベンチはストアチャネルを見て `tohost` を拾い、0 以外が
-書かれた時点で試験を終える(プログラムはそのあと無限ループでよい)。
-フレーム(`tests/test.h`)は gp(x3)、t0(x5)、t6(x31)を使うので、試験本体は
-x10〜x30 だけを使うこと。`TEST_INIT` が既定のトラップハンドラを入れる。
-予期しないトラップは `64 + cause` として報告され、テストベンチが原因・`mepc`・
-`mtval` を続けて表示する。
+With the same convention as riscv-tests, writing 1 to `tohost` passes and writing `(check number << 1) |
+1` fails. The testbench picks up `tohost` from the store channel and ends the test as soon as something
+other than 0 is written (the program may loop forever after that). The frame (`tests/test.h`) uses gp
+(x3), t0 (x5) and t6 (x31), so the body of a test must use only x10 to x30. `TEST_INIT` installs the
+default trap handler. An unexpected trap is reported as `64 + cause`, and the testbench then prints the
+cause, `mepc` and `mtval`.
 
-| 試験 | 内容 |
+| Test | Contents |
 |---|---|
-| `t01_alu` | 即値・レジスタ演算、シフト、LUI/AUIPC、32bit 形式、符号付き/符号なし比較 |
-| `t02_branch` | 6 種の分岐、JAL/JALR、ループ、前後方向ジャンプ |
-| `t03_ldst` | 全サイズのロード/ストア、符号/ゼロ拡張、バイトレーン、負オフセット |
-| `t04_hazard` | フォワーディング、load-use、ストアデータ、ストール中のオペランド保持 |
-| `t05_csr` | CSR 命令、WARL フィールド、カウンタの正確さ、不正な CSR アクセス |
-| `t06_irq` | CLINT(タイマ/ソフトウェア/外部)、マスク、WFI、ベクタ方式の mtvec |
-| `t07_trap` | バスのアクセスフォールト、不整列、`mtval`/`mepc`、トラップ後方の命令の抑止、トラップをはさんだ `minstret` の数(捨てた命令が退役しないこと) |
-| `t08_rvc` | 圧縮命令、語境界をまたぐ 32bit 命令、語の途中への分岐、不正な圧縮命令 |
-| `t09_muldiv` | 乗除算の符号、ゼロ除算、オーバーフロー、32bit 形 |
-| `t10_atomic` | LR/SC と全 AMO の 32/64bit、不整列 |
-| `t11_fp` | `mstatus.FS`、NaN-boxing、`fcsr`/丸めモード、FP ストアのデータ源、FPU と他ユニットのハザード |
-| `t12_priv` | S / U モード、委譲、SRET。M → S → U と戻る経路、割り込みの委譲、`mstatus` の TVM / TW / TSR(公式の rv64si は U モードまで行かない) |
-| `t13_pmp` | PMP が実際にアクセスを止めること: 番号の小さいエントリが優先、M はロックされていないエントリを素通りしロックされたものには従う、R / W / X の区別 |
-| `t14_mmu` | Sv39: 手で作ったページテーブルで 3 段の変換、権限ビット、`SFENCE.VMA` |
-| `t15_plic` | PLIC をプログラムから: 線を上げる → 外部割り込み → ハンドラで claim / complete → 戻る |
-| `t16_bench` | 計測用(前端に効くループ 3 種)。バグ注入では予測器が働いていることを BENCH_LIMIT のサイクル数で確かめる |
-| `t17_btb` | 分岐予測の誤フェッチ: 予測で捨てた命令をフェッチ部が取り戻すこと |
-| `t18_asid` | 別のアドレス空間が残した予測(`satp` を替えても BTB は消えない)。予測が何と言っても、そこにある命令を実行すること |
-| `t19_ldbench` | C で書いたロード・ストアの計測(`t19_ldbench.c`) |
-| `t20_ptw_pmp` | ページテーブルの読み出しを PMP が拒んだとき、ページフォールトではなくアクセスの種類のアクセスフォールトになること |
-| `t21_satp` | Linux と同じ手順で S モードから MMU を入れる(`satp` を書いた直後の命令ページフォールトで仮想アドレスへ移る) |
-| `t22_mip_seip` | PLIC の S 線が立っている間の `csrs` / `csrc mip` がソフトウェアの SEIP に写らないこと(決定 51) |
-| `t23_debug` | デバッグモード。テストベンチ内のデバッガ(`tb_CORE.sv` の debugger)が DM の代わりにコアの `dbg_*` を動かし、リセット直後の halt、ループ中の halt と step、EBREAK、GPR/FPR/CSR の読み書き(32bit 書き込み、エラー)、割り込みが保留中の step、ECALL の step、WFI 中の halt、U モードへの resume、デバッガのトリガ(dmode・action 1 の実行トリガとロードトリガを U モードで。命令・ロードの手前で止まり、hit が立ち、トラップしない。プログラムからはそのトリガを書き換えられない)を検査する。この試験名のときだけデバッガが動く |
-| `t24_predict` | 分岐予測(ワードをまたぐ 32bit 分岐の tail エントリ、飛び込んだワードでは tail を使わないこと、戻りアドレススタック、1 回おきに成立する分岐 ―― gshare の履歴が無いと半分外れる)。予測が外れても結果は同じなので、同じ実行の中で予測に頼らない参照と時間を比べ、1.25 倍を超えたら不合格 |
-| `t25_lsu` | EX から早出しした要求(`CPU_CORE_SPEC.md` 5.4): 取り消したストアの後ろのロード、トラップ時に飛んでいる答え、トラップの後ろの PLIC の claim(副作用のある I/O ロードは前の命令の確定を待つ)、ハンドラが飛ばすストア |
-| `t26_late` | ロードの値で分岐する条件分岐(MR で確定する「遅い分岐」、`CPU_CORE_SPEC.md` 決定 64): 6 種の比較 × ロードが rs1 / rs2 / 両方、予測の当たり外れの両方向、外れたときに EX にいたストア・フォールトするロード・除算・CSR 書き込みが何も残さないこと、遅い分岐のすぐ後ろの分岐、ロードがフォールトしたときトラップが勝つこと、遅い分岐の後ろで待つループの分岐の時間(待たないと BTB が学ばない)、ロードした番地への jalr(こちらは EX で待つ) |
-| `t27_fence` | FENCE(`CPU_CORE_SPEC.md` 5.3): 全種のエンコーディング(`fence.tso`、`pause`、予約フィールドが立ったものはトラップせず rd も書かない)、ストア・キャッシュしないストア / ロードのすぐ後ろ、ロードの答えが捨てられる途中のトラップハンドラの先頭。前のアクセスが終わる前に FENCE が出ないことはテストベンチが毎回確かめる |
-| `t28_bitmanip` | Zba / Zbb(`CPU_CORE_SPEC.md` 決定 65)を Python のモデルと突き合わせる(`tools/gen_t28.py` が作る。手で書き換えない)。47 の命令・即値のそれぞれについて、端の値 8 個の組と xorshift64 の 32 組を回し、結果を回転・xor・乗算でまとめたチェックサムを比べる。新しい符号の隣(PACKW、未定義の単項演算、Zbs)が不正命令のままであること |
-| `t29_sstc` | Sstc と特権仕様 1.12 の CSR(`CPU_CORE_SPEC.md` 決定 66): `menvcfg` / `senvcfg` / `mcountinhibit` の実装フィールド、CY / IR でカウンタが止まること、STCE の有無で `mip.STIP` が書けるビットか比較かが変わること、S からの `stimecmp` が STCE と `mcounteren.TM` の両方を要ること、`stimecmp` からの S タイマ割り込みを S モードで受けること |
-| `t30_trig` | Sdtrig の例外を起こすトリガ(`CPU_CORE_SPEC.md` 決定 67): `tselect` / `tdata1` / `tdata2` / `tdata3` / `tinfo` / `tcontrol` の読み書き、M モードの実行トリガと `tcontrol.MTE` / MPTE、ハンドラ内では発火しないこと、ロード・ストア・AMO のトリガ(アクセスが起きない、mtval、完全一致、不整列より優先)、m / s / u ビット(S・U モード)、捨てられる経路(予測ミスの後ろ、ECALL の後ろの命令とロード)では発火も hit も無いこと、不正命令より優先すること |
-| `t31_zicond` | Zicond(`CPU_CORE_SPEC.md` 決定 68): `czero.eqz` / `czero.nez` の値の表(rs2 の最下位・最上位・上位半分の 1 ビットだけ)、rd = rs1 / rd = rs2 / rs1 = rs2 / x0、直前の ALU・ロードからのフォワーディング、結果を分岐とアドレスに使う場合。PAUSE・NTL.*・C.NTL.* がトラップせず何も書かないこと |
-| `t32_pmu` | 性能カウンタ(Zihpm、Sscofpmf、`CPU_CORE_SPEC.md` 決定 69): `mhpmcounter` / `mhpmevent` の実装範囲と 7〜31 の読み出し 0、`mcountinhibit` の HPM ビット、サイクル・命令数が `mcycle` / `minstret` の差と一致すること、ロード・ストア・条件分岐(MR で解決する分岐を含む)・例外の正確な数、予測ミス・ロードユース・MDU 待ち・フロントエンド / バックエンドの停止が数えられること、`mcountinhibit` と MINH / UINH、あふれで OF と LCOFIP が立ち M で割り込み(cause 13)を取ること、OF が立っていれば再び割り込まないこと、S への委譲(`sip` / `sie`)、`hpmcounterN` と `scountovf` の `mcounteren` / `scounteren` による制限、Smcntrpmf(`mcyclecfg` / `minstretcfg`)。キャッシュと TLB のイベントは SIM_SYS の `progs/d04_pmu.S` |
-| `t33_fpipe` | パイプライン化した FPU(`CPU_CORE_SPEC.md` 10.11): 独立な FMADD.D 16 本が 1 サイクルに 1 本で流れること、依存の連鎖と整数への答えを直後の ADDI へ、直前の答えの FSD、FPU がまだ書いていないレジスタへの FLD・整数命令の書き込み(WAW)、FMV.X.D を分岐に・FEQ.D をアドレスに、直後の FRFLAGS、トラップの後ろと FENCE.I の後ろ(後ろの命令はストアで書き換えておく)で取り消された演算、整数⇄倍精度、除算の後ろ、遅い分岐の影の FADD、ロードの直後の FP 演算、FPU の整数の答えをあとでレジスタファイルから読む(rs1 / rs2)、FLD の 1〜5 命令後の読み出し(書き込みと同じサイクルの読み出し) |
+| `t01_alu` | Immediate and register operations, shifts, LUI/AUIPC, the 32-bit forms, signed / unsigned compares |
+| `t02_branch` | The 6 branches, JAL/JALR, loops, forward and backward jumps |
+| `t03_ldst` | Loads / stores of all sizes, sign / zero extension, byte lanes, negative offsets |
+| `t04_hazard` | Forwarding, load-use, store data, operands held during a stall |
+| `t05_csr` | CSR instructions, WARL fields, exactness of the counters, illegal CSR accesses |
+| `t06_irq` | CLINT (timer / software / external), masks, WFI, vectored mtvec |
+| `t07_trap` | Bus access faults, misalignment, `mtval`/`mepc`, suppression of the instructions behind a trap, the `minstret` count across a trap (thrown-away instructions do not retire) |
+| `t08_rvc` | Compressed instructions, 32-bit instructions across a word boundary, branches into the middle of a word, illegal compressed instructions |
+| `t09_muldiv` | Signs of multiply / divide, divide by zero, overflow, the 32-bit forms |
+| `t10_atomic` | LR/SC and all AMOs, 32/64 bit, misaligned |
+| `t11_fp` | `mstatus.FS`, NaN-boxing, `fcsr` / rounding modes, the data source of FP stores, hazards between the FPU and other units |
+| `t12_priv` | S / U modes, delegation, SRET. The path M → S → U and back, delegation of interrupts, TVM / TW / TSR of `mstatus` (the official rv64si does not go as far as U mode) |
+| `t13_pmp` | That PMP really stops accesses: lower numbered entries win, M passes through unlocked entries and obeys locked ones, R / W / X are told apart |
+| `t14_mmu` | Sv39: three-level translation with hand-made page tables, permission bits, `SFENCE.VMA` |
+| `t15_plic` | The PLIC from a program: raise a line → external interrupt → claim / complete in the handler → return |
+| `t16_bench` | For measurement (3 loops that exercise the front end). In bug injection it checks that the predictor works, through the cycle count of BENCH_LIMIT |
+| `t17_btb` | Wrong fetches of the branch predictor: the fetch unit gets back the instructions the prediction threw away |
+| `t18_asid` | Predictions left behind by another address space (the BTB is not cleared when `satp` changes). Whatever the prediction says, the instruction that is there is executed |
+| `t19_ldbench` | Load / store measurement written in C (`t19_ldbench.c`) |
+| `t20_ptw_pmp` | When PMP refuses a page table read, the result is an access fault of the access's kind, not a page fault |
+| `t21_satp` | Turns the MMU on from S mode the way Linux does (moving to the virtual address through the instruction page fault right after writing `satp`) |
+| `t22_mip_seip` | While the PLIC's S line is up, `csrs` / `csrc mip` do not leak into the software SEIP (decision 51) |
+| `t23_debug` | Debug mode. A debugger inside the testbench (the debugger of `tb_CORE.sv`) drives the core's `dbg_*` in place of the DM and checks halt right after reset, halt and step in a loop, EBREAK, reading and writing GPR/FPR/CSR (32-bit writes, errors), step with an interrupt pending, step over ECALL, halt during WFI, resume into U mode, and the debugger's triggers (an execute trigger and a load trigger with dmode and action 1, in U mode: they stop before the instruction or load, set hit and do not trap, and the program cannot rewrite them). The debugger runs only for this test name |
+| `t24_predict` | Branch prediction (the tail entry of a 32-bit branch across a word, not using the tail in a word jumped into, the return address stack, a branch taken every other time — half of them mispredicted without gshare's history). A misprediction does not change the result, so the time is compared with a reference in the same run that does not rely on prediction, and more than 1.25 times fails |
+| `t25_lsu` | Requests issued early from EX (`CPU_CORE_SPEC.md` 5.4): a load behind a store that was taken back, answers in flight at a trap, a PLIC claim behind a trap (an I/O load with side effects waits for the instruction in front to be final), a store the handler skips |
+| `t26_late` | Conditional branches on the value of a load (the "late branch" decided in MR, `CPU_CORE_SPEC.md` decision 64): 6 compares × load as rs1 / rs2 / both, prediction right and wrong in both directions, that the store, faulting load, divide or CSR write in EX at a misprediction leaves nothing behind, a branch right behind a late branch, that the trap wins when the load faults, the timing of a loop branch waiting behind a late branch (without waiting the BTB does not learn), jalr to a loaded address (which waits in EX) |
+| `t27_fence` | FENCE (`CPU_CORE_SPEC.md` 5.3): all encodings (`fence.tso`, `pause`, ones with reserved fields set neither trap nor write rd), right behind stores, uncached stores / loads, at the head of a trap handler while the answer of a load is being thrown away. The testbench checks every time that a FENCE does not go before the accesses in front of it are done |
+| `t28_bitmanip` | Checks Zba / Zbb (`CPU_CORE_SPEC.md` decision 65) against a Python model (generated by `tools/gen_t28.py`; do not edit by hand). For each of 47 instructions / immediates it runs the pairs of 8 edge values and 32 xorshift64 pairs and compares a checksum folding the results by rotate, xor and multiply. Encodings next to the new ones (PACKW, undefined unary operations, Zbs) stay illegal |
+| `t29_sstc` | Sstc and the CSRs of privileged spec 1.12 (`CPU_CORE_SPEC.md` decision 66): the implemented fields of `menvcfg` / `senvcfg` / `mcountinhibit`, CY / IR stopping the counters, STCE deciding whether `mip.STIP` is a writable bit or a comparison, `stimecmp` from S needing both STCE and `mcounteren.TM`, taking the S timer interrupt from `stimecmp` in S mode |
+| `t30_trig` | Sdtrig triggers that raise exceptions (`CPU_CORE_SPEC.md` decision 67): reading and writing `tselect` / `tdata1` / `tdata2` / `tdata3` / `tinfo` / `tcontrol`, M-mode execute triggers with `tcontrol.MTE` / MPTE, no firing inside the handler, load / store / AMO triggers (the access does not happen, mtval, exact match, priority over misalignment), the m / s / u bits (S and U modes), no firing or hit on paths that are thrown away (behind a misprediction, the instruction and load behind ECALL), priority over illegal instruction |
+| `t31_zicond` | Zicond (`CPU_CORE_SPEC.md` decision 68): a table of values of `czero.eqz` / `czero.nez` (only the lowest, highest and upper-half bit of rs2 set), rd = rs1 / rd = rs2 / rs1 = rs2 / x0, forwarding from the ALU and a load just before, results used for a branch and an address. PAUSE, NTL.* and C.NTL.* neither trap nor write anything |
+| `t32_pmu` | Performance counters (Zihpm, Sscofpmf, `CPU_CORE_SPEC.md` decision 69): the implemented range of `mhpmcounter` / `mhpmevent` and 0 read from 7 to 31, the HPM bits of `mcountinhibit`, cycles and instructions equal to the differences of `mcycle` / `minstret`, exact counts of loads, stores, conditional branches (including those resolved in MR) and exceptions, that mispredictions, load-use, MDU waits and front end / back end stalls are counted, `mcountinhibit` with MINH / UINH, OF and LCOFIP set on overflow and the interrupt (cause 13) taken in M, no second interrupt while OF is set, delegation to S (`sip` / `sie`), the restriction of `hpmcounterN` and `scountovf` by `mcounteren` / `scounteren`, Smcntrpmf (`mcyclecfg` / `minstretcfg`). The cache and TLB events are in SIM_SYS's `progs/d04_pmu.S` |
+| `t33_fpipe` | The pipelined FPU (`CPU_CORE_SPEC.md` 10.11): 16 independent FMADD.D flowing at one a cycle, a dependent chain and its integer answer straight into an ADDI, FSD of the answer just in front, FLD and integer writes to a register the FPU has not written yet (WAW), FMV.X.D into a branch and FEQ.D into an address, FRFLAGS right behind, operations taken back behind a trap and behind FENCE.I (the instruction behind is rewritten by a store first), integer ⇄ double, behind a divide, an FADD in the shadow of a late branch, FP operations right behind loads, the FPU's integer answers read later from the register file (rs1 / rs2), reads 1 to 5 instructions after an FLD (a read in the same cycle as the write) |
 
-## テストベンチが自動で見ているもの
+## What the testbench checks on its own
 
-- 停止要因(ECALL 以外で止まったら不合格)
-- キャッシュポートの規則違反(M1 は同時に 1 アクセスのみ)
-- 同じ PC が 2 サイクル連続でリタイアしていないこと(二重リタイア)
-- データポートの答えを MA のアクセスが待っていること(誰も待っていない答えは不合格。フラッシュで捨てるべき答えを渡す誤りを捕まえる)
-- FENCE が ID を出るとき、前のアクセスがすべて答えられていること(LSU の `os == drop`。捨てる答えは数えない)
-- ウォッチドッグ(ハングを不合格にする)
+- The reason for stopping (stopping anywhere but ECALL fails)
+- Violations of the cache port rules (M1 allows one access at a time)
+- That the same PC does not retire in 2 consecutive cycles (double retirement)
+- That an access in MA is waiting for every answer of the data port (an answer nobody waits for fails;
+  this catches handing over an answer that should have been thrown away by a flush)
+- That when a FENCE leaves ID, all accesses in front of it have been answered (`os == drop` of the LSU;
+  answers to be thrown away are not counted)
+- Watchdog (a hang fails)

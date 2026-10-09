@@ -1,144 +1,151 @@
-# 次の設計テーマ(2026-10-09 時点)
+# Next design themes (as of 2026-10-09)
 
-2026-10-03 から 10-09 までのテーマ(A・B・C2・D1・E1・G1・H)を終えた時点での整理。
-各テーマの経緯は 2 章の表と、そこに書いた文書の章にある(この文書の以前の版は git の履歴)。
+[日本語](ROADMAP_J.md)
 
-## 1. いまの姿
+Where things stand after the themes of 2026-10-03 to 10-09 (A, B, C2, D1, E1, G1, H). The history of
+each theme is in the table of section 2 and in the sections of the documents it points to (earlier
+versions of this document are in the git history).
 
-実機(Arty A7-100T、50 MHz、Linux 7.2):
+## 1. Where things are
 
-| | 値 | 文書 |
+On the board (Arty A7-100T, 50 MHz, Linux 7.2):
+
+| | Value | Document |
 |---|---|---|
-| CoreMark | **2.498 /MHz**(rv64gc)、**2.785 /MHz**(Zba・Zbb で作ったもの) | `BENCH.md` 15・16 章 |
-| Dhrystone | 1.488 / 1.496 DMIPS/MHz | 同上 |
-| 浮動小数点 | FIR 8 タップ **1.53 サイクル / 積和**(65.6 MFLOPS)、行列積 64×64 **2.42**(41.2 MFLOPS、アセンブラ + キャッシュのブロッキング) | `RTL/CPU/CPU_FPU/README.md` |
-| 資源 | LUT 44,833(70.7 %)、FF 24,712(19.5 %)、**スライス 86.2 %(残り約 2,190)**、ブロック RAM 108.5 / 135(残り 26.5)、DSP 32 / 240 | `TIMING.md` 34 章 |
-| タイミング | WNS +0.113 ns(50 MHz)。先頭はデバッガの CSR 番号 → CSR の判定 → EX の例外 → 止め | 同上 |
+| CoreMark | **2.498 /MHz** (rv64gc), **2.785 /MHz** (built with Zba and Zbb) | Sections 15 and 16 of `BENCH.md` |
+| Dhrystone | 1.488 / 1.496 DMIPS/MHz | Same |
+| Floating point | 8-tap FIR **1.53 cycles per multiply-add** (65.6 MFLOPS), matrix multiply 64×64 **2.42** (41.2 MFLOPS, assembler + cache blocking) | `RTL/CPU/CPU_FPU/README.md` |
+| Resources | LUT 44,833 (70.7 %), FF 24,712 (19.5 %), **slices 86.2 % (about 2,190 left)**, block RAM 108.5 / 135 (26.5 left), DSP 32 / 240 | Section 34 of `TIMING.md` |
+| Timing | WNS +0.113 ns (50 MHz). The worst path is the debugger's CSR number → CSR checks → EX exception → stall | Same |
 
-**時間がどこへ行っているか**:
+**Where the time goes**:
 
-- **CoreMark**(キャッシュに収まる): CPI 1.118。損失はフロントエンドが空 4.0 %、MDU / FPU 待ち
-  2.6 %、ロードユース 2.0 %、D$ 待ち 0.25 % など、どれも数 %(`BENCH.md` 13・15 章)。
-  パイプラインの残りは手間とリスクに見合いにくい。
-- **Linux の実負荷**(`workload.sh`、L2 あり): サイクルのうち **D$ 待ちがユーザモードの負荷で
-  7〜9 %、カーネルが主の負荷で 16〜39 %**、フロントエンドが空(I$ ミス)が 2〜30 %
-  (`BENCH.md` 15 章)。ユーザモードの負荷は DTLB ミスも目立つ(1000 命令あたり 8〜16)。
-- **浮動小数点**: 行列積の残り(2.42 と核の 1.7 の差)は D$ のミス。
+- **CoreMark** (fits in the caches): CPI 1.118. The losses are front end empty 4.0 %, MDU / FPU wait
+  2.6 %, load-use 2.0 %, D$ wait 0.25 % and so on, all a few % (sections 13 and 15 of `BENCH.md`).
+  What remains in the pipeline is hardly worth the effort and the risk.
+- **Real Linux loads** (`workload.sh`, with the L2): of the cycles, **D$ wait is 7 to 9 % in user-mode
+  loads and 16 to 39 % in kernel-heavy loads**, front end empty (I$ misses) 2 to 30 % (section 15 of
+  `BENCH.md`). User-mode loads also show many DTLB misses (8 to 16 per 1000 instructions).
+- **Floating point**: what remains of the matrix multiply (the gap between 2.42 and the kernel's 1.7)
+  is D$ misses.
 
-いまのコアは**ロード・ストアがミスすると MA で応答を待ち、その間なにも進まない**(stall on
-miss)。D$ 自体はミスの間も別のラインのヒットを受け付け(MSHR 2 本、応答を順番どおりに返す
-ROB 8 段)、L2 もあるが、コアがそれを使えていない。次の大きな伸びしろはここにある(3 章 M)。
+The core today **waits in MA for the answer when a load or store misses, and nothing moves meanwhile**
+(stall on miss). The D$ itself accepts hits to other lines during a miss (2 MSHRs, an 8-entry ROB that
+answers in order), and there is an L2, but the core does not make use of them. That is where the next
+big gain is (section 3, M).
 
 ---
 
-## 2. これまでのテーマ(済み)
+## 2. Themes done
 
-| # | テーマ | 結果 | 文書 |
+| # | Theme | Result | Document |
 |---|---|---|---|
-| A1 / H1 | 長時間の負荷試験 | 120 分を 3 回(A1、H1、E1 の後)、すべて OK | `BRINGUP.md` 14・16・17 回目 |
-| A2 | SD カードの入力のタイミング | もともと I/O ブロックの `IDDR` で受けていた(変更なし) | `BRINGUP.md` 13 回目 |
-| A3 | `fence` | 単一ハートでは何もしなくて足りることを確かめ、試験を足した | `CPU_CORE_SPEC.md` 5.3 |
-| B1 | Zba / Zbb | CoreMark +11.6 %、Linux の文字列関数が Zbb 版に | 決定 65 |
-| B2 | Sstc | CoreMark +1.5 %(タイマのたびの OpenSBI 経由がなくなった) | 決定 66 |
-| B3 | Zicond / Zihintpause / Zihintntl | ALU に 2 演算、ヒントはデバイスツリーに載せただけ | 決定 68 |
-| B4 | Sdtrig(トリガ 4 本) | gdb のハードウェアブレークポイント・ウォッチポイント | 決定 67、`JTAG.md` 5 章 |
-| B5 | PMU(Zihpm、Sscofpmf、Smcntrpmf) | 実機の `perf stat` / `perf record` | 決定 69、`BENCH.md` 13 章 |
-| C2 | FPU のパイプライン化 | 加減算・乗算・積和・変換が 1 サイクルピッチ。FIR 1.53、行列積 2.42 サイクル / 積和(前の版の C は 17.6)。資源はむしろ減った | `RTL/CPU/CPU_FPU/README.md`、`CPU_CORE_SPEC.md` 10.11、`BENCH.md` 16 章 |
-| D1 | Linux の実負荷を PMU で測る | `workload.sh`(8 負荷) | `BENCH.md` 14 章 |
-| E1 | L2 キャッシュ(256 KB) | カーネルが主の負荷で 1.2〜1.7 倍 | `CPU_L2_SPEC.md`、`BENCH.md` 15 章 |
-| G1 | 実機の gdb でトリガ | 動いているカーネルで `hbreak` / `watch` | `JTAG.md` 5 章 |
-| H2 | SD カードの書き方 | 第 1 パーティションは Mac から書く | `software/boot/README.md` |
+| A1 / H1 | Long stress tests | 120 minutes three times (after A1, H1 and E1), all OK | Rounds 14, 16 and 17 of `BRINGUP.md` |
+| A2 | Timing of the SD card inputs | Already taken in the I/O block's `IDDR` (no change) | Round 13 of `BRINGUP.md` |
+| A3 | `fence` | Confirmed that doing nothing is enough for a single hart, and added tests | `CPU_CORE_SPEC.md` 5.3 |
+| B1 | Zba / Zbb | CoreMark +11.6 %, Linux's string functions switch to the Zbb versions | Decision 65 |
+| B2 | Sstc | CoreMark +1.5 % (no more going through OpenSBI at every timer) | Decision 66 |
+| B3 | Zicond / Zihintpause / Zihintntl | 2 operations in the ALU; the hints only put in the device tree | Decision 68 |
+| B4 | Sdtrig (4 triggers) | Hardware breakpoints and watchpoints in gdb | Decision 67, section 5 of `JTAG.md` |
+| B5 | PMU (Zihpm, Sscofpmf, Smcntrpmf) | `perf stat` / `perf record` on the board | Decision 69, section 13 of `BENCH.md` |
+| C2 | Pipelining the FPU | Add / subtract, multiply, multiply-add and conversions at one a cycle. FIR 1.53, matrix multiply 2.42 cycles per multiply-add (17.6 in C with the earlier version). Resources even went down | `RTL/CPU/CPU_FPU/README.md`, `CPU_CORE_SPEC.md` 10.11, section 16 of `BENCH.md` |
+| D1 | Measuring real Linux loads with the PMU | `workload.sh` (8 loads) | Section 14 of `BENCH.md` |
+| E1 | L2 cache (256 KB) | 1.2 to 1.7 times on kernel-heavy loads | `CPU_L2_SPEC.md`, section 15 of `BENCH.md` |
+| G1 | Triggers with gdb on the board | `hbreak` / `watch` on a running kernel | Section 5 of `JTAG.md` |
+| H2 | How to write the SD card | Write the first partition from the Mac | `software/boot/README.md` |
 
 ---
 
-## 3. 次のテーマ
+## 3. Next themes
 
-### M. メモリの待ちを計算と重ねる(新規、本命)
+### M. Overlapping memory waits with computation (new, the main one)
 
-いまの規則は「**MA のロード・ストアは D$ の応答が来るまで止まる**」(`stall_ma = ma_valid &
-ma_mem & ~lsu_resp_valid`)。ミスすると L2 のヒットで 14〜22 サイクル、DRAM まで行くと 60
-サイクル以上、パイプライン全体が止まる。ストアも同じで、ライトアロケートのミスは行が届くまで
-待つ。重ね方は軽いものから順に 4 段階あり、組み合わせられる。
+The rule today is "**a load or store in MA stops until the D$ answers**" (`stall_ma = ma_valid & ma_mem
+& ~lsu_resp_valid`). On a miss the whole pipeline stops for 14 to 22 cycles on an L2 hit, and 60 cycles
+or more when it goes to DRAM. Stores are the same: a write-allocate miss waits until the line arrives.
+There are 4 levels of overlap, from the lightest, and they can be combined.
 
-| # | テーマ | 規模 | 中身 | 効く所 |
+| # | Theme | Size | Contents | Where it helps |
 |---|---|---|---|---|
-| M0 | **待ちの内訳を測る** | 小 | どの待ちを消せば効くかを先に数える。(1) MA の待ちのうちストア・ロードそれぞれの分、(2) ロードから値を使う命令までの距離(命令数)の分布、(3) 1 サイクルに飛んでいるミスの数。SIM_SYS のプロファイラと PMU のイベント(2〜3 本)に足し、`workload.sh` と `micro` で見る | M1〜M4 のどれをやるかを決める |
-| M1 | **ストアを待たない**(ストアバッファ) | 中 | キャッシュ可能な領域へのストアは D$ が受け付けた時点でリタイアさせ、応答を待たない。D$ は受け付けたストアを順番どおりに必ず実行するので、あとのロードはその後ろに並び、順序は崩れない。キャッシュ可能なストアにバスエラーは起きない(起きるのは非キャッシュ領域・AMO・SC だけで、それらは今のまま待つ)。`fence` で空になるのを待つ規則を足す | ストアのミス(`memset`、`memcpy`、fork のページのコピー、行列積の C の書き戻し)。M0 の (1) で量が分かる |
-| M2 | **ソフトウェアの先読み**(Zicbop、`prefetch.r` / `prefetch.w`) | 小〜中 | 先読みの命令は D$ にミスの処理(MSHR)を始めさせるだけで、コアは応答を待たない(D$ は受け付けた時点で応答し、ROB を塞がない)。Zicbop は ORI の形のヒントなので、今のコアでは何もしない命令として流れている。**動いているカーネルはもう `CONFIG_RISCV_ISA_ZICBOP=y` で作ってある**ので、デバイスツリーに `zicbop` を載せればカーネルの `prefetch` / `prefetchw` が効き始める。GCC 13.2 は `-march=..._zicbop` で `__builtin_prefetch` を `prefetch.r` にする(確認済み) | アセンブラの核(行列積で A の行と C を 1 パネル先に読む: 2.42 → 2.0 前後の見込み)、`memcpy` などの手書きのループ、カーネルの一部 |
-| M3 | **ハードウェアの先読み** | 中 | D$ か L2 がアクセスの並び(次の行、一定の歩幅)を見て、次の行を自分で読み始める。ソフトは変えなくてよい。L2 に入れるのが安全(L1 を汚さない、コアのタイミングから遠い)。L2 の空きで 1〜2 本の流れを追う | 流れて読む負荷(`md5sum` の L2 ヒット率 71 %、`gunzip`、SD の読み出しのコピー)。`BENCH.md` 14 章の見立て「先読みで減る種類」 |
-| M4 | **ロードのミスで止まらない**(stall on use) | 大 | ミスしたロードは結果を待たずに MA を出て、結果は後から**レジスタファイルの 2 つ目の書き込み口**に書く(C2 で FPU のために作った口)。書き先のレジスタには結果待ちのビット(C2 の `gpr_pend` / `fp_pend` と同じ形)を立て、それを読む命令だけが待つ。D$ は順番どおりに返すので、ロードの書き先を順に積む FIFO で足りる | 行列積(核の 1.7 に近づく)、ロードの後に独立な仕事がある整数のコード。ポインタをたどるループは値をすぐ使うので効かない |
+| M0 | **Measure what the waits are made of** | Small | Count first which waits are worth removing: (1) the share of stores and of loads in MA's waits, (2) the distribution of the distance (in instructions) from a load to the instruction that uses its value, (3) the number of misses in flight per cycle. Add them to the profiler of SIM_SYS and as PMU events (2 or 3), and look with `workload.sh` and `micro` | Decides which of M1 to M4 to do |
+| M1 | **Do not wait for stores** (store buffer) | Medium | A store to the cacheable region retires when the D$ accepts it, without waiting for the answer. The D$ always performs the stores it accepted in order, so later loads line up behind them and the order is kept. Cacheable stores get no bus errors (only the uncached region, AMO and SC do, and those keep waiting as now). Add the rule that `fence` waits for it to be empty | Store misses (`memset`, `memcpy`, copying pages at fork, writing C back in the matrix multiply). (1) of M0 tells how much |
+| M2 | **Software prefetch** (Zicbop, `prefetch.r` / `prefetch.w`) | Small to medium | A prefetch instruction only makes the D$ start handling a miss (MSHR); the core does not wait for the answer (the D$ answers as soon as it accepts it and does not block the ROB). Zicbop is a hint shaped like an ORI, so the core today runs it as an instruction that does nothing. **The running kernel is already built with `CONFIG_RISCV_ISA_ZICBOP=y`**, so putting `zicbop` in the device tree makes the kernel's `prefetch` / `prefetchw` start to work. GCC 13.2 turns `__builtin_prefetch` into `prefetch.r` with `-march=..._zicbop` (checked) | The assembler kernels (the matrix multiply reading the rows of A and C one panel ahead: 2.42 → about 2.0 expected), hand-written loops like `memcpy`, parts of the kernel |
+| M3 | **Hardware prefetch** | Medium | The D$ or the L2 watches the pattern of accesses (next line, constant stride) and starts reading the next line by itself. No software change needed. Putting it in the L2 is safer (does not pollute the L1, far from the core's timing). Follows 1 or 2 streams with the L2's spare capacity | Streaming loads (`md5sum` with its 71 % L2 hit rate, `gunzip`, the copy of SD reads). The "kind that prefetch reduces" of section 14 of `BENCH.md` |
+| M4 | **Do not stop on a load miss** (stall on use) | Large | A load that misses leaves MA without waiting for the result, and the result is written later through **the second write port of the register file** (the port C2 made for the FPU). The destination register gets a pending bit (the same form as C2's `gpr_pend` / `fp_pend`), and only instructions that read it wait. The D$ answers in order, so a FIFO of the loads' destinations is enough | Matrix multiply (getting close to the kernel's 1.7), integer code with independent work after a load. Pointer-chasing loops use the value right away and gain nothing |
 
-**M4 の難所**(M1・M2 にはない):
+**The hard parts of M4** (which M1 and M2 do not have):
 
-- **精密な例外**: アドレス変換と PMP の例外は MR で分かる(MA を出る前)ので精密なまま。後から
-  来るのはバスエラーだけで、キャッシュ可能な領域では起きない(DRAM と L2 はエラーを返さない)。
-  非キャッシュ領域・LR / SC・AMO・デバッガのアクセスは今のまま待つ。
-- **書き込み口の取り合い**: FPU の答えは決まったサイクルに出て止められないので、ロードの戻りが
-  同じサイクルに来たら 1〜2 段のバッファで 1 サイクル待たせる(または LVT を 3 面にする)。
-- **順序**: 同じレジスタにあとから書く命令(WAW)、戻りを待っている間のトラップ(取り消せない
-  所まで進んでいるので、トラップの前に戻りを待つ)、デバッガの停止、`fence`。C2 と同じ種類の
-  問題で、t33 とバグ注入の形がそのまま使える。
-- 資源: コア側で LUT +1,000〜2,000 の見込み。スライスは 86.2 % から 89〜92 % に戻る。
+- **Precise exceptions**: exceptions of address translation and PMP are known in MR (before leaving
+  MA), so they stay precise. Only bus errors come later, and the cacheable region has none (DRAM and the
+  L2 return no errors). The uncached region, LR / SC, AMO and the debugger's accesses keep waiting as now.
+- **Competition for the write port**: the FPU's answers come out in fixed cycles and cannot be stopped,
+  so a load result arriving in the same cycle waits a cycle in a buffer of 1 or 2 entries (or the LVT
+  gets 3 banks).
+- **Order**: an instruction that writes the same register later (WAW), a trap while results are still
+  coming (they are past the point of being taken back, so the trap waits for them), the debugger's halt,
+  `fence`. The same kind of problems as C2, so t33 and the form of the bug injections can be reused.
+- Resources: about LUT +1,000 to 2,000 on the core side. Slices go back from 86.2 % to 89 to 92 %.
 
-**勧める順序**: M0 → M1 と M2(どちらも中くらいで独立、M2 は Linux にも効く)→ M0 の数字を
-見て M3 か M4。M4 は効く範囲が一番広いが、規模も C2 の段階 2 と同じくらいある。
+**Recommended order**: M0 → M1 and M2 (both medium and independent; M2 also helps Linux) → M3 or M4
+depending on M0's numbers. M4 helps the widest range, but it is about as large as stage 2 of C2.
 
-**検討だけ(やらない見込み)**: FLD と FP 演算を同じサイクルに出す(メモリと浮動小数点の
-2 命令同時発行)。FIR は 1.53 → 約 1.0、行列積の核は 1.7 → 約 1.1 になるが、フェッチ・デコード・
-発行を 2 本にするのは事実上の新しいパイプラインで、50 MHz と残りのスライスでは見合わない。
+**Considered only (probably not done)**: issuing an FLD and an FP operation in the same cycle (dual issue
+of memory and floating point). The FIR would go 1.53 → about 1.0 and the matrix multiply kernel 1.7 →
+about 1.1, but making fetch, decode and issue two wide is in effect a new pipeline, not worth it at
+50 MHz with the slices left.
 
-### T. タイミングの余裕を戻す(小〜中、M4 の前に)
+### T. Getting timing margin back (small to medium, before M4)
 
-WNS は +0.113 ns。大きなテーマで論理を足す前に、わかっている経路を手当てしておく。
+WNS is +0.113 ns. Before adding logic with a large theme, deal with the paths that are known.
 
-| # | テーマ | 規模 | 中身 |
+| # | Theme | Size | Contents |
 |---|---|---|---|
-| T1 | EX の CSR の判定をデバッガの番号から切り離す | 小 | いまの最悪経路(`TIMING.md` 34 章)。CSR ファイルの読み出しアドレスが「デバッガの番号 / EX の命令」の多重化器を通っていて、EX の例外の判定がその先にある。デバッガが CSR を読むのは停止中だけなので、EX の例外は `ex_csr_addr` だけから作り、デバッガ用の判定を別に置く |
-| T2 | EX の止めを DTLB の比較から切り離す | 中 | `TIMING.md` 32 章の「MA の転送 → EX のアドレスの加算 → DTLB の比較 → 止め」。DTLB のミスは MR で分かればよい。止めを 1 サイクル後にしたときの D$ 要求の取り消しが要調査 |
-| T3 | `ma_mem` の複製 | 小 | 1 段目のファンアウト(72 本)を減らす。配置しだいで効く小さな手当て |
+| T1 | Separate EX's CSR checks from the debugger's number | Small | The worst path today (section 34 of `TIMING.md`). The read address of the CSR file goes through a "debugger's number / EX's instruction" multiplexer, and EX's exception checks are behind it. The debugger reads CSRs only while halted, so build EX's exception from `ex_csr_addr` alone and give the debugger checks of its own |
+| T2 | Separate EX's stall from the DTLB compare | Medium | "Forwarding from MA → EX's address add → DTLB compare → stall" of section 32 of `TIMING.md`. A DTLB miss only needs to be known in MR. What taking back the D$ request involves when the stall comes a cycle later needs study |
+| T3 | Duplicate `ma_mem` | Small | Reduce the fanout of the first level (72). A small measure whose effect depends on placement |
 
-### E. メモリ階層の残り
+### E. What remains of the memory hierarchy
 
-| # | テーマ | 規模 | 中身 |
+| # | Theme | Size | Contents |
 |---|---|---|---|
-| E1a | L2 の置き換えの比較 | 小 | 疑似 LRU と乱数(`SIM/SIM_L2` の掃引はあるが、実機の負荷では比べていない) |
-| E1b | SD の DMA の書き込みを L2 で受け止める | 中 | `sdread` / `ext4read` の D$ 待ち(39 % / 31 %)が L2 で減らなかった。DMA の書き込みは D$ のライトスルーで L2 を素通りし、1 回ずつメモリの応答を待つ間 D$ が塞がると見ている(未確認)。L2 で行を確保して応答を先に返す(`CPU_L2_SPEC.md` 8 章)。M0 と同じ道具でまず確かめる |
-| E2 | L1 を 16 → 32 KB | 中 | VIPT(1 ウェイ 4 KB)のままでは 8 ウェイが要り、D$ のヒットの経路(タイミングが厳しい)が太くなる。L2 がある今は効きも小さい。やらない見込み |
-| E3 | TLB を大きく(または 2 段) | 中 | ITLB / DTLB 8 エントリ。ユーザモードの負荷で DTLB ミスが 1000 命令あたり 8〜16(`BENCH.md` 14 章)。L2 の後に残ったユーザモードの損失の主因。32〜64 エントリの 2 段目を置く |
+| E1a | Compare L2 replacement policies | Small | Pseudo-LRU against random (`SIM/SIM_L2` has a sweep, but they were not compared on the board's loads) |
+| E1b | Catch the SD card's DMA writes in the L2 | Medium | The D$ wait of `sdread` / `ext4read` (39 % / 31 %) did not go down with the L2. The DMA writes pass through the L2 as the D$'s write-through, and the D$ is thought to be blocked while each waits for memory's answer (not confirmed). Allocate the line in the L2 and answer early (section 8 of `CPU_L2_SPEC.md`). Confirm first with the same tools as M0 |
+| E2 | L1 from 16 to 32 KB | Medium | Staying VIPT (4 KB per way) needs 8 ways, which widens the D$ hit path (tight on timing). With the L2 the gain is also small now. Probably not done |
+| E3 | Larger TLBs (or a second level) | Medium | ITLB / DTLB have 8 entries. User-mode loads have 8 to 16 DTLB misses per 1000 instructions (section 14 of `BENCH.md`), the main cause of what user-mode loads lose after the L2. Add a second level of 32 to 64 entries |
 
-### F. ISA の小物(Linux から見える)
+### F. Small ISA items (visible to Linux)
 
-| # | テーマ | 規模 | 中身 |
+| # | Theme | Size | Contents |
 |---|---|---|---|
-| F1 | Zbs(1 ビット操作) | 小 | `bset` / `bclr` / `binv` / `bext`。Zba / Zbb と合わせて B 拡張がそろう。ALU に足すだけ |
-| F2 | Zicboz(`cbo.zero`) | 中 | カーネルはもう `CONFIG_RISCV_ISA_ZICBOZ=y`。ページのゼロ埋めで、メモリから行を読まずに D$ の行をゼロで確保する。fork・exec・ページフォルトのたびの読み出しが減る。D$ に新しい命令を足す。M1 と相性がよい |
-| F3 | Zbc(キャリーなし乗算) | 小〜中 | カーネルは `CONFIG_RISCV_ISA_ZBC=y`。CRC32(ext4 のメタデータ)が使う。MDU に多サイクルで足す |
-| (M2) | Zicbop | | M にまとめた |
+| F1 | Zbs (single-bit operations) | Small | `bset` / `bclr` / `binv` / `bext`. With Zba / Zbb it completes the B extension. Only additions to the ALU |
+| F2 | Zicboz (`cbo.zero`) | Medium | The kernel already has `CONFIG_RISCV_ISA_ZICBOZ=y`. Zeroing pages allocates the D$ line as zeros without reading it from memory, cutting the reads at every fork, exec and page fault. Adds a new instruction to the D$. Goes well with M1 |
+| F3 | Zbc (carry-less multiply) | Small to medium | The kernel has `CONFIG_RISCV_ISA_ZBC=y`. Used by CRC32 (ext4 metadata). Add to the MDU as a multi-cycle operation |
+| (M2) | Zicbop | | Put under M |
 
-### G・D. デバッグと計測の仕上げ
+### G / D. Finishing debug and measurement
 
-| # | テーマ | 規模 | 中身 |
+| # | Theme | Size | Contents |
 |---|---|---|---|
-| G2 | トリガの範囲一致(match 1、NAPOT) | 小 | いまは完全一致だけなので、gdb の `watch` は変数の先頭アドレスへのアクセスでしか止まらない |
-| D2 | 関数名の出る `perf` | 小〜中 | elfutils を静的に作って足す。`perf report` がカーネルとユーザの関数単位になる。M0 で「どの関数がミスで待つか」まで追うなら要る |
+| G2 | Range matching of triggers (match 1, NAPOT) | Small | Today only exact matches, so gdb's `watch` stops only on accesses to the first address of a variable |
+| D2 | `perf` with function names | Small to medium | Build elfutils statically and add it. `perf report` then works per function of the kernel and user programs. Needed to follow M0 down to "which functions wait on misses" |
 
-### C. 大きなテーマ(保留)
+### C. Large themes (on hold)
 
-| # | テーマ | 判断 |
+| # | Theme | Judgement |
 |---|---|---|
-| C1 | 不整列アクセスのハードウェア対応 | 1 回約 1,070 サイクル(OpenSBI が代行)。Linux は起動時に「遅い」と測って避けるので、トラップに来ることはまれ。必要な負荷が見つかるまで保留 |
-| C3 | ASIC(GF180MCU)の試行 | `../mmRISC-2-GF180MCU` に作業場所がある。コアが落ち着いた時点で |
-| C4 | マルチコア | A7-100T には載らない(スライスの残り約 2,190)。`CPU_CACHE_SPEC.md` 6.4 の手引きは用意済み |
+| C1 | Misaligned accesses in hardware | About 1,070 cycles each (OpenSBI does them). Linux measures them as "slow" at boot and avoids them, so traps are rare. On hold until a load that needs them shows up |
+| C3 | Trying an ASIC (GF180MCU) | There is a workspace in `../mmRISC-2-GF180MCU`. When the core has settled |
+| C4 | Multi-core | Does not fit the A7-100T (about 2,190 slices left). The guide in section 6.4 of `CPU_CACHE_SPEC.md` is ready |
 
 ---
 
-## 4. 勧める順序
+## 4. Recommended order
 
-1. **T1**(小): タイミングの余裕を戻す。デバッガの経路を切るだけ
-2. **M0**(小): メモリの待ちの内訳を測る。E1b の確認も同じ道具で
-3. **M2(Zicbop)と M1(ストアバッファ)**: どちらも中くらいで独立。M2 は Linux にもすぐ効き、
-   アセンブラの核で確かめやすい
-4. M0 の結果で **E3(TLB)**、**M3(ハードウェアの先読み)**、**M4(ロードのミスで止まらない)**
-   から選ぶ。M4 の前に T2
-5. 合間に **F1(Zbs)**、F2・F3、G2
-6. C1・C3 は保留のまま
+1. **T1** (small): get timing margin back. Only cutting the debugger's path
+2. **M0** (small): measure what the memory waits are made of. Check E1b with the same tools
+3. **M2 (Zicbop) and M1 (store buffer)**: both medium and independent. M2 helps Linux right away and is
+   easy to check with the assembler kernels
+4. Choose among **E3 (TLB)**, **M3 (hardware prefetch)** and **M4 (no stop on load misses)** with the
+   results of M0. T2 before M4
+5. In between, **F1 (Zbs)**, F2 / F3, G2
+6. C1 and C3 stay on hold

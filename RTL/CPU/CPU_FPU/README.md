@@ -1,192 +1,205 @@
-# CPU_FPU — 浮動小数点ユニット(F / D)
+# CPU_FPU — floating point unit (F / D)
 
-mmRISC-2 の浮動小数点ユニット。RV64GC の F(単精度)と D(倍精度)の全命令を、IEEE 754 の
-丸め 5 モード・例外フラグ・subnormal までハードウェアで実行する。
+[日本語](README_J.md)
 
-2026-10-09 に**パイプライン版 `FPU_PIPE`** に置き換えた(ROADMAP C2)。加減算・乗算・積和・
-整数との変換は、レジスタの依存がなければ **1 サイクルに 1 命令**流れる。DSP 的な処理(FIR、
-行列積、内積)をアセンブラで書いて速くすることを想定している。
+The floating point unit of mmRISC-2. It executes every instruction of the F (single precision) and D
+(double precision) extensions of RV64GC in hardware, down to the 5 IEEE 754 rounding modes, the
+exception flags and subnormals.
 
-詳しい仕様は [`../CPU_CORE/CPU_CORE_SPEC.md`](../CPU_CORE/CPU_CORE_SPEC.md) 10 章
-(10.11 がパイプライン版)、測定は [`../../../LitexSystem/docs/BENCH.md`](../../../LitexSystem/docs/BENCH.md)
-16 章。
+On 2026-10-09 it was replaced by the **pipelined `FPU_PIPE`** (ROADMAP C2). Add / subtract, multiply,
+multiply-add and conversions to and from integers flow at **one instruction a cycle** when there is no
+register dependency. The intent is DSP-like processing (FIR, matrix multiply, dot product) written in
+assembler to be fast.
+
+The detailed specification is section 10 of [`../CPU_CORE/CPU_CORE_SPEC.md`](../CPU_CORE/CPU_CORE_SPEC.md)
+(10.11 is the pipelined version), the measurements section 16 of
+[`../../../LitexSystem/docs/BENCH.md`](../../../LitexSystem/docs/BENCH.md).
 
 ---
 
-## 1. 構成
+## 1. Structure
 
-| ディレクトリ | 内容 |
+| Directory | Contents |
 |---|---|
-| `FPU_PIPE/` | **コアが使う版**。全演算を 9 段のパイプラインで。除算・平方根は反復のエンジン |
-| `CORE_FPU/` | 前の版。1 件ずつ受けて答える状態機械(EX がその間止まる)。`SIM/SIM_FPU` と `FPGA/FPU_OOC` で比べる相手として残す |
-| `FPU_ROUND/` | 正規化・丸め・詰め込み。丸めるものは全部ここを通る(両方の版が使う) |
+| `FPU_PIPE/` | **The version the core uses**. All operations in a 9-stage pipeline. Divide and square root use an iterative engine |
+| `CORE_FPU/` | The earlier version. A state machine that takes one operation at a time and answers it (EX stops meanwhile). Kept as the reference that `SIM/SIM_FPU` and `FPGA/FPU_OOC` compare against |
+| `FPU_ROUND/` | Normalization, rounding and packing. Everything that is rounded goes through here (both versions use it) |
 
-### 1.1 演算の方式
+### 1.1 How the operations are done
 
-- **積和 1 本のデータパス**。FADD / FSUB / FMUL / FMA 4 種はどれも `a × b + c` を 128 ビットの
-  共通の枠で厳密に計算し、**丸めは 1 回**(fused の定義そのもの)。FADD は `a × 1.0 + c`、
-  FMUL は加数なしとして同じ経路を通る。部分積は DSP48 で 1 サイクルに全部出す(DSP 16 個)。
-- **除算・平方根は復元法の反復**(倍精度の除算 128 回、単精度の除算と平方根 64 回)。
-  商は最も深い subnormal の丸め位置まで作るので、丸め器の入力は 128 ビット。
-- **丸め器 `FPU_ROUND` は 2 サイクル**。1 サイクル目でシフト・切り詰め・切り上げるかを決め、
-  桁上がりの有無の両方の指数を作っておく。2 サイクル目は +1 と選ぶだけ。
-- subnormal は flush-to-zero にせず完全に扱う。NaN-boxing、canonical NaN、tininess は
-  丸めの後で判定(RISC-V の約束)。
+- **One multiply-add datapath**. FADD / FSUB / FMUL and the 4 FMAs all compute `a × b + c` exactly in a
+  common 128-bit frame and **round once** (the very definition of fused). FADD is `a × 1.0 + c`, FMUL is
+  the same path with no addend. The partial products all come out of DSP48s in one cycle (16 DSPs).
+- **Divide and square root iterate by restoring** (128 iterations for a double precision divide, 64 for
+  a single precision divide and for square root). The quotient is produced down to the rounding
+  position of the deepest subnormal, so the input of the rounder is 128 bits wide.
+- **The rounder `FPU_ROUND` takes 2 cycles**. The first cycle shifts, truncates and decides whether to
+  round up, preparing the exponent for both "carry" and "no carry". The second only adds 1 and selects.
+- Subnormals are handled fully, not flushed to zero. NaN-boxing, the canonical NaN, tininess detected
+  after rounding (RISC-V's conventions).
 
-### 1.2 パイプライン(`FPU_PIPE`)
+### 1.2 The pipeline (`FPU_PIPE`)
 
-| 段 | コアの位置 | 中身 |
+| Stage | Where the core is | Contents |
 |---|---|---|
-| P0 | MR | オペランドと制御の写し |
-| P1 | MA | 展開(値の種類、指数、先頭の 1 を揃えた仮数) |
-| P2 | | 積和: 部分積。それ以外: 答え、または丸め器に渡すもの(「束」) |
-| P3 | | 部分積の和(束は待つ) |
-| P4 | | 加数の桁合わせ(束は待つ) |
-| P5 | | 加算(束は待つ) |
-| P6 | | 選択: 和の正規化、束、除算・平方根の結果のどれか |
-| P7 | | 丸めの前半、整数への変換の後半 |
-| P8 | | 丸めの後半、答え |
+| P0 | MR | Copy of the operands and the control |
+| P1 | MA | Unpacking (kind of value, exponent, significand with its leading 1 aligned) |
+| P2 | | Multiply-add: the partial products. Others: the answer, or what is handed to the rounder (the "bundle") |
+| P3 | | Sum of the partial products (the bundle waits) |
+| P4 | | Alignment of the addend (the bundle waits) |
+| P5 | | Addition (the bundle waits) |
+| P6 | | Select: the normalized sum, the bundle, or the result of a divide / square root |
+| P7 | | First half of the rounding, second half of a conversion to integer |
+| P8 | | Second half of the rounding, the answer |
 
-- **段は前の版の状態そのもの**。各状態がもともと自分のレジスタに書いていたので、切れ目も
-  経路も変わらず、DSP も増えなかった。
-- **レイテンシは全部 9**(除算・平方根を除く)。全演算が同じ段数を通るので、答えは受け付けた
-  順に 1 サイクルに 1 件出て、レジスタの書き込みとフラグの順序が崩れない。積和でない演算は
-  P2 で答えを作り、P3〜P5 を待つ。
-- **除算・平方根**は P1 でエンジンに渡ってパイプラインを離れ、終わるまで次を受け付けない
-  (`in_ready` = 0)。終わるころにはパイプラインは空で、答えは P6 から丸めを通る。特殊値
-  (NaN、0、無限大)の除算・平方根はエンジンを使わずにパイプラインを流れる。
-- **P0・P1 はコアの MR・MA と一緒に止まり、一緒に取り消される**(`hold0` / `hold1`、
-  `kill0` / `kill1`)。P2 から先は取り消されない所なので止まらない。
+- **The stages are the states of the earlier version**. Each state already wrote registers of its own,
+  so neither the cuts nor the paths changed, and no DSPs were added.
+- **The latency is 9 for everything** (except divide and square root). All operations go through the
+  same number of stages, so answers come out in the order they were accepted, at most one a cycle, and
+  the order of register writes and flags is kept. Operations other than multiply-add make their answer
+  in P2 and wait through P3 to P5.
+- **Divide and square root** leave the pipeline at P1 for the engine, and nothing new is accepted until
+  they finish (`in_ready` = 0). By then the pipeline is empty, and the answer enters at P6 to be
+  rounded. A divide or square root of special values (NaN, 0, infinity) does not use the engine and
+  flows down the pipeline.
+- **P0 and P1 stop and are taken back together with the core's MR and MA** (`hold0` / `hold1`, `kill0` /
+  `kill1`). From P2 on nothing is taken back any more, so those stages never stop.
 
 ---
 
-## 2. コアとのつなぎ方(`CPU_CORE`)
+## 2. How it connects to the core (`CPU_CORE`)
 
 ```
   ID           EX              MR    MA    WB
   ──────────────────────────────────────────────────────────────────
-  GPR 読み     FP 演算を渡す    P0    P1    (何も書かない)
-  (整数の      ──────────────> P2 → … → P8 ─┬─> FRF の 2 つ目の書き込み口(+ EX へ直接)
-   結果待ち)                                  └─> RF  の 2 つ目の書き込み口
+  read GPRs    hand the FP     P0    P1    (writes nothing)
+  (wait for    op over ──────> P2 → … → P8 ─┬─> 2nd write port of the FRF (+ straight to EX)
+   int results)                               └─> 2nd write port of the RF
 ```
 
-| 項目 | 方式 |
+| Item | How |
 |---|---|
-| 発行 | FP 演算は EX で FPU に渡したら、パイプラインの本体は何も書かずに進んでリタイアする |
-| 答えの書き込み | 9 サイクル後に FPU がレジスタファイルの 2 つ目の書き込み口へ直接(FP の答えは FRF、整数の答えは RF)。`fflags` も答えが出たときに積む |
-| FP の依存 | 結果待ちのビット `fp_pend[32]` を **EX で**見て待つ。答えが出るサイクルに最後の段から EX へ直接渡す(依存する演算どうしは 9 サイクル間隔) |
-| 整数の依存 | `gpr_pend[32]` を **ID で**見て待つ。答えはレジスタファイルの書き込み優先の読み出しで受け取る(10 サイクル間隔)。整数側の転送(設計で一番長い経路の先頭)に入力を足さないため |
-| WAW | FPU がまだ書いていないレジスタに FLD・整数命令・別の FP 演算が書こうとしたら待つ。1 本のレジスタに飛んでいる書き手は常に 1 つ |
-| 取り消し | MA のトラップ・xRET・FENCE.I・SFENCE・再フェッチは P0 を取り消す(`kill0 = flush`)。P1 を取り消すのはトラップだけ(`kill1 = trap_taken`) |
-| 空になるのを待つもの | CSR 命令・xRET・SFENCE・FENCE.I、デバッガのレジスタアクセス(`fpu_busy`) |
-| ロード・ストアの先出し | FPU の答えを待っている FSD / FLD は、D$ への EX からの先出しをしない(`lsu_e_valid` の `~fp_wait`) |
+| Issue | Once EX hands an FP operation to the FPU, the main pipeline writes nothing for it and goes on to retire it |
+| Writing the answer | 9 cycles later the FPU writes straight into the second write port of a register file (FP answers to the FRF, integer answers to the RF). `fflags` are accumulated when the answer comes out too |
+| FP dependencies | The pending bits `fp_pend[32]` are checked **in EX**. In the cycle the answer comes out it goes from the last stage straight to EX (dependent operations are 9 cycles apart) |
+| Integer dependencies | `gpr_pend[32]` is checked **in ID**. The answer is picked up through the write-first read of the register file (10 cycles apart). This adds no input to the integer forwarding, which heads the longest path of the design |
+| WAW | An FLD, an integer instruction or another FP operation that would write a register the FPU has not written yet waits. At most one writer of a register is ever in flight |
+| Taking back | A trap, xRET, FENCE.I, SFENCE or refetch in MA takes back P0 (`kill0 = flush`). Only a trap takes back P1 (`kill1 = trap_taken`) |
+| What waits for the FPU to be empty | CSR instructions, xRET, SFENCE, FENCE.I, the debugger's register accesses (`fpu_busy`) |
+| Early issue of loads / stores | An FSD / FLD waiting for an answer of the FPU does not issue to the D$ early from EX (`~fp_wait` in `lsu_e_valid`) |
 
-**レジスタファイルは書き込み 2 つ**(`CORE_RF`、`CORE_FRF`)。分散 RAM の 2 面(A: パイプラインの
-WB、B: FPU)と、どちらの面が新しいかを示す 32 ビットの表(LVT、live value table)。前の
-フリップフロップの版より小さく(FF −4,096)、中身はリセットで初期化されない。
-
----
-
-## 3. 性能
-
-### 3.1 命令ごとのサイクル数
-
-| 命令 | 発行の間隔(依存なし) | 答えを使えるまで |
-|---|---|---|
-| FADD / FSUB / FMUL / FMADD 系、比較、符号操作、FMV、FCVT(単精度・倍精度とも) | **1** | FP の答え: 9、整数の答え(FEQ、FCVT.L.D、FMV.X.D など): 10 |
-| FDIV.D | 次の FP 演算は終わるまで待つ | 約 134 |
-| FDIV.S / FSQRT | 同上 | 約 70 |
-| FLD / FSD | 1(D$ にヒットすれば) | FLD の値は次の次の命令から |
-
-前の版(`CORE_FPU`)は全演算が EX を占め、積和系は 10 サイクルに 1 命令だった。
-
-### 3.2 実機の測定(Arty A7-100T、50 MHz、Linux、`micro 50 fp`)
-
-| 処理 | 積和 1 回あたりのサイクル数 | MFLOPS |
-|---|---|---|
-| FIR 8 タップ × 1024、アセンブラ | **1.53** | **65.6** |
-| 行列積 64×64、アセンブラ、キャッシュのブロッキング | **2.42** | **41.2** |
-| 行列積 64×64、アセンブラ、ブロッキングなし | 4.01 | 24.9 |
-| 内積 × 512、アセンブラ | 3.66 | 27.3 |
-| 行列積 64×64、C(`-O2`) | 16.6 | 6.04 |
-| 参考: 前の版、行列積 64×64、C(`-O2`) | 17.6 | 5.69 |
-
-同じアセンブラの核を前の版のコアで動かした値(SIM_SYS、データは D$ に入る大きさ)と比べると、
-行列積 11.19 → 2.18(5.1 倍)、FIR 10.10 → 1.45(7.0 倍)、内積 12.81 → 3.66(3.5 倍)。
-
-- **FIR はほぼ 1 サイクルピッチ**。積和 64 本に FLD 8 本・FSD 8 本・ループ 3 本の 83 命令 ÷ 64 =
-  1.30 が発行の下限。
-- **行列積**は 1 つの k で FLD 8 本・FMADD 16 本(核だけで約 1.7)。64×64 の 3 行列(96 KB)は
-  D$(16 KB)に入らないので、B を 64×16 のパネル(8 KB)に詰め直して D$ に置く(ブロッキング)と
-  4.01 → 2.42。残りは D$ のミスで、ロードの MA はミスの応答を待つので計算と重ならない
-  (ROADMAP の「ミスの待ちを重ねる」)。
-- **内積**は積和 1 回に FLD 2 本が要り、ロードで決まる。
-- **C のループ**はほぼ速くならない。`s += a[i] * b[i]` のような書き方は同じ和に積み重ねるので、
-  依存の 9 サイクルがそのまま見える。`-O3 -funroll-loops` でも和は 1 本のまま。
-
-### 3.3 速いコードの書き方(アセンブラ)
-
-`LitexSystem/software/bench/fpkern.S` に例がある(FIR、行列積、内積)。
-
-1. **独立な演算を 9 本以上並べる**。答えが出るまで 9 サイクルかかるので、同じレジスタに積み
-   重ねる和は 9 本以上に分ける(FIR は出力 8 本 + ロード 1 本で 1 巡 9 命令、行列積は C の
-   4×4 = 16 本)。
-2. **ロードを減らす**。FLD と FP 演算は 1 サイクルに合わせて 1 本しか出ない。係数や窓を
-   レジスタに置き、1 回読んだ値を何度も使う(FIR は窓を 8 本のレジスタで回す)。
-3. **ロードは 2 命令以上前に**。FLD の直後でその値を使うと 1 サイクル待つ。
-4. **FSD は答えが出てから**。FSD は答えを EX で待つ(待つ間はほかの命令も進まない)ので、
-   答えの 9 サイクル後に置くか、その間に別の仕事を挟む。
-5. **整数の答え(FCVT.L.D、FEQ)は 10 サイクル後**。分岐やアドレスに使うものは早めに出す。
-6. **`fcsr` を読む CSR 命令はパイプラインが空になるのを待つ**。ループの中で `frflags` を
-   読まない。
-7. **データが D$(16 KB)に入らないときはブロッキング**。ミスは計算と重ならないので、ミスの
-   数がそのまま効く(`fpkern.c`)。
-8. 呼び出し規約: f8〜f9、f18〜f27 は呼ばれた側が保存する。
+**The register files have 2 write ports** (`CORE_RF`, `CORE_FRF`): two banks of distributed RAM (A: WB of
+the pipeline, B: the FPU) and a 32-bit table telling which bank is newer (LVT, live value table).
+Smaller than the earlier flip-flop version (FF −4,096); the contents are not initialized at reset.
 
 ---
 
-## 4. 資源とタイミング
+## 3. Performance
+
+### 3.1 Cycles per instruction
+
+| Instruction | Issue interval (no dependency) | Until the answer can be used |
+|---|---|---|
+| FADD / FSUB / FMUL / FMADD family, compare, sign injection, FMV, FCVT (single and double) | **1** | FP answers: 9; integer answers (FEQ, FCVT.L.D, FMV.X.D, ...): 10 |
+| FDIV.D | The next FP operation waits until it finishes | about 134 |
+| FDIV.S / FSQRT | Same | about 70 |
+| FLD / FSD | 1 (on a D$ hit) | The value of an FLD can be used from the instruction after next |
+
+In the earlier version (`CORE_FPU`) every operation occupied EX, and the multiply-add family ran at one
+instruction every 10 cycles.
+
+### 3.2 Measured on the board (Arty A7-100T, 50 MHz, Linux, `micro 50 fp`)
+
+| Workload | Cycles per multiply-add | MFLOPS |
+|---|---|---|
+| FIR 8 taps × 1024, assembler | **1.53** | **65.6** |
+| Matrix multiply 64×64, assembler, cache blocking | **2.42** | **41.2** |
+| Matrix multiply 64×64, assembler, no blocking | 4.01 | 24.9 |
+| Dot product × 512, assembler | 3.66 | 27.3 |
+| Matrix multiply 64×64, C (`-O2`) | 16.6 | 6.04 |
+| For reference: earlier version, matrix multiply 64×64, C (`-O2`) | 17.6 | 5.69 |
+
+Compared with the same assembler kernels on the core with the earlier FPU (SIM_SYS, data sized to fit
+in the D$): matrix multiply 11.19 → 2.18 (5.1×), FIR 10.10 → 1.45 (7.0×), dot product 12.81 → 3.66
+(3.5×).
+
+- **The FIR runs at almost one a cycle**. 64 multiply-adds plus 8 FLDs, 8 FSDs and 3 loop instructions
+  make 83 instructions ÷ 64 = 1.30, the lower bound of issue.
+- **The matrix multiply** does 8 FLDs and 16 FMADDs per k (about 1.7 for the kernel alone). The three
+  64×64 matrices (96 KB) do not fit in the D$ (16 KB), so packing B into 64×16 panels (8 KB) kept in the
+  D$ (blocking) takes it from 4.01 to 2.42. What remains is D$ misses: MA waits for the answer of a
+  missing load, so the misses do not overlap with computation ("Overlap memory waits" in the ROADMAP).
+- **The dot product** needs 2 FLDs per multiply-add and is bound by the loads.
+- **Loops in C** hardly get faster. Code like `s += a[i] * b[i]` piles onto one sum, so the 9 cycles of
+  the dependency show as they are. Even with `-O3 -funroll-loops` there is still only one sum.
+
+### 3.3 How to write fast code (assembler)
+
+`LitexSystem/software/bench/fpkern.S` has examples (FIR, matrix multiply, dot product).
+
+1. **Line up 9 or more independent operations**. An answer takes 9 cycles, so split sums that pile onto
+   one register into 9 or more (the FIR's round is 8 outputs + 1 load = 9 instructions; the matrix
+   multiply has 4×4 = 16 sums of C).
+2. **Cut down the loads**. FLDs and FP operations together issue only one a cycle. Keep coefficients
+   and windows in registers and use a value read once many times (the FIR rotates its window through 8
+   registers).
+3. **Load 2 or more instructions ahead**. Using the value right after the FLD waits one cycle.
+4. **FSD after the answer is out**. FSD waits in EX for its answer (and nothing else moves meanwhile), so
+   place it 9 cycles after the operation or put other work in between.
+5. **Integer answers (FCVT.L.D, FEQ) take 10 cycles**. Issue early what feeds a branch or an address.
+6. **A CSR instruction reading `fcsr` waits for the pipeline to empty**. Do not read `frflags` inside a
+   loop.
+7. **Block when the data does not fit in the D$ (16 KB)**. Misses do not overlap with computation, so
+   their number counts directly (`fpkern.c`).
+8. Calling convention: f8 to f9 and f18 to f27 are saved by the callee.
+
+---
+
+## 4. Resources and timing
 
 | | `CORE_FPU` | `FPU_PIPE` |
 |---|---|---|
-| 単体(`FPGA/FPU_OOC`、50 MHz) | LUT 9,757、FF 2,008、DSP 16、2,260 スライス、レジスタ間 WNS +3.43 ns | LUT 9,060、FF 2,631(+ SRL 177)、DSP 16、2,309 スライス、+3.76 ns |
-| SoC 全体(実機のビルド) | LUT 46,957(74.1 %)、FF 28,019、スライス 91.4 %、WNS +0.159 ns | LUT 44,833(70.7 %)、FF 24,712、スライス 86.2 %、WNS +0.113 ns |
+| Alone (`FPGA/FPU_OOC`, 50 MHz) | LUT 9,757, FF 2,008, DSP 16, 2,260 slices, register-to-register WNS +3.43 ns | LUT 9,060, FF 2,631 (+ SRL 177), DSP 16, 2,309 slices, +3.76 ns |
+| Whole SoC (the board's build) | LUT 46,957 (74.1 %), FF 28,019, slices 91.4 %, WNS +0.159 ns | LUT 44,833 (70.7 %), FF 24,712, slices 86.2 %, WNS +0.113 ns |
 
-パイプライン化は FPU 本体ではほぼ只(状態機械の多重化器が消えて LUT は減った)。全体ではレジスタ
-ファイルを分散 RAM にした分で、むしろ小さくなった。FPU はクリティカルパスに入っていない
-(`LitexSystem/docs/TIMING.md` 33・34 章)。
+Pipelining was almost free in the FPU itself (the multiplexers of the state machine disappeared and LUTs
+went down). In the whole design it even got smaller, thanks to the register files moving to distributed
+RAM. The FPU is not on the critical path (sections 33 and 34 of `LitexSystem/docs/TIMING.md`).
 
 ---
 
-## 5. 検証
+## 5. Verification
 
-| 何を | どこで | 規模 |
+| What | Where | Size |
 |---|---|---|
-| 演算そのもの | `SIM/SIM_FPU`(Berkeley SoftFloat の RISC-V 特殊化と突き合わせ): 全演算 × 両精度 × 丸め 5 モード × 特殊値の総当たり + ランダム、結果と例外フラグ 5 ビット | `CORE_FPU` 約 58 万チェック、`FPU_PIPE`(`make pipe`、毎サイクル 1 件)約 70 万チェック |
-| パイプラインの制御 | `SIM/SIM_FPU` の `tb_FPU_PIPE`: 止める・取り消す・長く止める・除算を P1 に置いたまま | バグ注入 28 種すべて検出(`bug_inject_pipe.sh`) |
-| コアとのつなぎ | `SIM/SIM_CORE/tests/t33_fpipe.S`: 1 サイクルピッチ、依存の連鎖、WAW、フラグ、トラップ・FENCE.I・遅い分岐の後ろの取り消し、ロードの直後 | コアのバグ注入 315 種すべて検出(FPU のつなぎは M78・M88・M341〜M358) |
-| 実際の命令列 | riscv-tests(`rv64uf` / `rv64ud`)、SIM_SYS(本物のキャッシュ越し)、Linux の起動 | |
-| サイクル数 | `SIM/SIM_SYS/bench/fploop.c`(核ごとのサイクルの上限) | SIM_SYS のバグ注入 M19 を検出 |
+| The operations themselves | `SIM/SIM_FPU` (against Berkeley SoftFloat's RISC-V specialization): all operations × both precisions × 5 rounding modes × all pairs of special values + random, result and all 5 exception flags | `CORE_FPU` about 580,000 checks, `FPU_PIPE` (`make pipe`, one a cycle) about 700,000 checks |
+| Pipeline control | `tb_FPU_PIPE` of `SIM/SIM_FPU`: holding, taking back, long holds, a divide left in P1 | All 28 bug injections detected (`bug_inject_pipe.sh`) |
+| Connection to the core | `SIM/SIM_CORE/tests/t33_fpipe.S`: one a cycle, dependent chains, WAW, flags, taking back behind a trap, FENCE.I and a late branch, right behind loads | All 315 bug injections of the core detected (the FPU connection is M78, M88, M341 to M358) |
+| Real instruction streams | riscv-tests (`rv64uf` / `rv64ud`), SIM_SYS (through the real caches), booting Linux | |
+| Cycle counts | `SIM/SIM_SYS/bench/fploop.c` (a cycle bound per kernel) | Detects SIM_SYS bug injection M19 |
 
-参照モデルや試験が見つけたもののうち、手書きの試験では気づけなかったもの:
+Of what the reference model and the tests found, the things hand-written tests would not have caught:
 
-- 丸めで最小正規数に届いたときに UF が立たない(tininess を詰め込んだ指数で判定していた)、
-  等しい値で `flt` が 1、NaN-boxing されていない値の FSGNJ など(SoftFloat が検出、前の版)。
-- 平方根の sticky ビットが答えを決める値はランダムでは当たらない。探した 8 個を足した。
-- FENCE.I の後ろの FP 演算の取り消しは、同じ命令がもう一度流れるだけでは忘れても見えない
-  (同じ値が二度書かれる)。試験では後ろの命令をストアで書き換えておく。
-- **答えを待つ FSD が D$ に古いデータのまま先出しし、取り消して MA から出直していた**。答えは
-  正しく、サイクルだけ失う(C の行列積が 17.6 → 18.6)。実機の `micro` で見つけ、`fploop` の
-  サイクルの上限で見張るようにした。
+- UF not raised when rounding reaches the smallest normal (tininess was decided on the packed exponent),
+  `flt` returning 1 for equal values, FSGNJ of values that are not NaN-boxed, and so on (found by
+  SoftFloat, in the earlier version).
+- Values where the sticky bit of the square root decides the answer are not hit by random values. 8
+  found by search were added.
+- Taking back an FP operation behind FENCE.I: if the same instruction simply flows again, forgetting to
+  take it back cannot be seen (the same value is written twice). The test rewrites the instruction
+  behind it with a store first.
+- **An FSD waiting for its answer issued to the D$ early with stale data, was taken back and went again
+  from MA**. The answer was right; only cycles were lost (the C matrix multiply went 17.6 → 18.6). Found
+  with `micro` on the board, and now watched by the cycle bounds of `fploop`.
 
 ---
 
-## 6. 経緯
+## 6. History
 
-| 日付 | 内容 |
+| Date | What |
 |---|---|
-| 2026-09-20〜21 | `CORE_FPU`(M4): EX で待つ方式、SoftFloat で検証、riscv-tests の F / D 全 PASS |
-| 2026-10-09 | 方針: DSP 的な用途のため、加減算・乗算・積和・変換を 1 サイクルピッチに。除算・平方根は長くてよい。速くしたい所はアセンブラで |
-| 2026-10-09 | 段階 1: `FPU_PIPE`(単体の検証と合成) |
-| 2026-10-09 | 段階 2: コアへの組み込み(結果待ちのビット、2 つ目の書き込み口、LVT のレジスタファイル) |
-| 2026-10-09 | 実機: FIR 1.52、行列積 4.05、FSD の先出しの修正で C の行列積 18.6 → 16.6、キャッシュのブロッキングで行列積 2.42 |
+| 2026-09-20 to 21 | `CORE_FPU` (M4): the wait-in-EX scheme, checked with SoftFloat, all F / D riscv-tests pass |
+| 2026-10-09 | Direction: for DSP-like use, add / subtract, multiply, multiply-add and conversions at one a cycle. Divide and square root may stay long. What should be fast is written in assembler |
+| 2026-10-09 | Stage 1: `FPU_PIPE` (verified and synthesized on its own) |
+| 2026-10-09 | Stage 2: integration into the core (pending bits, second write ports, LVT register files) |
+| 2026-10-09 | Board: FIR 1.52, matrix multiply 4.05; fixing the early issue of FSD takes the C matrix multiply 18.6 → 16.6; cache blocking takes the matrix multiply to 2.42 |

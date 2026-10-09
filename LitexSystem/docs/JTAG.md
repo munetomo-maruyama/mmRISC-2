@@ -1,162 +1,161 @@
-# JTAG / cJTAG デバッグ(LiteX SoC)
+# JTAG / cJTAG debugging (LiteX SoC)
 
-mmRISC-2 のデバッグモジュール(`RTL/CPU/CPU_DBG`、RISC-V Debug Spec 1.0)を
-Arty の PMOD JA に出し、OpenOCD から halt / step / レジスタ / メモリを扱う。
-ピン配置・スイッチ・OpenOCD の設定は、デバッグ論理の立ち上げに使った
-`FPGA/ARTY_A7_100T`(`RTL/TOP/TOP.sv`、`TOP.xdc`)と**同じ**にしてあるので、
-同じケーブルと同じ `.cfg` がそのまま使える。
+[日本語](JTAG_J.md)
 
-## 1. ピンとスイッチ
+The debug module of mmRISC-2 (`RTL/CPU/CPU_DBG`, RISC-V Debug Spec 1.0) is brought out on PMOD JA of
+the Arty, and OpenOCD handles halt / step / registers / memory through it. The pinout, switches and
+OpenOCD configuration are **the same** as `FPGA/ARTY_A7_100T` (`RTL/TOP/TOP.sv`, `TOP.xdc`), which was
+used to bring up the debug logic, so the same cable and the same `.cfg` work as they are.
 
-| PMOD JA | FPGA ピン | 信号 | FPGA 側 |
+## 1. Pins and switches
+
+| PMOD JA | FPGA pin | Signal | FPGA side |
 |---|---|---|---|
-| JA1 | G13 | TCK / TCKC | プルアップ。汎用ピン上のクロック |
-| JA2 | B11 | TDI | プルアップ |
-| JA3 | A11 | TDO | プルアップ。シフト中だけ駆動 |
-| JA4 | D12 | TMS / TMSC | キーパ(cJTAG ではホストとターゲットが交互に駆動する) |
-| JA7 | D13 | nTRST | プルアップ。TAP のリセット |
-| JA8 | B18 | nSRST | プルアップ。**CPU** のリセット(下記) |
+| JA1 | G13 | TCK / TCKC | Pull-up. A clock on a general-purpose pin |
+| JA2 | B11 | TDI | Pull-up |
+| JA3 | A11 | TDO | Pull-up. Driven only while shifting |
+| JA4 | D12 | TMS / TMSC | Keeper (in cJTAG the host and the target drive it in turn) |
+| JA7 | D13 | nTRST | Pull-up. Reset of the TAP |
+| JA8 | B18 | nSRST | Pull-up. Reset of the **CPU** (below) |
 | JA5 / JA11 | — | GND | |
 
-| スイッチ | 下 | 上 |
+| Switch | Down | Up |
 |---|---|---|
-| SW3(A10) | 4 線 JTAG | 2 線 cJTAG(OScan1) |
-| SW2(C10) | 認証なし | 認証あり(鍵 `0xbeefcafe`) |
+| SW3 (A10) | 4-wire JTAG | 2-wire cJTAG (OScan1) |
+| SW2 (C10) | No authentication | Authentication (key `0xbeefcafe`) |
 
-状態表示は RGB LED(LiteX の LED チェイサが LD4〜LD7 を使っていて、その CSR の
-位置はデバイスツリーと `fw_jump.bin` が前提にしているので動かさない)。明るすぎるので
-1/16 のデューティで点ける。
+The status is shown on the RGB LEDs (LiteX's LED chaser uses LD4 to LD7, and the device tree and
+`fw_jump.bin` assume the location of its CSR, so it is not moved). They are too bright, so they are lit
+at a 1/16 duty.
 
-| LED | 色 | 意味 |
+| LED | Color | Meaning |
 |---|---|---|
-| LD0 | 赤 / 緑 | ハート停止中 / 実行中 |
-| LD1 | 青 | dmactive(デバッガが DM を有効にしている) |
-| LD2 | 緑 | cJTAG オンライン(SW3 上のとき) |
+| LD0 | Red / green | Hart halted / running |
+| LD1 | Blue | dmactive (the debugger has enabled the DM) |
+| LD2 | Green | cJTAG online (when SW3 is up) |
 
-実装は `cpu/mmrisc/core.py` の `add_jtag`。`--cpu-jtag none` を `build_soc.sh` に
-渡すとタイオフに戻る。制約(`build/gateware/digilent_arty.xdc` と `.tcl`)は
-`TOP.xdc` / `TOP_impl.xdc` と同じ内容:
+The implementation is `add_jtag` in `cpu/mmrisc/core.py`. Passing `--cpu-jtag none` to `build_soc.sh`
+returns to tie-offs. The constraints (`build/gateware/digilent_arty.xdc` and `.tcl`) are the same as
+`TOP.xdc` / `TOP_impl.xdc`:
 
-- TCK と TMSC に 100 ns の `create_clock`、sys と互いに非同期(`set_clock_groups`)
-- 両方ともクロック専用ピンではないので `CLOCK_DEDICATED_ROUTE FALSE`(合成後に
-  バッファの出力ネットへ。`pre_placement_commands`)
-- nTRST / nSRST / SW2 / SW3 / TDI / TMS / TDO は false path
+- `create_clock` of 100 ns on TCK and TMSC, asynchronous to sys and to each other (`set_clock_groups`)
+- Neither is a dedicated clock pin, so `CLOCK_DEDICATED_ROUTE FALSE` (on the output net of the buffer
+  after synthesis; `pre_placement_commands`)
+- nTRST / nSRST / SW2 / SW3 / TDI / TMS / TDO are false paths
 
-## 2. リセット
+## 2. Reset
 
-| 何が | 何をリセットするか |
+| What | What it resets |
 |---|---|
-| ボードの RESET ボタン、LiteX のシステムリセット | SoC 全体(デバッグモジュールも) |
-| nSRST(JA8)、`ndmreset`、`hartreset` | **CPU だけ**(コア・キャッシュ・CPU 内のバス)。デバッグモジュールと LiteX の周辺は動いたまま |
+| The board's RESET button, LiteX's system reset | The whole SoC (the debug module too) |
+| nSRST (JA8), `ndmreset`, `hartreset` | **Only the CPU** (core, caches, buses inside the CPU). The debug module and LiteX's peripherals keep running |
 
-OpenOCD の `reset` は nSRST を使う(`reset_config trst_and_srst`)。CPU は ROM の
-先頭から BIOS をやり直す。`reset halt` なら BIOS の最初の命令の手前で止まる。
+OpenOCD's `reset` uses nSRST (`reset_config trst_and_srst`). The CPU starts the BIOS again from the head
+of the ROM. With `reset halt` it stops before the first instruction of the BIOS.
 
 ## 3. OpenOCD
 
-配線は `FPGA/ARTY_A7_100T/README.md` 3 章(FT2232H のチャネル A)。Ubuntu VM で
-FT2232H を USB パススルーして使う。
+The wiring is in section 3 of `FPGA/ARTY_A7_100T/README.md` (channel A of the FT2232H). The FT2232H is
+passed through over USB to the Ubuntu VM.
 
 ```bash
 cd LitexSystem
-# 4 線 JTAG(SW3 下)
+# 4-wire JTAG (SW3 down)
 openocd -f ../FPGA/ARTY_A7_100T/openocd/ft2232h_jtag.cfg  -f scripts/jtag_check.tcl
-# 2 線 cJTAG(SW3 上、外付けの 4 線→2 線アダプタ経由)
+# 2-wire cJTAG (SW3 up, through an external 4-wire → 2-wire adapter)
 openocd -f ../FPGA/ARTY_A7_100T/openocd/ft2232h_cjtag.cfg -f scripts/jtag_check.tcl
 ```
 
-`scripts/jtag_check.tcl` は、CPU が何をしていても(BIOS のプロンプトでも Linux の
-シェルでも)実行できる確認手順。halt して pc・dcsr・mstatus・satp を表示し、
-misa と dcsr.xdebugver を確かめ、SoC の識別文字列(CSR 空間 0x1200_2000)をシステム
-バス経由で読み、a0 を書いて戻し、3 命令ステップして resume する。メモリには書かない。
-最後に `JTAG CHECK RESULT : PASS` が出る。OpenOCD はそのまま残るので、
-`telnet localhost 4444` で続けて操作できる。
+`scripts/jtag_check.tcl` is a check that can be run whatever the CPU is doing (at the BIOS prompt or at
+the Linux shell). It halts and prints pc, dcsr, mstatus and satp, checks misa and dcsr.xdebugver, reads
+the SoC's identification string (CSR space 0x1200_2000) over the system bus, writes a0 and restores it,
+steps 3 instructions and resumes. It does not write memory. At the end it prints `JTAG CHECK RESULT :
+PASS`. OpenOCD stays running, so you can go on with `telnet localhost 4444`.
 
 ```
 halt
-reg                                   ; 全レジスタ
+reg                                   ; all registers
 reg pc
-mdw 0x12002000 8                      ; 識別文字列(1 文字 32bit)
-mdd 0x80000000 4                      ; メモリ(D$ 経由で読むので CPU と同じ値が見える)
+mdw 0x12002000 8                      ; identification string (32 bits per character)
+mdd 0x80000000 4                      ; memory (read through the D$, so the CPU's values are seen)
 step
 resume
-reset halt                            ; CPU だけリセットして BIOS の手前で止める
+reset halt                            ; reset only the CPU and stop before the BIOS
 resume
 ```
 
-### 知っておくこと
+### Things to know
 
-- **メモリは物理アドレス**。設定ファイルは `riscv set_enable_virt2phys off` なので、
-  Linux のカーネル仮想アドレスをそのまま `mdw` しても読めない。物理アドレス
-  (メモリは 0x8000_0000 から)で読むか、halt 中に `riscv set_enable_virt2phys on`
-  にする(ページテーブルを OpenOCD が引く)。
-- **ブレークポイント**。`bp <addr> 4` は EBREAK の書き込みになる(ソフトウェア
-  ブレークポイント)。書き込みは D$ に入り、`CPU_TOP` が I$ を無効化するので、そのまま効く。
-  `bp <addr> 4 hw`(gdb の `hbreak`)はトリガ(Sdtrig、4 本)を使い、命令を書き換えない
-  (ROM や、書き換えたくない場所にも置ける)。OpenOCD は接続時に `Found 4 triggers` と出す。
-- **ウォッチポイント**(`wp <addr> <len> r|w|a`、gdb の `watch` / `rwatch` / `awatch`)。
-  アクセスの手前で止まり、ストアはまだ書かれていない(resume すると OpenOCD がトリガを
-  外して 1 命令進めてから付け直す)。トリガは**アドレスの完全一致だけ**なので、範囲の
-  先頭アドレスへのアクセスでしか止まらない(OpenOCD は `Could not set a trigger that will
-  match a whole address range` と警告する)。8 バイトの変数なら、その先頭への `ld` / `sd`
-  では止まるが、途中のバイトへの `sb` では止まらない。トリガは 4 本で、ハードウェア
-  ブレークポイントと合わせて数える。
-- **Program Buffer は無い**(`progbufsize=0`)。接続時と最初の step の前に
-  `Unable to insert program into progbuf` が 2 行出る。OpenOCD が、このコアに無い
-  CSR(vlenb、mtopi)を探して Program Buffer を試した跡で、害はない。
-- step 中は割り込みを取らない(`dcsr.stepie=0`)。Linux のアイドル(WFI)で halt
-  すると、WFI を終えた次の命令で止まる。止めている間も `mtime` は進むので、
-  resume 直後にタイマ割り込みがまとめて来る。
-- 認証あり(SW2 上)のときは、設定ファイルが `init` のあとで
-  `riscv authdata_write 0xbeefcafe` を実行する(次節)。
+- **Memory addresses are physical**. The configuration has `riscv set_enable_virt2phys off`, so `mdw` on
+  a Linux kernel virtual address reads nothing. Read physical addresses (memory starts at 0x8000_0000),
+  or `riscv set_enable_virt2phys on` while halted (OpenOCD walks the page tables).
+- **Breakpoints**. `bp <addr> 4` writes an EBREAK (a software breakpoint). The write goes into the D$ and
+  `CPU_TOP` invalidates the I$, so it takes effect as it is. `bp <addr> 4 hw` (gdb's `hbreak`) uses a
+  trigger (Sdtrig, 4 of them) and does not rewrite the instruction (it can be put in ROM, or where you
+  do not want to write). OpenOCD prints `Found 4 triggers` when it connects.
+- **Watchpoints** (`wp <addr> <len> r|w|a`, gdb's `watch` / `rwatch` / `awatch`). They stop before the
+  access, and a store has not been written yet (on resume OpenOCD removes the trigger, steps one
+  instruction and puts it back). Triggers match **exact addresses only**, so they stop only on accesses
+  to the first address of the range (OpenOCD warns `Could not set a trigger that will match a whole
+  address range`). For an 8-byte variable, an `ld` / `sd` of its first address stops, an `sb` to a byte
+  in the middle does not. There are 4 triggers, counted together with hardware breakpoints.
+- **There is no Program Buffer** (`progbufsize=0`). On connecting and before the first step, two lines
+  of `Unable to insert program into progbuf` are printed. That is OpenOCD trying the Program Buffer while
+  looking for CSRs this core does not have (vlenb, mtopi), and does no harm.
+- Interrupts are not taken while stepping (`dcsr.stepie=0`). Halting in Linux's idle (WFI) stops at the
+  instruction after the WFI. `mtime` keeps running while halted, so timer interrupts come in a bunch
+  right after resume.
+- With authentication (SW2 up), the configuration runs `riscv authdata_write 0xbeefcafe` after `init`
+  (next section).
 
-### 認証の確認
+### Checking authentication
 
-SW2 は OpenOCD を起動する**前に**上げておく(OpenOCD は接続時に DM をリセットし、
-そこで認証が解ける)。鍵は環境変数 `AUTH_KEY` で差し替えられる。
+Raise SW2 **before** starting OpenOCD (OpenOCD resets the DM when it connects, and that clears the
+authentication). The key can be replaced with the environment variable `AUTH_KEY`.
 
-| 手順 | 期待する結果 |
+| Step | Expected result |
 |---|---|
-| 1. SW2 上、`AUTH_KEY=0x12345678 openocd -f ../FPGA/ARTY_A7_100T/openocd/ft2232h_jtag.cfg`(誤った鍵) | `Debugger is not authenticated to target Debug Module. (dmstatus=0x3)`、`examination failed`。telnet で `halt` しても `Target not examined yet` で何も起きず、LD0 は緑(実行中)のまま |
-| 2. 続けて telnet で `riscv authdata_write 0xbeefcafe` | `authdata_write resulted in successful authentication`、`Examined RISC-V core`。以後 `halt` / `reg` / `mdw` が使える |
-| 3. SW2 上、`AUTH_KEY` なしで `openocd ... -f scripts/jtag_check.tcl` | 設定ファイルが正しい鍵を書き、`JTAG CHECK RESULT : PASS` |
-| 4. SW2 下、`AUTH_KEY=none`(鍵を書かない) | 認証不要なので、そのまま `examine` が通る |
+| 1. SW2 up, `AUTH_KEY=0x12345678 openocd -f ../FPGA/ARTY_A7_100T/openocd/ft2232h_jtag.cfg` (wrong key) | `Debugger is not authenticated to target Debug Module. (dmstatus=0x3)`, `examination failed`. `halt` in telnet only says `Target not examined yet`, nothing happens, and LD0 stays green (running) |
+| 2. Then `riscv authdata_write 0xbeefcafe` in telnet | `authdata_write resulted in successful authentication`, `Examined RISC-V core`. From then on `halt` / `reg` / `mdw` work |
+| 3. SW2 up, `openocd ... -f scripts/jtag_check.tcl` without `AUTH_KEY` | The configuration writes the right key, `JTAG CHECK RESULT : PASS` |
+| 4. SW2 down, `AUTH_KEY=none` (no key written) | No authentication needed, so `examine` passes as it is |
 
-未認証の間、DM は `dmstatus` の authenticated / version と `authdata` 以外をすべて 0 と
-読ませ、halt 要求・ndmreset・システムバスアクセスを一切行わない(`CPU_DBG_SPEC.md` 4.7)。
-dmstatus=0x3 は version=3(Debug Spec 1.0)で authenticated=0 の値。
+While not authenticated, the DM reads 0 for everything except authenticated / version of `dmstatus` and
+`authdata`, and performs no halt request, ndmreset or system bus access at all (`CPU_DBG_SPEC.md` 4.7).
+dmstatus=0x3 is version=3 (Debug Spec 1.0) with authenticated=0.
 
-## 4. 検証
+## 4. Verification
 
-| 環境 | 内容 |
+| Environment | Contents |
 |---|---|
-| `SIM/SIM_CORE` `t23_debug` | コア単体。テストベンチのデバッガがコアの `dbg_*` を直接動かす。変異 M211–M231 |
-| `SIM/SIM_OCD` | `RTL/TOP/TOP.sv`(本物のコアがハート)と OpenOCD の協調シミュレーション。halt、GPR/FPR/CSR、メモリ(メモリバス・周辺バス)、load_image、step、ソフトウェアブレークポイント、ハードウェアブレークポイント、ウォッチポイント(ストア・ロード)、reset halt。認証ありでも同じ |
-| `SIM/SIM_DBG` | デバッグ論理そのもの(TAP、DTM、DM、cJTAG、SBA)、3026 項目 |
-| 実機 | `scripts/jtag_check.tcl`(上記)。JTAG / cJTAG × 認証なし / あり の 4 通りで PASS、誤った鍵の拒否も確認(2026-10-01) |
-| 実機 | gdb で動いている Linux カーネルにハードウェアブレークポイントと書き込み / 読み出しのウォッチポイント(下の 5 章、2026-10-06) |
+| `SIM/SIM_CORE` `t23_debug` | The core alone. The testbench's debugger drives the core's `dbg_*` directly. Mutations M211–M231 |
+| `SIM/SIM_OCD` | Co-simulation of `RTL/TOP/TOP.sv` (the real core as the hart) with OpenOCD. Halt, GPR/FPR/CSR, memory (memory bus and peripheral bus), load_image, step, software breakpoints, hardware breakpoints, watchpoints (store and load), reset halt. Also with authentication |
+| `SIM/SIM_DBG` | The debug logic itself (TAP, DTM, DM, cJTAG, SBA), 3026 checks |
+| Board | `scripts/jtag_check.tcl` (above). PASS in all 4 combinations of JTAG / cJTAG × without / with authentication, and rejection of a wrong key checked (2026-10-01) |
+| Board | Hardware breakpoints and write / read watchpoints on a running Linux kernel with gdb (section 5 below, 2026-10-06) |
 
-## 5. gdb でカーネルにトリガを置く(2026-10-06、実機)
+## 5. Putting triggers in the kernel with gdb (2026-10-06, board)
 
-トリガ(Sdtrig、4 本、`CPU_CORE_SPEC.md` 決定 67)は仮想アドレスで照合するので、動いている
-Linux カーネルの関数や変数にそのまま置ける。カーネルは KASLR なしなので番地は固定。
-SD カードの `Image` と同じビルドの `vmlinux`(シンボルあり、DWARF なし)を gdb に読ませる。
+Triggers (Sdtrig, 4 of them, `CPU_CORE_SPEC.md` decision 67) match virtual addresses, so they can be put
+on functions and variables of a running Linux kernel as they are. The kernel has no KASLR, so the
+addresses are fixed. Give gdb the `vmlinux` of the same build as the `Image` on the SD card (with
+symbols, without DWARF).
 
 ```bash
 cd LitexSystem
-openocd -f ../FPGA/ARTY_A7_100T/openocd/ft2232h_jtag.cfg        # 端末 1
-riscv64-unknown-linux-gnu-gdb <カーネルのビルド>/vmlinux          # 端末 2
+openocd -f ../FPGA/ARTY_A7_100T/openocd/ft2232h_jtag.cfg        # terminal 1
+riscv64-unknown-linux-gnu-gdb <kernel build>/vmlinux             # terminal 2
 ```
 
 ```
 (gdb) set pagination off
 (gdb) target extended-remote localhost:3333
-(gdb) monitor riscv set_enable_virt2phys on      ; カーネルの仮想アドレスでメモリを読むため
-(gdb) hbreak __riscv_sys_newuname                ; ボードで uname を打つと止まる
+(gdb) monitor riscv set_enable_virt2phys on      ; to read memory at kernel virtual addresses
+(gdb) hbreak __riscv_sys_newuname                ; stops when uname is typed on the board
 (gdb) continue
-(gdb) x/4i $pc                                   ; 命令は書き換えられていない
+(gdb) x/4i $pc                                   ; the instructions are not rewritten
 (gdb) delete
-(gdb) watch *(long *)&jiffies_64                 ; タイマ割り込み(10 ms)ごとに止まる
+(gdb) watch *(long *)&jiffies_64                 ; stops at every timer interrupt (10 ms)
 (gdb) continue
 (gdb) delete
 (gdb) rwatch *(long *)&jiffies_64
@@ -165,25 +164,25 @@ riscv64-unknown-linux-gnu-gdb <カーネルのビルド>/vmlinux          # 端�
 (gdb) continue
 ```
 
-結果:
+Results:
 
-- `hbreak`: `uname -a` で `__riscv_sys_newuname+12`(gdb はプロローグの後に置く)に止まり、
-  `x/4i` には元の命令(`jal __do_sys_newuname`)が見える。命令は書き換えていない
-- `watch`: `do_timer` の中で、止まるたびに `jiffies_64` が 1 ずつ増える(4294956787 → 788 →
-  789 → 790)。トリガはストアの手前で止め、OpenOCD がそのストアを 1 ステップ進めてから gdb に
-  報告するので、表示される pc はストアの次(`do_timer+…930`)
-- `rwatch`: `calc_global_load`、`update_process_times`、`calc_global_load_tick`、`do_timer` と、
-  `jiffies_64` を読む関数で止まる
+- `hbreak`: `uname -a` stops at `__riscv_sys_newuname+12` (gdb places it after the prologue), and
+  `x/4i` shows the original instruction (`jal __do_sys_newuname`). The instruction was not rewritten
+- `watch`: inside `do_timer`, `jiffies_64` goes up by 1 at each stop (4294956787 → 788 → 789 → 790). The
+  trigger stops before the store, and OpenOCD steps that store before reporting to gdb, so the pc shown
+  is the one after the store (`do_timer+…930`)
+- `rwatch`: stops in functions that read `jiffies_64`: `calc_global_load`, `update_process_times`,
+  `calc_global_load_tick`, `do_timer`
 
-知っておくこと:
+Things to know:
 
-- `vmlinux` に DWARF が無いので、変数は型を付けて指定する(`*(long *)&jiffies_64`)。行番号や
-  バックトレースは出ない
-- トリガは完全一致だけなので、ウォッチポイントは変数の先頭アドレスへのアクセスで止まる
-  (8 バイトの `jiffies_64` は 8 バイト単位で読み書きされるので問題ない)
-- `hbreak` / `watch` / `rwatch` を合わせて 4 個まで
-- OpenOCD は起動時ではなく、最初にトリガを使うときにトリガの数を調べる
-- 止まっている間に `interrupt` を打つと割り込みの要求が残り、次の停止(ウォッチポイントでも)が
-  `SIGINT` と報告される。止まった場所は正しい
-- 20 秒以上止めておくと、再開後に Linux が RCU stall の警告を出すことがある
+- `vmlinux` has no DWARF, so give variables a type (`*(long *)&jiffies_64`). There are no line numbers
+  or backtraces
+- Triggers match exactly only, so a watchpoint stops on accesses to the first address of the variable
+  (the 8-byte `jiffies_64` is read and written 8 bytes at a time, so that is fine)
+- `hbreak` / `watch` / `rwatch` together: up to 4
+- OpenOCD counts the triggers the first time it uses one, not at start-up
+- Typing `interrupt` while stopped leaves an interrupt request behind, and the next stop (even at a
+  watchpoint) is reported as `SIGINT`. The place it stopped is right
+- Staying stopped for more than 20 seconds can make Linux warn of an RCU stall after resuming
 

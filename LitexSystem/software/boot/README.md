@@ -1,62 +1,64 @@
-# SD カード
+# SD card
 
-## 置くもの
+[日本語](README_J.md)
 
-カードは 2 つのパーティションに分ける。
+## What goes on it
 
-| パーティション | 形式 | ラベル | 中身 |
+The card is split into 2 partitions.
+
+| Partition | Format | Label | Contents |
 |---|---|---|---|
-| 1 | FAT16、512 MB | `LITEXBOOT` | 下の 3 つのファイル(ルートに置く) |
-| 2 | ext4、残り全部 | `rootfs` | ルートファイルシステム |
+| 1 | FAT16, 512 MB | `LITEXBOOT` | The 3 files below (in the root) |
+| 2 | ext4, all the rest | `rootfs` | Root file system |
 
-第 1 パーティションに置く 3 つは、すべてこのディレクトリ(`software/boot/`)にある。
+The 3 files of the first partition are all in this directory (`software/boot/`).
 
-| ファイル | 出どころ | ロード先 | md5(2026-10-04) |
+| File | Where it comes from | Load address | md5 (2026-10-04) |
 |---|---|---|---|
-| `fw_jump.bin` | `scripts/build_opensbi.sh` がここに作る(デバイスツリー入り) | 0x8000_0000 | `28461f3da61988ac2ee6e61d7ddf1570` |
-| `Image` | Linux カーネル。Rocket 構成で作ったものと同じ設定に、性能カウンタ(`perf`)のための `CONFIG_PERF_EVENTS` / `CONFIG_RISCV_PMU_SBI` を足して作り直したもの(2026-10、`CPU_CORE_SPEC.md` 決定 69) | 0x8020_0000 | `1d886448db1ae0b8e1629cfeba6b605b` |
-| `boot.json` | BIOS が読む配置表。Rocket 構成と同じ | ― | `a1c356008baa859fa615b879d0fa18f3` |
+| `fw_jump.bin` | Made here by `scripts/build_opensbi.sh` (with the device tree) | 0x8000_0000 | `28461f3da61988ac2ee6e61d7ddf1570` |
+| `Image` | The Linux kernel. The same configuration as built for the Rocket configuration, rebuilt with `CONFIG_PERF_EVENTS` / `CONFIG_RISCV_PMU_SBI` added for the performance counters (`perf`) (2026-10, `CPU_CORE_SPEC.md` decision 69) | 0x8020_0000 | `1d886448db1ae0b8e1629cfeba6b605b` |
+| `boot.json` | The placement table the BIOS reads. Same as the Rocket configuration | ― | `a1c356008baa859fa615b879d0fa18f3` |
 
-3 つとも git で管理しているので、リポジトリを取ってくればそのままカードを作れる
-(出どころとライセンスは下の「配布しているバイナリ」)。デバイスツリーを変えて
-`scripts/build_opensbi.sh` を実行し直したら、新しい `fw_jump.bin` もコミットする
-(ビットストリームと組で使うものなので、ずれると何も表示されない)。
+All 3 are under git, so a card can be made straight from a clone of the repository (where they come from
+and their licenses: "Distributed binaries" below). When you change the device tree and run
+`scripts/build_opensbi.sh` again, commit the new `fw_jump.bin` too (it is used as a pair with the
+bitstream; if they do not match, nothing is printed).
 
-第 2 パーティションは Rocket 構成の BusyBox 一式(`~/mmlitex_build/initramfs`)に、
-このリポジトリの `software/rootfs/`(inittab、`sbin/init`、udhcpc のスクリプト、
-負荷試験 `stress.sh`)を重ねたもの。`scripts/sd_rootfs.sh` が書く。
+The second partition is the BusyBox set of the Rocket configuration (`~/mmlitex_build/initramfs`) with
+`software/rootfs/` of this repository on top (inittab, `sbin/init`, the udhcpc script, the stress test
+`stress.sh`). `scripts/sd_rootfs.sh` writes it.
 
-## 配布しているバイナリ
+## Distributed binaries
 
-| ファイル | ソース | 作り方 | ライセンス |
+| File | Source | How it is built | License |
 |---|---|---|---|
-| `Image` | Linux、[litex-hub/linux](https://github.com/litex-hub/linux) の commit `4929f78c004ecab9b68bb41018a3d11749dcea62`(7.2.0-rc2 ベース)。手は入れていない | この `Image` を作ったときの `.config` が同じディレクトリの `linux.config`(Rocket 構成の設定に `CONFIG_PERF_EVENTS`、`CONFIG_RISCV_PMU`、`CONFIG_RISCV_PMU_SBI` を足しただけ)。それを `.config` に置いて `make ARCH=riscv CROSS_COMPILE=riscv64-unknown-linux-gnu- Image`。コンパイラは riscv64-unknown-linux-gnu-gcc 13.2.0 | GPL-2.0。対応するソース一式(その commit の tar と `linux.config`)を GitHub の Release [`linux-src-4929f78c004e`](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/linux-src-4929f78c004e) に置いている |
-| `fw_jump.bin` | OpenSBI、[riscv-software-src/opensbi](https://github.com/riscv-software-src/opensbi) の commit `3593a5facc4c6938b90429a6973ba9ee21fc5899`(v1.9 系)。ソースには手を入れず、`opensbi_patches/` のパッチ(2026-10: `0001` 止まっているカウンタも RESET 付きの停止で解放する。これが無いと Linux の `perf` がカウンタを使い切る)をビルド用の写しに当てる | `scripts/build_opensbi.sh`(パッチを当て、`PLATFORM=generic`、デバイスツリー `../mmrisc_arty.dts` を `FW_FDT_PATH` で埋め込む) | BSD-2-Clause(`COPYING.OpenSBI.BSD`) |
-| `linux.config` | 上のカーネルの設定 | ― | GPL-2.0(カーネルの一部) |
-| `opensbi_patches/` | このリポジトリ(OpenSBI へのパッチ) | ― | OpenSBI に合わせて BSD-2-Clause |
-| `boot.json` | このリポジトリ | ― | Apache-2.0(このリポジトリと同じ) |
+| `Image` | Linux, [litex-hub/linux](https://github.com/litex-hub/linux) commit `4929f78c004ecab9b68bb41018a3d11749dcea62` (based on 7.2.0-rc2). Unmodified | The `.config` this `Image` was built with is `linux.config` in the same directory (the Rocket configuration's settings plus only `CONFIG_PERF_EVENTS`, `CONFIG_RISCV_PMU` and `CONFIG_RISCV_PMU_SBI`). Put it as `.config` and run `make ARCH=riscv CROSS_COMPILE=riscv64-unknown-linux-gnu- Image`. Compiler: riscv64-unknown-linux-gnu-gcc 13.2.0 | GPL-2.0. The corresponding source (a tar of that commit and `linux.config`) is on the GitHub Release [`linux-src-4929f78c004e`](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/linux-src-4929f78c004e) |
+| `fw_jump.bin` | OpenSBI, [riscv-software-src/opensbi](https://github.com/riscv-software-src/opensbi) commit `3593a5facc4c6938b90429a6973ba9ee21fc5899` (v1.9 series). The source is not changed; the patches of `opensbi_patches/` (2026-10: `0001` also frees stopped counters on a stop with RESET; without it Linux's `perf` runs out of counters) are applied to a copy for the build | `scripts/build_opensbi.sh` (applies the patches, `PLATFORM=generic`, embeds the device tree `../mmrisc_arty.dts` with `FW_FDT_PATH`) | BSD-2-Clause (`COPYING.OpenSBI.BSD`) |
+| `linux.config` | The configuration of the kernel above | ― | GPL-2.0 (part of the kernel) |
+| `opensbi_patches/` | This repository (patches to OpenSBI) | ― | BSD-2-Clause, to match OpenSBI |
+| `boot.json` | This repository | ― | Apache-2.0 (same as this repository) |
 
-カーネルのバージョン文字列に付いている `-dirty` は、作業ツリーに大文字小文字だけが違う
-名前のファイル(netfilter の `xt_*.h` など 13 個)が無いためで、コードの変更ではない
-(大文字小文字を区別しない場所を経由してコピーしたときに起きる)。確かめたこと(2026-10-09):
-作業ツリーで「変更あり」と出るのは大文字小文字だけが違う 13 個だけで、どれも netfilter の
-ファイルと tools の試験で、`linux.config` では `CONFIG_NETFILTER` が無効なのでビルドに入らない。
-したがって `Image` は上の commit と `linux.config` からそのまま作れる。Release の tar と
-`linux.config` から作り直すと、大きさ(15,464,960 バイト)と `.config` が同じで、違うのは
-ビルドの時刻(バージョン表示、内蔵の initramfs の時刻)と一部のファイル名の `./`(ツリーの中か外で
-ビルドしたかの差)だけだった。
+The `-dirty` in the kernel's version string is because the working tree lacks files whose names differ
+only in case (13 of them, such as netfilter's `xt_*.h`), not because of a code change (it happens when
+copying through a place that does not distinguish case). What was checked (2026-10-09): the only files
+the working tree shows as "modified" are those 13 that differ only in case, all netfilter files and
+tools tests, and `linux.config` has `CONFIG_NETFILTER` disabled, so none of them goes into the build.
+`Image` can therefore be built as it is from the commit above and `linux.config`. Rebuilding from the
+Release's tar and `linux.config` gives the same size (15,464,960 bytes) and the same `.config`; the only
+differences are the build time (in the version banner and the time stamps of the built-in initramfs)
+and the `./` of some file names (whether the build was in or out of the tree).
 
-## 第 1 パーティションは Mac から書く(2026-10-05 から)
+## Write the first partition from the Mac (since 2026-10-05)
 
-**Parallels の Ubuntu で第 1 パーティション(FAT)に書いた内容が、カードを挿し直したあと
-消えることがある。** カードリーダを挿し直すと Parallels はまず Mac につなぎ、macOS がカードを
-マウントする。そのあと VM に渡して書いても、macOS はマウントしたときの古い FAT とルート
-ディレクトリを持ったままで、カードが Mac に戻ったときにそれを書き戻す。VM で書いたファイルは
-消え、macOS の `.Spotlight-V100` だけが残る。一度は書き戻しでディレクトリが壊れ、Linux が
-読み出し専用にマウントし直した(`docs/BRINGUP.md` 15 回目)。
+**What is written to the first partition (FAT) from Ubuntu on Parallels can disappear after the card is
+reinserted.** When the card reader is plugged in again, Parallels first connects it to the Mac and macOS
+mounts the card. Even if it is then handed to the VM and written there, macOS keeps the old FAT and root
+directory from when it mounted the card, and writes them back when the card returns to the Mac. The
+files written from the VM disappear and only macOS's `.Spotlight-V100` remains. Once the write-back
+corrupted the directory and Linux remounted it read-only (round 15 of `docs/BRINGUP.md`).
 
-第 1 パーティションの 3 つのファイルは、Mac のターミナルから書くのが確実(リポジトリは
-共有フォルダなので Mac のホームの下にある):
+Writing the 3 files of the first partition from the Mac's Terminal is the sure way (the repository is in
+the shared folder, so it is under the Mac's home):
 
 ```bash
 cp ~/Documents/CQ/RISCV/mmRISC/mmRISC-2/LitexSystem/software/boot/{Image,fw_jump.bin,boot.json} /Volumes/LITEXBOOT/ && sync
@@ -64,35 +66,34 @@ md5 /Volumes/LITEXBOOT/Image /Volumes/LITEXBOOT/fw_jump.bin /Volumes/LITEXBOOT/b
 diskutil eject /Volumes/LITEXBOOT
 ```
 
-md5 が上の表と同じなら、取り出してボードへ。macOS が足すファイル(`.Spotlight-V100`、
-`.fseventsd`、`.Trashes`)は起動に関係しない。第 2 パーティション(ext4)は macOS が触らない
-ので、下の Ubuntu の手順で書いてよい。Ubuntu で第 1 パーティションも書くなら、Parallels で
-カードリーダを「常にこの仮想マシンに接続」にし、Mac に一度もマウントさせないこと。
+If the md5s match the table above, eject and put the card in the board. The files macOS adds
+(`.Spotlight-V100`, `.fseventsd`, `.Trashes`) do not affect booting. macOS does not touch the second
+partition (ext4), so it may be written with the Ubuntu procedure below. To write the first partition
+from Ubuntu as well, set the card reader in Parallels to "always connect to this virtual machine" and
+never let the Mac mount it.
 
-## 書き込み手順(Parallels Desktop 上の Ubuntu)
+## Writing (Ubuntu on Parallels Desktop)
 
-Parallels Desktop 上の Ubuntu では、カードを挿したときに自動でマウントされることも
-されないこともある。また USB のカードリーダが途中で切れて付き直すことがあり、書き込み中に
-切れるとファイルシステムが壊れる(`docs/BRINGUP.md` の 10 回目)。そこで、毎回
-**全部アンマウント → マウント → 書き込み → sync → アンマウント → 切り離し**
-の順で、すべて `udisksctl` で行う。`udisksctl` はデスクトップの自動マウントと同じ仕組みで、
-マウント先のディレクトリ(`/media/<user>/<ラベル>`)も作り、消してくれる。
+On Ubuntu in Parallels Desktop, a card may or may not be mounted automatically when inserted. The USB
+card reader also sometimes drops and reconnects, and a drop in the middle of a write corrupts the file
+system (round 10 of `docs/BRINGUP.md`). So every time, go **unmount everything → mount → write → sync →
+unmount → power off**, all with `udisksctl`. `udisksctl` is the same mechanism as the desktop's
+automount, and it also creates and removes the mount point (`/media/<user>/<label>`).
 
-以下、リポジトリの一番上で実行する。
+Run the following at the top of the repository.
 
-**0. カードのデバイス名を確かめる。** カードリーダが VM につながっていなければ、
-Parallels のメニュー(デバイス → USB)で Ubuntu に接続する。
+**0. Find the card's device name.** If the card reader is not connected to the VM, connect it to Ubuntu
+from the Parallels menu (Devices → USB).
 
 ```bash
 lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT
 ```
 
-28.8G などカードの大きさで、`LITEXBOOT` と `rootfs` のパーティションを持つものが
-カード。以下は `/dev/sdb` として書く(**違っていたら読み替える**。付き直すと名前が
-変わることがある)。
+The card is the one with the card's size (28.8G or so) and partitions `LITEXBOOT` and `rootfs`. Below it
+is written as `/dev/sdb` (**substitute if different**; the name can change after a reconnect).
 
-**1. 全部アンマウントする。** マウントされていなければ `is not mounted` と出るだけで
-害は無い。`lsblk` の `MOUNTPOINT` が空になったのを確かめる。
+**1. Unmount everything.** If it is not mounted, it only says `is not mounted`, which does no harm.
+Check that `MOUNTPOINT` in `lsblk` is empty.
 
 ```bash
 udisksctl unmount -b /dev/sdb1
@@ -100,16 +101,15 @@ udisksctl unmount -b /dev/sdb2
 lsblk -o NAME,MOUNTPOINT /dev/sdb
 ```
 
-**2. マウントする。** `Mounted /dev/sdb1 at /media/<user>/LITEXBOOT` のように、
-マウント先が表示される。
+**2. Mount.** The mount point is printed, as in `Mounted /dev/sdb1 at /media/<user>/LITEXBOOT`.
 
 ```bash
 udisksctl mount -b /dev/sdb1
 udisksctl mount -b /dev/sdb2
 ```
 
-**3. 書く。** 第 1 パーティションは自分の持ち物としてマウントされるので `sudo` は
-要らない。第 2 パーティションは root の持ち物にするため `sudo` で書く。
+**3. Write.** The first partition is mounted as yours, so no `sudo` is needed. The second partition is
+written with `sudo` so that its files belong to root.
 
 ```bash
 cp LitexSystem/software/boot/fw_jump.bin LitexSystem/software/boot/Image \
@@ -117,17 +117,17 @@ cp LitexSystem/software/boot/fw_jump.bin LitexSystem/software/boot/Image \
 sudo LitexSystem/scripts/sd_rootfs.sh /media/$USER/rootfs
 ```
 
-`sd_rootfs.sh` は、カードに BusyBox がまだ無ければ一式を、あれば差分だけを書く
-(カードの上で作ったファイルは残る)。一式を書き直すなら `--full` を付ける。
+`sd_rootfs.sh` writes the whole set if the card has no BusyBox yet, or only the differences if it has
+(files made on the card stay). Add `--full` to rewrite the whole set.
 
-**4. 書き出す。**
+**4. Flush.**
 
 ```bash
 sync
 ```
 
-**5. アンマウントして切り離す。** `power-off` は書き込みをすべて確定させてから
-カードを切り離す。これが終わってからカードを抜く(または Parallels で USB を外す)。
+**5. Unmount and power off.** `power-off` completes all writes before detaching the card. Pull the card
+(or disconnect the USB in Parallels) only after it finishes.
 
 ```bash
 udisksctl unmount -b /dev/sdb1
@@ -135,172 +135,168 @@ udisksctl unmount -b /dev/sdb2
 udisksctl power-off -b /dev/sdb
 ```
 
-## 新しいカードを作る
+## Making a new card
 
-**カードの中身はすべて消える。** デバイス名(ここでは `/dev/sdb`)を `lsblk` で
-必ず確かめ、PC のディスク(`sda`)を指定しないこと。
+**Everything on the card is erased.** Always check the device name (here `/dev/sdb`) with `lsblk`, and
+never give the PC's disk (`sda`).
 
-手順 0 と 1(全部アンマウント)のあとで:
+After steps 0 and 1 (unmount everything):
 
 ```bash
 printf 'label: dos\nstart=2048, size=512MiB, type=6\ntype=83\n' | sudo sfdisk /dev/sdb
-lsblk -o NAME,SIZE /dev/sdb                  # sdb1 が 512M、sdb2 が残り
-udisksctl unmount -b /dev/sdb1               # 作り直した直後に自動でマウントされていたら外す
+lsblk -o NAME,SIZE /dev/sdb                  # sdb1 is 512M, sdb2 the rest
+udisksctl unmount -b /dev/sdb1               # unmount if they were mounted automatically right after
 udisksctl unmount -b /dev/sdb2
 sudo mkfs.vfat -F 16 -n LITEXBOOT /dev/sdb1
 sudo mkfs.ext4 -L rootfs /dev/sdb2
 ```
 
-あとは上の手順 2〜5 と同じ(`sd_rootfs.sh` は空のパーティションに一式を書く)。
+The rest is the same as steps 2 to 5 above (`sd_rootfs.sh` writes the whole set to an empty partition).
 
-## うまくいかないとき
+## When it does not work
 
-- `mount point does not exist`: `sudo mount` を使ったとき、マウント先のディレクトリが
-  無い(アンマウントで消えている)。`udisksctl mount` を使う。
-- `Input/output error`、またはカーネルのログ(`sudo dmesg | tail -30`)に
-  `Synchronize Cache(10) failed` や `I/O error`: カードリーダが切れた。つなぎ直して
-  手順 0 からやり直し、書く前にファイルシステムを検査する(手順 1 でアンマウントした
-  状態で):
+- `mount point does not exist`: with `sudo mount`, the mount point directory is missing (unmounting
+  removed it). Use `udisksctl mount`.
+- `Input/output error`, or `Synchronize Cache(10) failed` or `I/O error` in the kernel log
+  (`sudo dmesg | tail -30`): the card reader dropped. Reconnect, start again from step 0, and check the
+  file systems before writing (unmounted, as after step 1):
   ```bash
   sudo fsck.vfat -a /dev/sdb1
   sudo e2fsck -f /dev/sdb2
   ```
-- カードに本当に書けたか確かめる(PC のキャッシュを通さず、カードから読む):
+- To check that the card really has the data (reading from the card, not through the PC's cache):
   ```bash
   dd if=/media/$USER/LITEXBOOT/fw_jump.bin iflag=direct bs=4096 status=none | md5sum
   ```
-- ボードの BIOS が `cannot open boot.json (FatFs error 4)`: 第 1 パーティションにファイルが
-  無い。Ubuntu で書いたのに消えているなら、上の「Mac から書く」の現象。第 1 パーティションを
-  作り直すときは必ず FAT16(`mkfs.vfat -F 16`)。`-F` を付けないと 512 MB では FAT32 になる。
-- ボード側で `Liftoff!` の後に何も出ない: 第 1 パーティションのファイルが壊れているか
-  古い。`fw_jump.bin` はどの版も 279048 バイトで大きさでは区別できないので、md5 を
-  上の表と比べる。
+- The board's BIOS says `cannot open boot.json (FatFs error 4)`: the files are missing from the first
+  partition. If they were written from Ubuntu and are gone, it is the "write from the Mac" problem
+  above. When remaking the first partition, always use FAT16 (`mkfs.vfat -F 16`); without `-F`, 512 MB
+  becomes FAT32.
+- Nothing after `Liftoff!` on the board: the files of the first partition are corrupted or old. Every
+  version of `fw_jump.bin` is 279048 bytes, so the size tells nothing; compare the md5 with the table
+  above.
 
-## 電源を切る前に
+## Before turning the power off
 
-いきなり電源を切ると、次の起動で ext4 がジャーナルを再生する
-(`EXT4-fs (mmcblk0p2): recovery complete`)。壊れはしないが、書いた直後のデータは
-失われうる。切る前にボードで
+Cutting the power abruptly makes ext4 replay its journal at the next boot (`EXT4-fs (mmcblk0p2):
+recovery complete`). Nothing breaks, but data written just before may be lost. Before turning it off,
+run on the board
 
 ```sh
 poweroff
 ```
 
-を実行し、`reboot: Power down` が出てから電源を切る(`reboot` なら LiteX のリセットで
-再起動する)。inittab の `::shutdown:` の行が、書き出しと読み出し専用への再マウントを
-行うので、次の起動で `recovery complete` は出ない(2026-09-29 に実機で確認)。
+and turn the power off after `reboot: Power down` appears (`reboot` restarts through LiteX's reset). The
+`::shutdown:` lines of inittab flush and remount read-only, so `recovery complete` does not appear at
+the next boot (checked on the board 2026-09-29).
 
-`poweroff` の最後の `sbi_srst_reset: type=0x0 reason=0x0 failed` は、このボードに電源を
-切る仕組みが無い(OpenSBI の `Platform Shutdown Device: ---`)ため。書き出しは済んで
-いるので、そのまま電源を切るか RESET を押してよい。`umount: devtmpfs busy -
-remounted read-only` も無害(`/dev` はメモリ上のもので、使用中なので外せないだけ)。
+The `sbi_srst_reset: type=0x0 reason=0x0 failed` at the end of `poweroff` is because this board has no
+way to cut its power (OpenSBI's `Platform Shutdown Device: ---`). Everything has been flushed, so just
+turn the power off or press RESET. `umount: devtmpfs busy - remounted read-only` is harmless too (`/dev`
+lives in memory and is in use, so it cannot be unmounted).
 
-## デバイスツリーは別ファイルではない
+## The device tree is not a separate file
 
-`fw_jump.bin` に**埋め込んである**(`FW_FDT_PATH`)。だから
-`software/mmrisc_arty.dts` を触ったら、SD カードに DTB を置くのではなく
-`scripts/build_opensbi.sh` を実行し直して `fw_jump.bin` を差し替える。
+It is **embedded** in `fw_jump.bin` (`FW_FDT_PATH`). So after changing `software/mmrisc_arty.dts`, do
+not put a DTB on the SD card: run `scripts/build_opensbi.sh` again and replace `fw_jump.bin`.
 
-## 起動
+## Booting
 
-シリアル 115200bps。`litex>` プロンプトで:
+Serial at 115200 bps. At the `litex>` prompt:
 
 ```
 sdcardboot
 ```
 
-LiteX BIOS → OpenSBI → Linux → BusyBox と進めば成功。
-詰まったときの見どころは `docs/BRINGUP.md`。
+Success is LiteX BIOS → OpenSBI → Linux → BusyBox. Where to look when it gets stuck: `docs/BRINGUP.md`.
 
-## Ethernet(2026-09-26 から)
+## Ethernet (since 2026-09-26)
 
-SoC は `--with-ethernet --eth-dhcp` で作っている(`scripts/build_soc.sh`)。
-Ethernet を入れると CSR の配置と割り込み番号が変わるので、**ビットストリームと
-`fw_jump.bin` は必ず組で使う**。Ethernet 入りのビットストリームに古い
-`fw_jump.bin` を組み合わせると(逆も)、UART の場所が違うので何も表示されない。
-Ethernet 無しの最後のビットストリームは `build/known_good_noeth/` に取ってある。
+The SoC is built with `--with-ethernet --eth-dhcp` (`scripts/build_soc.sh`). Ethernet changes the
+placement of the CSRs and the interrupt numbers, so **always use the bitstream and `fw_jump.bin` as a
+pair**. A bitstream with Ethernet with an old `fw_jump.bin` (or the other way round) prints nothing,
+because the UART is somewhere else. The last bitstream without Ethernet is kept in
+`build/known_good_noeth/`.
 
-| | Ethernet 無し | Ethernet 入り |
+| | Without Ethernet | With Ethernet |
 |---|---|---|
-| ethmac / ethphy の CSR | ― | 0x1200_1000 / 0x1200_1800 |
-| SD カード | 0x1200_2000、PLIC 3 | 0x1200_3000、PLIC 4 |
+| CSRs of ethmac / ethphy | ― | 0x1200_1000 / 0x1200_1800 |
+| SD card | 0x1200_2000, PLIC 3 | 0x1200_3000, PLIC 4 |
 | timer0 | 0x1200_3000 | 0x1200_4000 |
 | UART | 0x1200_3800 | 0x1200_4800 |
-| パケットバッファ | ― | 0x3000_0000(8 KiB、キャッシュしない) |
-| Ethernet の割り込み | ― | PLIC 3 |
+| Packet buffer | ― | 0x3000_0000 (8 KiB, uncached) |
+| Ethernet interrupt | ― | PLIC 3 |
 
-### Linux で IP をもらう
+### Getting an IP in Linux
 
-BusyBox の `udhcpc` は、インタフェースを起こすこともアドレスを設定することも自分では
-せず、スクリプトに任せる。しかもこの BusyBox は既定のスクリプトの場所が空
-(`CONFIG_UDHCPC_DEFAULT_SCRIPT=""`)なので、**`-s` でスクリプトを指定しないと何も
-実行されない**(インタフェースは DOWN のままで `Network is down` になる)。そのスクリプト
-(`software/rootfs/usr/share/udhcpc/default.script`)は、上の書き込み手順の
-`sd_rootfs.sh` がカードに入れる。inittab も起動時に `udhcpc` を実行するので、普段は
-何もしなくてよい。手で取り直すなら、ボードで:
+BusyBox's `udhcpc` neither brings the interface up nor sets the address by itself; it leaves that to a
+script. And this BusyBox has an empty default script location (`CONFIG_UDHCPC_DEFAULT_SCRIPT=""`), so
+**nothing is run unless a script is given with `-s`** (the interface stays DOWN and you get `Network is
+down`). That script (`software/rootfs/usr/share/udhcpc/default.script`) is put on the card by
+`sd_rootfs.sh` in the writing procedure above. inittab also runs `udhcpc` at boot, so normally there is
+nothing to do. To get it again by hand, on the board:
 
 ```sh
 udhcpc -i eth0 -s /usr/share/udhcpc/default.script
-                        # "Setting IP address ..." と "Adding router ..." が出れば設定済み
+                        # set up when "Setting IP address ..." and "Adding router ..." appear
 ifconfig eth0
-ping <ルータの IP>      # "... is alive!" (この BusyBox の ping は簡易版で -c などは無い)
+ping <router IP>        # "... is alive!" (this BusyBox's ping is the simple one, without -c and the like)
 ```
 
-起動時に自動で取るなら `/etc/inittab` の `--install -s` の行より後に次を足す
-(`-b`: 取れなければ裏で待ち続ける):
+To get it automatically at boot, add the following after the `--install -s` line of `/etc/inittab`
+(`-b`: if none is obtained, keep waiting in the background):
 
 ```
 ::sysinit:/bin/busybox udhcpc -i eth0 -b -s /usr/share/udhcpc/default.script
 ```
 
-2026-09-26 に実機で確認: `udhcpc` で 192.168.0.11 を取得し、ルータと LAN 上の PC に
-`ping` が通った。
+Checked on the board 2026-09-26: `udhcpc` got 192.168.0.11, and `ping` reached the router and a PC on
+the LAN.
 
-MAC アドレスは BIOS と同じ `10:e2:d5:00:00:00`(デバイスツリーの
-`local-mac-address`)なので、BIOS と Linux は DHCP で同じ IP をもらう。
+The MAC address is `10:e2:d5:00:00:00`, the same as the BIOS (`local-mac-address` of the device tree), so
+the BIOS and Linux get the same IP by DHCP.
 
-### LiteX BIOS の TFTP ネットブート
+### TFTP netboot of the LiteX BIOS
 
-カーネルと OpenSBI を SD カードではなく PC の TFTP サーバから読み込む。SD カードの
-入れ替え無しでカーネルや `fw_jump.bin` を試せる。ルートファイルシステムは今まで
-どおり SD カード(`root=/dev/mmcblk0p2`)。自動の起動順は シリアル → SD カード →
-ネットワーク なので、ネットブートは `litex>` プロンプトから手で行う。
+Loads the kernel and OpenSBI from a TFTP server on the PC instead of the SD card. Kernels and
+`fw_jump.bin` can be tried without swapping SD cards. The root file system stays on the SD card as before
+(`root=/dev/mmcblk0p2`). The automatic boot order is serial → SD card → network, so netboot is done by
+hand from the `litex>` prompt.
 
-**1. TFTP サーバ(PC 側、一度だけ)**。ボードと同じネットワークにいること。VM で
-立てるなら、VM のネットワークはブリッジ接続にする(NAT だとボードから届かない)。
-Mac の Parallels Desktop 上の Ubuntu に立てる場合の詳しい手順(ブリッジ設定、
-`tftpd-hpa` の設定、ufw で UDP 69 を開ける、tcpdump での切り分け)は
-`docs/TFTP_SERVER.md`。
+**1. TFTP server (on the PC, once)**. It must be on the same network as the board. When it runs in a VM,
+make the VM's network bridged (with NAT the board cannot reach it). The detailed procedure for Ubuntu on
+Parallels Desktop on a Mac (bridge setting, `tftpd-hpa` configuration, opening UDP 69 in ufw, narrowing
+things down with tcpdump) is in `docs/TFTP_SERVER.md`.
 
 ```bash
-sudo apt install tftpd-hpa          # 公開ディレクトリは /srv/tftp
+sudo apt install tftpd-hpa          # the published directory is /srv/tftp
 sudo cp LitexSystem/software/boot/Image LitexSystem/software/boot/fw_jump.bin \
-        LitexSystem/software/boot/boot.json /srv/tftp/   # SD カードの第 1 パーティションと同じもの
-ip -4 addr                                # サーバの IP を控える
+        LitexSystem/software/boot/boot.json /srv/tftp/   # the same as the first partition of the SD card
+ip -4 addr                                # note the server's IP
 ```
 
-**2. ボード**。電源を入れて `Press Q or ESC to abort boot completely.` の間に
-`Q` を押すと `litex>` になる。
+**2. The board**. Power on and press `Q` during `Press Q or ESC to abort boot completely.` to get
+`litex>`.
 
 ```
-litex> eth_dhcp                       <- "Local IP: 192.168.x.y" が出れば DHCP 成功
-litex> ping <サーバの IP>              <- 応答が返れば経路は通っている
-litex> eth_remote_ip <サーバの IP>     <- TFTP サーバ(既定は 192.168.1.100)
-litex> netboot                        <- boot.json を読み、Image と fw_jump.bin を取って起動
+litex> eth_dhcp                       <- DHCP worked when "Local IP: 192.168.x.y" appears
+litex> ping <server IP>               <- an answer means the route works
+litex> eth_remote_ip <server IP>      <- the TFTP server (default 192.168.1.100)
+litex> netboot                        <- reads boot.json, fetches Image and fw_jump.bin and boots
 ```
 
-`Copying Image to 0x80200000 ...` の後、SD カードからの起動と同じように OpenSBI と
-Linux が出れば成功(2026-09-26 に実機で確認)。
+After `Copying Image to 0x80200000 ...`, success is OpenSBI and Linux appearing just as when booting from
+the SD card (checked on the board 2026-09-26).
 
-`Booting from boot.json...` の直後に `Booting from boot.bin...` へ進んで
-`Network boot failed.` になるのは、`boot.json` すら取れていないとき。TFTP サーバが
-動いているか、ファイルが `TFTP_DIRECTORY` にあるか、**サーバ側のファイアウォールが
-UDP 69 番を通しているか**(実機ではこれだった)を確かめる。
+Moving on to `Booting from boot.bin...` right after `Booting from boot.json...` and ending in `Network
+boot failed.` means not even `boot.json` could be fetched. Check that the TFTP server is running, that
+the files are in `TFTP_DIRECTORY`, and **that the server's firewall lets UDP port 69 through** (that was
+it on the board).
 
-ダウンロードは終わるのに `Liftoff!` の後に何も出ないときは、読み込んだ中身を確かめる。
-`fw_jump.bin` はどの版も 279048 バイトで大きさでは区別できないので、まずサーバで
-`strings fw_jump.bin | grep serial@` が `serial@12004800` を示すか見る。それでも出ない
-なら、BIOS が再起動しても壊さない番地へ読み込んで BIOS に戻る JSON をサーバに置き、
+If the download finishes but nothing appears after `Liftoff!`, check what was loaded. Every version of
+`fw_jump.bin` is 279048 bytes and cannot be told apart by size, so first see on the server whether
+`strings fw_jump.bin | grep serial@` shows `serial@12004800`. If it still does not boot, put on the server
+a JSON that loads to addresses the BIOS does not destroy when restarting and returns to the BIOS,
 
 ```json
 {
@@ -310,43 +306,42 @@ UDP 69 番を通しているか**(実機ではこれだった)を確かめる。
 }
 ```
 
-`netboot check.json` → `Q` → `crc 0x81000000 <大きさ>` と `crc 0x81200000 <大きさ>` を、
-PC で計算した CRC32(`python3 -c "import zlib,sys;print(hex(zlib.crc32(open(sys.argv[1],'rb').read())))" fw_jump.bin`)
-と比べる。
+and compare `netboot check.json` → `Q` → `crc 0x81000000 <size>` and `crc 0x81200000 <size>` with the
+CRC32 computed on the PC
+(`python3 -c "import zlib,sys;print(hex(zlib.crc32(open(sys.argv[1],'rb').read())))" fw_jump.bin`).
 
-TFTP サーバの既定値を変えてビットストリームごと作り直すなら
-`REMOTE_IP=192.168.x.y ./scripts/build_soc.sh`。
+To change the default TFTP server and rebuild the bitstream: `REMOTE_IP=192.168.x.y ./scripts/build_soc.sh`.
 
-## 長時間の負荷試験(`software/rootfs/root/stress.sh`)
+## Long stress test (`software/rootfs/root/stress.sh`)
 
-Linux 上で 3 つの作業を同時に何時間も回し、どれも自分のデータを md5 で照合する。
+Runs 3 jobs at the same time for hours on Linux, each checking its own data with md5.
 
-| 作業 | 内容 | 主に試すもの |
+| Job | What it does | What it mainly tests |
 |---|---|---|
-| net | TFTP サーバから `Image`(15 MB)を 1024 バイトのブロックで取得 | Ethernet の大きなフレームの受信、割り込み |
-| sd | 2 MB の乱数を SD カードの ext4 に書き、ページキャッシュを捨てて読み戻す | SD カードの DMA(読み書き両方) |
-| mem | 64 MB の 0 を `/tmp`(RAM)に書く | データキャッシュと DRAM |
+| net | Fetches `Image` (15 MB) from the TFTP server in blocks of 1024 bytes | Receiving large Ethernet frames, interrupts |
+| sd | Writes 2 MB of random data to the SD card's ext4, drops the page cache and reads it back | The SD card's DMA (both directions) |
+| mem | Writes 64 MB of zeros to `/tmp` (RAM) | Data cache and DRAM |
 
-**準備**。TFTP サーバの公開ディレクトリに `stress.sh` を置き(`Image` はネットブート用に
-置いたものをそのまま使う)、ボードで取ってくる:
+**Preparation**. Put `stress.sh` in the TFTP server's published directory (the `Image` placed there for
+netboot is used as it is), and fetch it on the board:
 
 ```sh
-udhcpc -i eth0 -s /usr/share/udhcpc/default.script     # 起動時に取っていれば不要
-tftp -g -r stress.sh -l /root/stress.sh <サーバの IP>
+udhcpc -i eth0 -s /usr/share/udhcpc/default.script     # not needed if it was obtained at boot
+tftp -g -r stress.sh -l /root/stress.sh <server IP>
 chmod +x /root/stress.sh
 ```
 
-**実行**(分を省くと 120 分):
+**Running it** (120 minutes if the minutes are omitted):
 
 ```sh
-/root/stress.sh <サーバの IP> 240
+/root/stress.sh <server IP> 240
 ```
 
-10 分ごとに `stress: 時刻 n OK, m NG, uptime ...` が 1 行出る。これが止まったら、その
-時点でボードが止まっている。途中経過は別の端末が無いので、止めずに見るなら
-`/root/stress.log` を後で見る(1 回ごとに 1 行)。終わると作業ごとの回数と、実行中に
-増えたカーネルの警告(`warning` / `oops` / `error` など)を出し、最後に `=== PASS ===`
-か `=== FAILED ===` を出す。照合に失敗したファイルは `/tmp/stress.d/net.bad`、
-`/root/stress.d/sd.bad.<n>`、`/tmp/stress.d/mem.bad` に残る。
+Every 10 minutes one line `stress: time n OK, m NG, uptime ...` appears. If these stop, the board has
+stopped at that point. There is no second terminal, so to see progress without stopping it, look at
+`/root/stress.log` afterwards (one line per round). At the end it prints the count for each job and any
+kernel warnings (`warning` / `oops` / `error` and the like) that appeared while it ran, and finally `===
+PASS ===` or `=== FAILED ===`. Files that failed the check are left in `/tmp/stress.d/net.bad`,
+`/root/stress.d/sd.bad.<n>` and `/tmp/stress.d/mem.bad`.
 
-ネットワークを外して試すなら、サーバの代わりに `-` を渡す(`/root/stress.sh - 240`)。
+To test without the network, pass `-` instead of the server (`/root/stress.sh - 240`).

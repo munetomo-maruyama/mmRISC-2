@@ -1,169 +1,172 @@
-# ロード / ストアの待ちをなくす(設計案、2026-10-02)
+# Removing the waits of loads / stores (design proposal, 2026-10-02)
 
-進み具合: **A1 実装済み**(2026-10-02、5 章)、**A2 実装済み**(2026-10-02、6 章)。
-決まった内容は `CPU_CORE_SPEC.md` 5.4(決定 58〜60)と `CPU_CACHE_SPEC.md` 5.2(決定 16)。
+[日本語](PLAN_LOAD_LATENCY_J.md)
 
-`LitexSystem/docs/BENCH.md` の改善候補 A。決める前に方式を比べるための文書で、
-決まった内容は `CPU_CORE_SPEC.md` と `CPU_CACHE_SPEC.md` に移す。
+Progress: **A1 implemented** (2026-10-02, section 5), **A2 implemented** (2026-10-02, section 6).
+What was decided is in `CPU_CORE_SPEC.md` 5.4 (decisions 58 to 60) and `CPU_CACHE_SPEC.md` 5.2
+(decision 16).
 
-## 1. いま何が起きているか
+Improvement candidate A of `LitexSystem/docs/BENCH.md`. A document for comparing approaches before
+deciding; what is decided moves to `CPU_CORE_SPEC.md` and `CPU_CACHE_SPEC.md`.
 
-`SIM/SIM_SYS` の `+dtrace` で、D$ にヒットするロードの要求と応答のサイクルを見た
-(`bench/ldloop.c` のループ):
+## 1. What happens now
+
+With `+dtrace` of `SIM/SIM_SYS`, the cycles of request and response of a load that hits in the D$ were
+observed (the loop of `bench/ldloop.c`):
 
 ```
-[57932] D REQ  cmd=0 addr=0080006000  (pc in MR 0080000af4)    ← MR で要求
-[57935] D RESP data=0505050505050505  (pc in MA 0080000af4)    ← 3 サイクル後
+[57932] D REQ  cmd=0 addr=0080006000  (pc in MR 0080000af4)    ← request in MR
+[57935] D RESP data=0505050505050505  (pc in MA 0080000af4)    ← 3 cycles later
 ```
 
-| サイクル | コア | D$ |
+| Cycle | Core | D$ |
 |---|---|---|
-| t | ロードは MR。要求を出す | s0: 配列を読み始める(仮想アドレスの index) |
-| t+1 | ロードは MA。**待つ** | s1: タグ比較(物理アドレス)、ヒット → 応答を ROB に書く |
-| t+2 | MA で**待つ** | ROB の先頭が完了 → 応答をレジスタへ |
-| t+3 | 応答が見える。MA が進む | |
+| t | The load is in MR. It makes the request | s0: starts reading the arrays (index from the virtual address) |
+| t+1 | The load is in MA. **Waits** | s1: tag compare (physical address), hit → writes the response into the ROB |
+| t+2 | **Waits** in MA | The head of the ROB completes → response to the register |
+| t+3 | The response is visible. MA moves on | |
 
-ヒットでも MA で 2 サイクル待ち、その間は後ろの命令がすべて止まる。ロード・ストア
-1 回ごとに 2 サイクルで、CoreMark の総サイクルの 23.6 %、Dhrystone の 33.8 % が
-これ(`BENCH.md` 1 章。プロファイラの「データアクセス 1 回あたり 1.1 サイクル」は
-最終段で数えた値で、発行点で数えると 2.0)。
+Even on a hit MA waits 2 cycles, and every instruction behind stops meanwhile. That is 2 cycles for
+every load and store: 23.6 % of the total cycles of CoreMark and 33.8 % of Dhrystone (section 1 of
+`BENCH.md`; the profiler's "1.1 cycles per data access" is counted at the last stage, counted at the
+issue point it is 2.0).
 
-同時に、タイミングの最悪経路の 9 本が、MR で要求を出すかどうかを決める PMP の判定
-から始まり、パイプライン全体のストール信号に入っている(`TIMING.md` 23 章、
-WNS +0.002 ns)。要求を出す場所を変えると、この 2 つが一緒に動く。
+At the same time, 9 of the worst timing paths start from the PMP decision of whether MR may make the
+request and run into the stall signal of the whole pipeline (section 23 of `TIMING.md`, WNS +0.002 ns).
+Changing where the request is made moves both of these together.
 
-## 2. 方式
+## 2. Approaches
 
-### A1. D$ の応答を 1 サイクル早める(3 → 2)
+### A1. Answer from the D$ one cycle earlier (3 → 2)
 
-s1 でヒットが分かったとき、ROB に書いてから次のサイクルに取り出すのをやめ、
-**s1 の結果からそのまま応答のレジスタを書く**。ROB に古い未完了の要求がない
-(この要求が先頭)ときだけ。それ以外は今までどおり ROB を通す。
+When s1 finds a hit, instead of writing the ROB and taking it out the next cycle, **write the response
+register straight from the result of s1**. Only when the ROB holds no older unfinished request (this
+request is the head). Otherwise go through the ROB as before.
 
-| 項目 | 内容 |
+| Item | Contents |
 |---|---|
-| 効果 | MA の待ちが 2 → 1 サイクル。CoreMark 約 +12 %、Dhrystone 約 +20 %(見込み) |
-| 変更 | `DCACHE` の応答部だけ。コアのプロトコルは変わらない |
-| タイミング | 新しい経路は s1 のヒット判定 → 応答レジスタ。今の ROB への書き込みと同じ深さ |
-| 危険 | 小〜中。応答の順序(ROB の先頭との比較)を間違えると順序が入れ替わる |
-| 検証 | `SIM_CACHE`(60,263 項目、変異 28 種)に、ROB に先客がいるときといないときのヒットを足す |
+| Effect | MA's wait goes from 2 to 1 cycle. CoreMark about +12 %, Dhrystone about +20 % (estimated) |
+| Change | Only the response part of `DCACHE`. The core's protocol does not change |
+| Timing | The new path is s1's hit decision → response register. The same depth as the present write into the ROB |
+| Risk | Small to medium. Getting the order of responses wrong (the comparison with the head of the ROB) swaps their order |
+| Verification | Add to `SIM_CACHE` (60,263 checks, 28 mutations) hits with and without an earlier request in the ROB |
 
-### A2. 要求を EX から出す(仮想アドレスで index、物理アドレスは MR で)
+### A2. Make the request from EX (index from the virtual address, physical address in MR)
 
-D$ は**仮想アドレスで index を引き、物理アドレス(タグ)は 1 サイクル後に受け取る**
-作り(`CPU_CACHE_SPEC.md` 5.6)なので、要求は EX で出せる。
+The D$ **takes the index from the virtual address and receives the physical address (the tag) one cycle
+later** (`CPU_CACHE_SPEC.md` 5.6), so the request can be made in EX.
 
-| サイクル | コア | D$ |
+| Cycle | Core | D$ |
 |---|---|---|
-| t | ロードは EX。アドレスを足して要求を出す。DTLB も引く | s0 |
-| t+1 | MR。DTLB の答え(物理アドレス)と PMP | s1: タグ比較。MR が「出してはいけなかった」と言えば**取り消す** |
-| t+2 | MA。A1 と合わせれば応答がここで見える → **待たない** | |
+| t | The load is in EX. Adds up the address and makes the request. Also looks up the DTLB | s0 |
+| t+1 | MR. The answer of the DTLB (physical address) and PMP | s1: tag compare. If MR says "this should not have been sent", it is **taken back** |
+| t+2 | MA. Together with A1 the response is visible here → **no wait** | |
 
-取り消すのは、DTLB ミス / ページフォルト、不整列、PMP の拒否、トラップによる
-フラッシュ。I$ が PMP の拒否でやっている `i_cancel` と同じ考え方を D$ に入れる
-(ストアは s1 で書くので、その書き込みと、ミスなら fill の開始を止める)。
-DTLB ミスで取り消したものは、ページテーブルを引いたあと MR から出し直す(今の経路を
-そのまま残して予備にする)。
+What is taken back: DTLB misses / page faults, misalignment, PMP refusals, flushes by a trap. The same
+idea as the `i_cancel` the I$ uses for PMP refusals, brought to the D$ (a store writes in s1, so that
+write is stopped, and on a miss the start of the fill). What is taken back for a DTLB miss is sent again
+from MR after the page table walk (the present path stays as a fallback).
 
-| 項目 | 内容 |
+| Item | Contents |
 |---|---|
-| 効果 | A1 と合わせて MA の待ちがほぼ 0。CoreMark 最大 +31 %、Dhrystone 最大 +51 %(A1 込み) |
-| タイミング | **PMP がストールの網から外れる**(取り消しと例外だけに効く)。代わりに EX の加算 → D$ の index → 配列のアドレスが新しい経路になる |
-| 変更 | コアの LSU(要求を出す段、飛んでいる要求の追跡、取り消した要求の応答を捨てる)、`DCACHE` に s1 の取り消し、`CACHE_PORT_ARB`(取り消しを通す) |
-| 危険 | 大。メモリパイプラインの約束事が変わる。EX で出した要求が、EX が止まったまま答えを返すことがある(応答を 1 つ預かる場所が要る)。ページテーブルウォーカと D$ ポートの取り合い |
-| 検証 | `SIM_CACHE` に取り消しの試験(ストア、ミス、AMO、LR/SC)、`SIM_CORE` に要求の後ろでフラッシュ・DTLB ミス・PMP の拒否が起きる試験、両方の変異。riscv-tests の v 環境、Linux 起動 |
+| Effect | With A1, MA's wait becomes almost 0. CoreMark up to +31 %, Dhrystone up to +51 % (A1 included) |
+| Timing | **PMP leaves the stall net** (it acts only on cancel and exceptions). Instead, EX's add → D$ index → array address becomes a new path |
+| Change | The core's LSU (the stage that makes requests, tracking requests in flight, throwing away the responses of cancelled requests), cancel in s1 of `DCACHE`, `CACHE_PORT_ARB` (passing the cancel through) |
+| Risk | Large. The conventions of the memory pipeline change. A request made from EX may be answered while EX is still stopped (a place to hold one response is needed). The page table walker competes for the D$ port |
+| Verification | Cancel tests in `SIM_CACHE` (stores, misses, AMO, LR/SC), tests in `SIM_CORE` where a flush, a DTLB miss or a PMP refusal happens behind a request, mutations in both. The v environment of riscv-tests, booting Linux |
 
-### A3(比較のため). ロードの結果を後から書く
+### A3 (for comparison). Write the result of a load later
 
-MA でロードを答えを待たずにコミットし、答えは 1〜2 サイクル後にレジスタファイルへ
-書く(スコアボードで依存する命令を止める)。
+Commit the load in MA without waiting for the answer, and write the answer into the register file 1 to 2
+cycles later (a scoreboard stops dependent instructions).
 
-採らない理由: バスエラー(I/O のロード)を正確な例外として報告できなくなる。
-ストア(これも毎回 2 サイクル待っている)には効かない。転送経路が増え、いま最も長い
-転送の経路(`TIMING.md` 23 章の 2 位)をさらに長くする。
+Why not: bus errors (of I/O loads) could no longer be reported as precise exceptions. It does nothing
+for stores (which also wait 2 cycles every time). It adds forwarding paths and makes the longest
+forwarding path now (second in section 23 of `TIMING.md`) longer still.
 
-## 3. 進め方の提案
+## 3. Proposed way forward
 
-1. **A1 を先に入れる**。キャッシュの中だけで閉じ、コアの約束事が変わらない。効果を
-   測ってから A2 に進む
-2. **A2**。メモリパイプラインの作り直し。PMP がストールの網から外れるので、
-   タイミングの余裕も戻る見込み
-3. そのあと、残る差の候補:
+1. **A1 first**. It is closed inside the cache and does not change the core's conventions. Measure its
+   effect, then go to A2
+2. **A2**. A rework of the memory pipeline. PMP leaves the stall net, so timing margin should come back
+   as well
+3. After that, candidates for what remains:
 
-| 候補 | 見込み |
+| Candidate | Estimate |
 |---|---|
-| 条件分岐の予測を履歴付きに(gshare など) | CoreMark +2〜4 % |
-| 乗算を 3 → 2 サイクル以下に | 3 % 前後 |
-| ロードユースの 1 サイクル | 3 % 前後(A2 で形が変わるので、その後に測り直す) |
+| Conditional branch prediction with history (gshare or the like) | CoreMark +2 to 4 % |
+| Multiply from 3 down to 2 cycles or less | about 3 % |
+| The 1 cycle of load-use | about 3 % (A2 changes its shape, so measure again after it) |
 
-見込みの数字は、シミュレーション(`SIM/SIM_SYS`、`make bench`)のプロファイルから、
-その分の停止がそのまま消えるとした値。A1 + A2 で CoreMark は 1.76 → 2.3 前後 /MHz
-(シミュレーション)になり、Rocket と同じ水準に届く計算になる。
+The estimates assume that the stalls in the profile of the simulation (`SIM/SIM_SYS`, `make bench`)
+disappear entirely. With A1 + A2 CoreMark goes from 1.76 to about 2.3 /MHz (simulation), which by the
+numbers reaches the level of Rocket.
 
-## 4. 決めてほしいこと
+## 4. Decisions requested
 
-- A1 → A2 の順でよいか
-- A2 で D$ に s1 の取り消しを入れること(検証済みのキャッシュに手を入れる)
+- Is the order A1 → A2 fine?
+- Putting a cancel in s1 of the D$ in A2 (touching a cache that has been verified)
 
-## 5. A1 の結果(2026-10-02)
+## 5. Results of A1 (2026-10-02)
 
-`DCACHE` のステージ 1 で、ヒットが ROB の先頭なら応答をそこから出す(`s1_fast`)。
+In stage 1 of `DCACHE`, a hit that is the head of the ROB is answered from there (`s1_fast`).
 
-| | 前 | 後 | |
+| | Before | After | |
 |---|---|---|---|
-| ヒットの要求 → 応答 | 3 サイクル | **2 サイクル** | `+dtrace` で確認 |
-| MA の待ち / アクセス | 2 | 1 | |
-| CoreMark(シミュレーション) | 5,684,843 サイクル | 4,998,815 | **+13.7 %、2.00 CoreMark/MHz** |
-| Dhrystone(シミュレーション) | 396,032 | 324,545 | **+22 %** |
+| Hit request → response | 3 cycles | **2 cycles** | Checked with `+dtrace` |
+| MA wait / access | 2 | 1 | |
+| CoreMark (simulation) | 5,684,843 cycles | 4,998,815 | **+13.7 %, 2.00 CoreMark/MHz** |
+| Dhrystone (simulation) | 396,032 | 324,545 | **+22 %** |
 
-検証: SIM_CACHE(60,222 項目)、変異 31 種すべて検出(新規 3 種: 先頭でなくても
-ステージ 1 から答える、SC の結果が逆、ロードのバイト位置合わせ抜け)、SIM_SYS
-(背圧あり / なし)、SIM_OCD、SIM_DBG、BIOS、SD モデルからの Linux 起動。
+Verification: SIM_CACHE (60,222 checks), all 31 mutations detected (3 new: answering from stage 1 even
+when not the head, SC result inverted, missing byte alignment of loads), SIM_SYS (with / without back
+pressure), SIM_OCD, SIM_DBG, BIOS, Linux boot from the SD model.
 
-実機: 1.667 → **1.895 CoreMark/MHz**(+13.7 %)、0.849 → **1.024 DMIPS/MHz**(+20.6 %)、
-WNS +0.052 ns。シミュレーションの見込みどおり。
+Board: 1.667 → **1.895 CoreMark/MHz** (+13.7 %), 0.849 → **1.024 DMIPS/MHz** (+20.6 %), WNS
++0.052 ns. As the simulation predicted.
 
-## 6. A2 の結果(2026-10-02)
+## 6. Results of A2 (2026-10-02)
 
-要求を EX から出し、MR が通す(`e_go`)か取り消す(`d_req_cancel`)。取り消したものと
-EX から出られなかったものは MA から出し直す。D$ は s1 で取り消しを受け、ROB の枠は
-黙って完了させて `d_resp_drop` 付きで返す。詳細は `CPU_CORE_SPEC.md` 5.4。
+The request is made from EX, and MR lets it go (`e_go`) or takes it back (`d_req_cancel`). What was
+taken back, and what could not leave EX, is sent again from MA. The D$ takes the cancel in s1, completes
+the ROB slot silently and answers with `d_resp_drop`. Details in `CPU_CORE_SPEC.md` 5.4.
 
-| | A1 の後 | A2 の後 | |
+| | After A1 | After A2 | |
 |---|---|---|---|
-| MA の待ち / アクセス | 1 | **0**(ヒット) | プロファイラの D$ 待ち 0.0 % |
-| CoreMark(シミュレーション) | 4,998,815 サイクル | 4,312,829 | **+15.9 %、2.32 CoreMark/MHz** |
-| Dhrystone(シミュレーション) | 324,545 | 253,069 | **+28 %** |
+| MA wait / access | 1 | **0** (hit) | D$ wait 0.0 % in the profiler |
+| CoreMark (simulation) | 4,998,815 cycles | 4,312,829 | **+15.9 %, 2.32 CoreMark/MHz** |
+| Dhrystone (simulation) | 324,545 | 253,069 | **+28 %** |
 
-A1 + A2 で CoreMark +32 %、Dhrystone +56 %。3 章の見込み(CoreMark 1.76 → 2.3 前後
-/MHz)どおり。
+A1 + A2 give CoreMark +32 % and Dhrystone +56 %. As estimated in section 3 (CoreMark 1.76 → about 2.3
+/MHz).
 
-設計で決めたこと(2 章からの変更点):
+What the design settled (changes from section 2):
 
-- **投機的に出すのはキャッシュ領域のロードだけ**。ストア・AMO / LR / SC・I/O の
-  ロードは、MA の命令がコミットするサイクル(または MA が空)にだけ通す。PLIC の
-  claim のように、読むだけで状態が変わる I/O がある
-- **前のアクセスが出ていなければ通さない**。最初の版は、取り消されて MA から
-  出直す古いストアを若いロードが追い越し、`t03` / `t04` / `t10` / `t14` が落ちた
-- DTLB ミスのときは「MR から出し直す」のではなく、EX で止まった命令の要求を
-  MR で取り消し、MA から出す(`ex_e_blocked`)。出し直しの経路を MA の 1 本に
-  まとめた
-- フラッシュで捨てる命令の答えは、D$ ではなくコアの LSU が数えて捨てる(`drop`)
+- **Only loads of the cacheable region are sent speculatively**. Stores, AMO / LR / SC and I/O loads go
+  only in the cycle the instruction in MA commits (or when MA is empty). Some I/O, like the claim of the
+  PLIC, changes state just by being read
+- **Nothing goes before the accesses in front of it have gone**. In the first version a young load
+  overtook an old store that had been taken back and was going again from MA, and `t03` / `t04` / `t10`
+  / `t14` failed
+- On a DTLB miss, instead of "sending again from MR", the request of the instruction stopped in EX is
+  taken back in MR and sent from MA (`ex_e_blocked`). The resend path was reduced to the single one from
+  MA
+- The answers of instructions thrown away by a flush are counted and thrown away by the core's LSU
+  (`drop`), not by the D$
 
-検証:
+Verification:
 
-| 環境 | 内容 | 結果 |
+| Environment | Contents | Result |
 |---|---|---|
-| SIM_CACHE | 19 章(取り消し: ストアのヒット / ミス、AMO、LR / SC、I/O、ランダム 3000 操作の 25 %) | 64,736 項目 PASS、変異 M32〜M36(新規 5)すべて検出 |
-| SIM_CORE | 新規 `t25_lsu`(取り消したストアの後ろのロード、トラップ時に飛んでいる答え、トラップの後ろの PLIC の claim、ハンドラが飛ばすストア)、`t18_asid` に間違った経路のストアを追加、誰も待っていない答えを検出する不変条件 | 25 本 PASS(Verilator、Icarus)、背圧注入、変異 M240〜M251(M249 は等価で削除)と、場所の変わった既存の変異 7 本を更新してすべて検出 |
-| riscv-tests | p / v | 132 / 109 PASS(既知の失敗のみ) |
-| SIM_SYS | 全テスト、背圧あり | PASS |
+| SIM_CACHE | Section 19 (cancel: store hit / miss, AMO, LR / SC, I/O, 25 % of 3000 random operations) | 64,736 checks PASS, mutations M32 to M36 (5 new) all detected |
+| SIM_CORE | New `t25_lsu` (a load behind a store that was taken back, answers in flight at a trap, a PLIC claim behind a trap, a store the handler skips), a store on a wrong path added to `t18_asid`, an invariant that detects answers nobody waits for | 25 tests PASS (Verilator, Icarus), back pressure, mutations M240 to M251 (M249 removed as equivalent) plus 7 existing mutations whose place moved, updated, all detected |
+| riscv-tests | p / v | 132 / 109 PASS (known failures only) |
+| SIM_SYS | All tests, with back pressure | PASS |
 | SIM_DBG / SIM_OCD / BIOS | | PASS |
-| Linux | SD モデルから起動(SIM_BIOS `make linux-sd`) | シェルのプロンプトまで起動 |
+| Linux | Boot from the SD model (SIM_BIOS `make linux-sd`) | Boots to the shell prompt |
 
-タイミング: PMP は MR の「進めるか」から外れ、`e_go` → `d_req_cancel` → D$ の s1 に
-しか効かない。代わりに EX の加算 → D$ の索引が新しい経路になる。配置配線後の
-WNS は +0.004 ns(A1 の後は +0.052 ns)。
+Timing: PMP left MR's "may it go on", and acts only through `e_go` → `d_req_cancel` → s1 of the D$.
+Instead, EX's add → D$ index is a new path. WNS after place and route is +0.004 ns (+0.052 ns after A1).
 
-実機: 1.895 → **2.211 CoreMark/MHz**(+16.7 %)、1.024 → **1.297 DMIPS/MHz**(+26.7 %)。
-`micro` のロードを含むループは、ロードのないループと同じ 4.4 サイクルになった。
+Board: 1.895 → **2.211 CoreMark/MHz** (+16.7 %), 1.024 → **1.297 DMIPS/MHz** (+26.7 %). The loops of
+`micro` with loads now take the same 4.4 cycles as the loop without loads.
