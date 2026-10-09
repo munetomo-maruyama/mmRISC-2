@@ -1,0 +1,3 @@
+CORE_FPU  (period 20.0 ns, I/O delay 6.0 ns each side)
+after synthesis: 9757 LUT, 2008 FF, 16 DSP, 0 LUT RAM / SRL cells
+after routing: WNS 2.722 ns (register to register 3.427 ns), WHS 0.124 ns, 2260 slices

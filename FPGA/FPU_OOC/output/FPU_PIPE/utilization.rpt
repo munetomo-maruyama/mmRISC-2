@@ -1,0 +1,31 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
+| Date         : Fri Oct  9 18:43:16 2026
+| Host         : ARM-Windows running 64-bit major release  (build 9200)
+| Command      : report_utilization -hierarchical -file ./output/FPU_PIPE/utilization.rpt
+| Design       : FPU_PIPE
+| Device       : xc7a100tcsg324-1
+| Speed File   : -1
+| Design State : Routed
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Utilization Design Information
+
+Table of Contents
+-----------------
+1. Utilization by Hierarchy
+
+1. Utilization by Hierarchy
+---------------------------
+
++--------------+-----------+------------+------------+---------+------+------+--------+--------+------------+
+|   Instance   |   Module  | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs | RAMB36 | RAMB18 | DSP Blocks |
++--------------+-----------+------------+------------+---------+------+------+--------+--------+------------+
+| FPU_PIPE     |     (top) |       7718 |       7604 |       0 |  114 | 2633 |      0 |      0 |         16 |
+|   (FPU_PIPE) |     (top) |       6752 |       6638 |       0 |  114 | 2549 |      0 |      0 |         16 |
+|   u_round    | FPU_ROUND |        966 |        966 |       0 |    0 |   84 |      0 |      0 |          0 |
++--------------+-----------+------------+------------+---------+------+------+--------+--------+------------+
+* Note: The sum of lower-level cells may be larger than their parent cells total, due to cross-hierarchy LUT combining
+
+

@@ -1,0 +1,3 @@
+FPU_PIPE  (period 20.0 ns, I/O delay 6.0 ns each side)
+after synthesis: 9060 LUT, 2631 FF, 16 DSP, 177 LUT RAM / SRL cells
+after routing: WNS 3.758 ns (register to register 3.758 ns), WHS 0.036 ns, 2309 slices

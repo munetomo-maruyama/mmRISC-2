@@ -1,0 +1,30 @@
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved. Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
+---------------------------------------------------------------------------------------------------------------------------------------------
+| Tool Version : Vivado v.2025.1 (win64) Build 6140274 Thu May 22 00:12:29 MDT 2025
+| Date         : Fri Oct  9 18:41:40 2026
+| Host         : ARM-Windows running 64-bit major release  (build 9200)
+| Command      : report_utilization -hierarchical -file ./output/FPU_PIPE/utilization_synth.rpt
+| Design       : FPU_PIPE
+| Device       : xc7a100tcsg324-1
+| Speed File   : -1
+| Design State : Synthesized
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+Utilization Design Information
+
+Table of Contents
+-----------------
+1. Utilization by Hierarchy
+
+1. Utilization by Hierarchy
+---------------------------
+
++--------------+-----------+------------+------------+---------+------+------+--------+--------+------------+
+|   Instance   |   Module  | Total LUTs | Logic LUTs | LUTRAMs | SRLs |  FFs | RAMB36 | RAMB18 | DSP Blocks |
++--------------+-----------+------------+------------+---------+------+------+--------+--------+------------+
+| FPU_PIPE     |     (top) |       7841 |       7664 |       0 |  177 | 2631 |      0 |      0 |         16 |
+|   (FPU_PIPE) |     (top) |       6852 |       6675 |       0 |  177 | 2547 |      0 |      0 |         16 |
+|   u_round    | FPU_ROUND |        989 |        989 |       0 |    0 |   84 |      0 |      0 |          0 |
++--------------+-----------+------------+------------+---------+------+------+--------+--------+------------+
+
+
