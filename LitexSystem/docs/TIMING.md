@@ -1509,3 +1509,48 @@ number is only the other input of its read address multiplexer. The debugger rea
 (the pipeline empty), so **building EX's exception check from `ex_csr_addr` alone** (with a separate check
 for the debugger) would take this start point off the path entirely. It is MET now, so the work is held
 off, as a candidate for the next time margin is needed (alongside the 2 candidates of section 32).
+
+## 35. EX's CSR checks separated from the debugger's number (T1): +0.048 ns (2026-10-10)
+
+The version with T1 of `ROADMAP.md` (`CPU_CORE_SPEC.md` decision 70): the CSR checks of EX are made from
+`ex_csr_addr` alone, and the debugger's number goes only to the read data.
+
+| | Section 34 | This version |
+|---|---|---|
+| WNS | +0.113 ns | **+0.048 ns** |
+| WHS | | +0.024 ns |
+| LUT | 44,833 (70.7 %) | 45,530 (71.8 %) |
+| FF | 24,712 | 24,709 |
+| Slices | 86.2 % (13,664) | 85.5 % (13,558) |
+| Path no. 300 | +0.975 ns | +0.588 ns |
+
+**The aim was reached**: no path from `dbg_regno_q` is left among the 300 (in section 34 it was the 1st,
++0.402 and +0.477). The number of WNS went down anyway, and the reason is placement, not the change:
+
+- The change only takes logic away from the paths it touched; it adds none to the others. The paths now at
+  the top are families seen before (below), and they did not get longer logic.
+- The whole distribution went down: the 300th path is +0.588 ns against +0.975 ns. The same logic got about
+  0.1 to 0.4 ns longer routing. In section 34 a change of one AND term moved WNS by −0.17 ns; at 85 % slices
+  the swing of placement is about ±0.2 ns.
+
+So WNS is now set by the paths that were just behind the debugger's, and they are all within the swing:
+
+| Slack | Path | Of the 300 |
+|---|---|---|
+| **+0.048 ns** (24 levels, CARRY4 10, 77 % routing) | `d_resp_data` (the D$'s answer, forwarded from MA) → EX's operand → address add (`mr_vaddr`) → DTLB compare → `ex_advance` (fo=1,556) → the fetch queue's `pq_count` | 4 (+13 to `head_pc`) |
+| +0.108 ns (27 levels, CARRY4 14) | `pmpaddr` → data-side PMP compare → `mr_pmp_fail` → cancel of the request issued early (`lsu_e_go` → `d_req_cancel`) → the D$'s s1 → ROB write enable (`rob_data` CE) | **276** |
+
+- The first is candidate 1 of section 32 (T2 of `ROADMAP.md`: separate EX's stall from the DTLB compare).
+- The second is the family of section 22, now going through the cancel of decision 58. The PMP compare
+  (14 levels of CARRY4) is followed by the cancel and the D$'s ROB in the same cycle. It is 276 of the 300
+  because each ROB bit is a separate endpoint, and the logic is one path.
+
+**What it means**: T1 removed one family; the margin left is about one swing of placement. Before adding
+logic around the LSU and the D$ (M1 store buffer, M2 Zicbop), one of the two families above should be cut.
+Candidates:
+
+1. **T2** (the first family): see section 32.
+2. **The PMP check of the data side one cycle earlier** (the second family): the PMP compare's input is
+   `mr_paddr`, a register, but the compare itself is 14 levels of CARRY4. Registering the comparisons of
+   `pmpaddr` against the address range (or comparing in EX against the DTLB's answer and registering the
+   result) would leave only the selection by priority in MR.
