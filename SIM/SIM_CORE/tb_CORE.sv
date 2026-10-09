@@ -793,7 +793,7 @@ module tb_CORE;
             if (trace_valid)                 p_retire <= p_retire + 1;
             else if (u_core.stall_ma)        p_dcache <= p_dcache + 1;
             else if ((u_core.mdu_active & ~u_core.mdu_done) |
-                     (u_core.fpu_active & ~u_core.fpu_done))
+                     u_core.fp_wait)
                                              p_unit   <= p_unit   + 1;
             else if (u_core.ex_mmu_wait)     p_mmu    <= p_mmu    + 1;
             else if (~u_core.fq_valid)       p_starve <= p_starve + 1;
@@ -869,7 +869,7 @@ module tb_CORE;
     end
 
     always @(posedge clk) begin
-        if ($test$plusargs("ftrace") && rst_n && u_core.fpu_start)
+        if ($test$plusargs("ftrace") && rst_n && u_core.fpu_in_valid)
             $display("[%0t] FPU op=%0d fmt=%0d rm=%0d a=%016h b=%016h c=%016h",
                      $time, u_core.ex_fp_op, u_core.ex_fp_fmt, u_core.ex_rm_eff,
                      u_core.fpu_a, u_core.ex_fs2_fwd, u_core.ex_fs3_fwd);

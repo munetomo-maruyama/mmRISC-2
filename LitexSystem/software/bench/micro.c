@@ -16,7 +16,11 @@
  *   misaligned            an 8 byte load at an address that is not a
  *                         multiple of 8: the core traps, and the access is
  *                         done in software (OpenSBI or the kernel)
- *   dgemm                 double precision multiply and add
+ *   dgemm                 double precision multiply and add, in C
+ *   fp kernels            (micro 50 fp for these alone) the kernels of
+ *                         fpkern.S in assembler for the pipelined FPU:
+ *                         matrix multiply in 4 x 4 blocks, FIR of 8 taps,
+ *                         dot product; their answers held against C
  *   sweep                 (micro 50 sweep) the stride 64 load loop over
  *                         8 ... 256 lines, all within the D$
  *   loops                 four loops of four instructions (loops.h), the
@@ -29,6 +33,7 @@
 #include <string.h>
 #include <time.h>
 #include "loops.h"
+#include "fpkern.h"
 
 static double mhz = 50.0;
 
@@ -218,6 +223,85 @@ static void dgemm(void)
 }
 
 /*--------------------------------------------------------------------------*/
+/* the kernels of fpkern.S. The matrices are dgemm's (64 x 64, more than the
+ * D$ holds); the FIR (1024 outputs) and the dot product (512) fit in it */
+#define FIRN 1024
+#define DOTN 512
+static double C2[DN][DN];
+static double fx[FIRN + 8], fh[8], fy[FIRN], fy_ref[FIRN];
+static double du[DOTN], dv[DOTN];
+static volatile double dsink;
+
+static void body_dgemm4(long n)
+{
+    for (long r = 0; r < n; r++)
+        fpk_dgemm4(DN, &A[0][0], &B[0][0], &C2[0][0]);
+}
+
+static void body_fir(long n)
+{
+    for (long r = 0; r < n; r++)
+        fpk_fir8(FIRN, fx, fh, fy);
+}
+
+static void body_dot(long n)
+{
+    double s = 0.0;
+    for (long r = 0; r < n; r++)
+        s += fpk_dot(DOTN, du, dv);
+    dsink = s;
+}
+
+static void fp_report(const char *what, double t, double macs)
+{
+    printf("%s:  %6.2f MFLOPS  %5.2f cycles per multiply-add\n",
+           what, 2.0 * macs / t / 1e6, t * mhz * 1e6 / macs);
+}
+
+static void fp_kernels(void)
+{
+    long   n;
+    double t;
+    int    bad = 0;
+
+    for (int i = 0; i < DN; i++)
+        for (int j = 0; j < DN; j++) {
+            A[i][j] = 1.0 + i * 0.001;
+            B[i][j] = 2.0 - j * 0.001;
+            C[i][j] = C2[i][j] = 0.0;
+        }
+    ref_dgemm(DN, &A[0][0], &B[0][0], &C[0][0]);
+    fpk_dgemm4(DN, &A[0][0], &B[0][0], &C2[0][0]);
+    for (int i = 0; i < DN; i++)
+        for (int j = 0; j < DN; j++)
+            if (!fpk_close(C[i][j], C2[i][j])) bad++;
+    n = 1;
+    t = timed(body_dgemm4, &n, 1.0);
+    fp_report("dgemm 64x64 asm 4x4     ", t, (double)DN * DN * DN * n);
+
+    for (int i = 0; i < FIRN + 8; i++) fx[i] = (i % 17) * 0.25 - 2.0;
+    for (int k = 0; k < 8; k++)        fh[k] = 0.125 * (k + 1);
+    ref_fir8(FIRN, fx, fh, fy_ref);
+    fpk_fir8(FIRN, fx, fh, fy);
+    for (int i = 0; i < FIRN; i++)
+        if (!fpk_close(fy[i], fy_ref[i])) bad++;
+    n = 1;
+    t = timed(body_fir, &n, 1.0);
+    fp_report("FIR 8 taps x 1024 asm   ", t, 8.0 * FIRN * n);
+
+    for (int i = 0; i < DOTN; i++) {
+        du[i] = 1.0 / (i + 1);
+        dv[i] = i * 0.5 - 3.0;
+    }
+    if (!fpk_close(fpk_dot(DOTN, du, dv), ref_dot(DOTN, du, dv))) bad++;
+    n = 1;
+    t = timed(body_dot, &n, 1.0);
+    fp_report("dot product x 512 asm   ", t, (double)DOTN * n);
+
+    printf("fp kernels              :  %s\n", bad ? "WRONG ANSWERS" : "answers agree with C");
+}
+
+/*--------------------------------------------------------------------------*/
 static char *lp_buf;
 static int   lp_kind;
 
@@ -296,12 +380,18 @@ int main(int argc, char **argv)
         sweep();
         return 0;
     }
+    if (argc > 2 && strcmp(argv[2], "fp") == 0) {
+        dgemm();
+        fp_kernels();
+        return 0;
+    }
     bandwidth("buffer", 8 * 1024);          /* in the D$ */
     bandwidth("buffer", 8 * 1024 * 1024);   /* DRAM */
     chase(8 * 1024);
     chase(8 * 1024 * 1024);
     misaligned();
     dgemm();
+    fp_kernels();
     loops();
     return 0;
 }

@@ -113,7 +113,7 @@ MUTATIONS=(
 "27#CPU_CORE/CPU_CORE/CPU_CORE.sv#s|id_exc_cause = EXC_ECALL_U + {3'd0, priv};|id_exc_cause = EXC_BREAK;|#core: ECALL is reported as a breakpoint"
 "28#CPU_CORE/CORE_IFU/CORE_IFU.sv#s/assign pop_q     = fq_valid \& fq_ready;/assign pop_q     = fq_valid;/#IFU: the fetch queue drops an instruction that ID could not take"
 "77#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                       \& ~serial_busy \& ~wfi_wait \& ~dbg_halted;/                       \& ~wfi_wait \& ~dbg_halted;/#core: the instruction behind a CSR write is decoded with the old mstatus.FS"
-"78#CPU_CORE/CPU_CORE/CPU_CORE.sv#/assign fpu_start/s/ \& ~stall_ma \&/ \&/#core: the FPU starts before the load in front of it has answered"
+"78#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/assign fpu_in_valid = fpu_active \& ex_advance \& ~kill_ex \& ~flush;/assign fpu_in_valid = fpu_active \& ex_advance \& ~flush;/#core: an FP operation is handed to the FPU in the cycle a late branch throws it away (t33)"
 "79#CPU_CORE/CPU_CORE/CPU_CORE.sv#/assign mdu_start/s/ \& ~stall_ma \&/ \&/#core: the multiplier starts before the load in front of it has answered"
 "80#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                         (dec_is_fp \& fp_off) ||/                         (1'b0) ||/#core: an FP instruction is allowed although mstatus.FS is off"
 "81#CPU_FPU/FPU_ROUND/FPU_ROUND.sv#s/        flags\[1\] = tiny \& inexact \& ~overflow;              \/\/ UF/        flags[1] = 1'b0;/#FPU: underflow is never reported"
@@ -123,7 +123,7 @@ MUTATIONS=(
 "85#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|        mstatus_val\[14:13\] = mstatus_fs;|        mstatus_val[14:13] = 2'b11;|#CSR: mstatus.FS always reads as dirty"
 "86#CPU_FPU/FPU_ROUND/FPU_ROUND.sv#s/            RM_RNE:  inc = guard \& (rest | lsb);/            RM_RNE:  inc = guard;/#FPU: round to nearest never breaks a tie to even"
 "87#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/        ex_rm_eff = (ex_fp_rm == 3'b111) ? frm_csr : ex_fp_rm;/        ex_rm_eff = ex_fp_rm;/#core: the dynamic rounding mode ignores frm"
-"88#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/| (fpu_active \& ~fpu_done \& ~flush);/| (1'b0);/#core: EX does not wait for the FPU"
+"88#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/                                    | fp_wait;/                                    | 1'b0;/#core: EX does not wait for the FPU (t33)"
 "89#CPU_CORE/CORE_FRF/CORE_FRF.sv#s/        rs3_data = (we \&\& (rs3 == rd)) ? rd_data : regs\[rs3\];/        rs3_data = regs[rs3];/#FRF: the third read port has no write first bypass"
 "90#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/        else if (ex_use_fs1 \&\& ma_valid \&\& ma_fp_we \&\& (ma_fp_rd == ex_fs1)) ex_fs1_fwd = ma_fp_fwd_data;/        else if (1'b0) ex_fs1_fwd = ma_fp_fwd_data;/#core: no forwarding of a floating point result from MA"
 "29#CPU_CORE/CORE_CSR/CORE_CSR.sv#s|mstatus_val\[12:11\] = mstatus_mpp;|mstatus_val[12:11] = 2'b11;|#CSR: mstatus.MPP always reads as machine mode"
@@ -236,6 +236,22 @@ MUTATIONS=(
 "335#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign hpm_ev\[6\]  = (ex_ctrl_go \& ex_mispredict) | kill_ex;%assign hpm_ev[6]  = kill_ex;%#PMU: wrong guesses found in EX not counted (t32)"
 "336#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign hpm_ev\[15\] = trap_en \& ~trap_int_c;%assign hpm_ev[15] = trap_en;%#PMU: interrupts counted as exceptions (t32)"
 "337#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign hpm_ev\[16\] = trap_en \&  trap_int_c;%assign hpm_ev[16] = trap_en;%#PMU: exceptions counted as interrupts (t32)"
+"341#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/if      (ex_use_fs1 \&\& fpo_fp \&\& (fpu_out_rd == ex_fs1))/if      (1'b0)/#FPU: the answer is not forwarded to the first source the cycle it comes out (t33)"
+"342#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/return use_fs \& fp_pend\[r\] \& ~(fpo_fp \& (fpu_out_rd == r));/return 1'b0;/#FPU: a source the FPU still owes is not waited for (t33)"
+"343#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/fp_waw = ex_fp_we_rd \& fp_pend\[ex_rd\];/fp_waw = 1'b0;/#FPU: FLD writes a register the FPU still owes (t33)"
+"344#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/(gpr_pend\[r\] | (ex_valid \& ex_fp_arith \& ex_we_rd \& (ex_rd == r)))/gpr_pend[r]/#FPU: ID does not see the integer register the operation in EX is about to owe (t33)"
+"345#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/(dec_we_rd   \& gpr_owed(dec_rd)));/1'b0);/#FPU: an integer write overtakes the FPU's answer to the same register (t33)"
+"346#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/.kill0         (flush),/.kill0         (1'b0),/#FPU: an operation in P0 behind FENCE.I is not taken back (t33)"
+"347#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/if (flush \&\& mr_valid \&\& mr_fpu) begin/if (1'b0) begin/#FPU: a register stays owed after its operation was taken back (t33)"
+"348#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/| wb_valid | fpu_busy;/| wb_valid;/#FPU: a CSR instruction does not wait for the FPU to be empty (t33)"
+"349#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/.fflags_set  (fpu_out_flags),/.fflags_set  (5'd0),/#FPU: the flags of the answers are lost (t11, t33)"
+"350#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/.hold0         (stall_ma),/.hold0         (1'b0),/#FPU: P0 does not stop with MR (t33)"
+"351#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/.we_b     (fpo_int),/.we_b     (1'b0),/#FPU: an integer answer is not written (t33)"
+"352#CPU_CORE/CPU_CORE/CPU_CORE.sv#s/.we_b     (fpo_fp),/.we_b     (1'b0),/#FPU: a floating point answer is not written"
+"353#CPU_CORE/CORE_FRF/CORE_FRF.sv#s/return lvt\[r\] ? bank_b\[r\] : bank_a\[r\];/return bank_a[r];/#FRF: the live value table is not read"
+"354#CPU_CORE/CORE_RF/CORE_RF.sv#s/rs1_data = lvt\[rs1\] ? bank_b\[rs1\] : bank_a\[rs1\];/rs1_data = bank_a[rs1];/#RF: the live value table is not read for rs1"
+"355#CPU_CORE/CORE_FRF/CORE_FRF.sv#s/if (we_b \&\& (r == rd_b))  return rd_data_b;/;/#FRF: a read in the cycle the FPU writes gets the old value (t33)"
+"356#CPU_CORE/CORE_FRF/CORE_FRF.sv#s/if (we_b) lvt\[rd_b\] <= 1'b1;/;/#FRF: the live value table does not follow a write of the FPU"
 "338#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign hpm_ev\[2\]  = commit;%assign hpm_ev[2]  = commit | trap_en;%#PMU: a trap counted as a retired instruction (t32)"
 "339#CPU_CORE/CORE_CSR/CORE_CSR.sv#s%if (!inhibit_cy \&\& !cy_filt) %if (!inhibit_cy) %#Smcntrpmf: mcyclecfg does not stop mcycle (t32)"
 "340#CPU_CORE/CORE_CSR/CORE_CSR.sv#s%assign ir_filt = (priv_r == PRIV_M) ? ir_minh : (priv_r == PRIV_S) ? ir_sinh : ir_uinh;%assign ir_filt = (priv_r == PRIV_M) ? ir_minh : (priv_r == PRIV_S) ? ir_sinh : 1'b0;%#Smcntrpmf: UINH of minstretcfg ignored (t32)"
@@ -406,7 +422,7 @@ $R/CORE_RF/CORE_RF.sv \
 $R/CORE_BTB/CORE_BTB.sv $R/CORE_IFU/CORE_IFU.sv $R/CORE_EXU/CORE_EXU.sv $R/CORE_LSU/CORE_LSU.sv \
 $R/CORE_MDU/CORE_MDU.sv \
 $R/CORE_FRF/CORE_FRF.sv $d/CPU/CPU_FPU/FPU_ROUND/FPU_ROUND.sv \
-$d/CPU/CPU_FPU/CORE_FPU/CORE_FPU.sv \
+$d/CPU/CPU_FPU/FPU_PIPE/FPU_PIPE.sv \
 $R/CPU_CORE/CPU_CORE.sv $d/CPU/CPU_CLINT/CPU_CLINT.sv \
 $d/CPU/CPU_PLIC/CPU_PLIC.sv \
 CORE_MEM_MODEL.sv tb_CORE.sv"

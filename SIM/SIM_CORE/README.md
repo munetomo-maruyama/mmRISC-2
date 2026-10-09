@@ -31,7 +31,7 @@
 | `make plic` | `CPU_PLIC` のレジスタポートを直接叩く(`tb_PLIC.sv`) |
 | `make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / uzba / uzbb / uzicond / mi / si)。`RVTESTS` でリポジトリの場所を指定 |
 | `make riscv-tests-v` | 同じ試験を仮想記憶の環境(`-v`、Sv39 でページを割り当てながら走る)で |
-| `make bugs` / `./bug_inject.sh` | バグ注入 297 種(背圧あり/なしの両方で判定。M211〜M231 はデバッグモード、M298〜M314 はトリガ、M320〜M340 は性能カウンタ、M240 以降は EX からの早出し。`CORE_MDU` の変異は `tb_MDU` でも判定) |
+| `make bugs` / `./bug_inject.sh` | バグ注入 313 種(背圧あり/なしの両方で判定。M211〜M231 はデバッグモード、M298〜M314 はトリガ、M320〜M340 は性能カウンタ、M341〜M356 はパイプライン化した FPU の接続とレジスタファイル、M240 以降は EX からの早出し。`CORE_MDU` の変異は `tb_MDU` でも判定) |
 | `make lint` | Verilator lint |
 
 プラスアーグ:
@@ -97,6 +97,7 @@ x10〜x30 だけを使うこと。`TEST_INIT` が既定のトラップハンド�
 | `t30_trig` | Sdtrig の例外を起こすトリガ(`CPU_CORE_SPEC.md` 決定 67): `tselect` / `tdata1` / `tdata2` / `tdata3` / `tinfo` / `tcontrol` の読み書き、M モードの実行トリガと `tcontrol.MTE` / MPTE、ハンドラ内では発火しないこと、ロード・ストア・AMO のトリガ(アクセスが起きない、mtval、完全一致、不整列より優先)、m / s / u ビット(S・U モード)、捨てられる経路(予測ミスの後ろ、ECALL の後ろの命令とロード)では発火も hit も無いこと、不正命令より優先すること |
 | `t31_zicond` | Zicond(`CPU_CORE_SPEC.md` 決定 68): `czero.eqz` / `czero.nez` の値の表(rs2 の最下位・最上位・上位半分の 1 ビットだけ)、rd = rs1 / rd = rs2 / rs1 = rs2 / x0、直前の ALU・ロードからのフォワーディング、結果を分岐とアドレスに使う場合。PAUSE・NTL.*・C.NTL.* がトラップせず何も書かないこと |
 | `t32_pmu` | 性能カウンタ(Zihpm、Sscofpmf、`CPU_CORE_SPEC.md` 決定 69): `mhpmcounter` / `mhpmevent` の実装範囲と 7〜31 の読み出し 0、`mcountinhibit` の HPM ビット、サイクル・命令数が `mcycle` / `minstret` の差と一致すること、ロード・ストア・条件分岐(MR で解決する分岐を含む)・例外の正確な数、予測ミス・ロードユース・MDU 待ち・フロントエンド / バックエンドの停止が数えられること、`mcountinhibit` と MINH / UINH、あふれで OF と LCOFIP が立ち M で割り込み(cause 13)を取ること、OF が立っていれば再び割り込まないこと、S への委譲(`sip` / `sie`)、`hpmcounterN` と `scountovf` の `mcounteren` / `scounteren` による制限、Smcntrpmf(`mcyclecfg` / `minstretcfg`)。キャッシュと TLB のイベントは SIM_SYS の `progs/d04_pmu.S` |
+| `t33_fpipe` | パイプライン化した FPU(`CPU_CORE_SPEC.md` 10.11): 独立な FMADD.D 16 本が 1 サイクルに 1 本で流れること、依存の連鎖と整数への答えを直後の ADDI へ、直前の答えの FSD、FPU がまだ書いていないレジスタへの FLD・整数命令の書き込み(WAW)、FMV.X.D を分岐に・FEQ.D をアドレスに、直後の FRFLAGS、トラップの後ろと FENCE.I の後ろ(後ろの命令はストアで書き換えておく)で取り消された演算、整数⇄倍精度、除算の後ろ、遅い分岐の影の FADD、ロードの直後の FP 演算 |
 
 ## テストベンチが自動で見ているもの
 

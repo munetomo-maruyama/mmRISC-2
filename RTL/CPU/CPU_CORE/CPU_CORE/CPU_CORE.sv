@@ -338,6 +338,11 @@ module CPU_CORE
         );
 
     logic [63:0] rf_rs1_data, rf_rs2_data;
+    // the answers of the FPU (FPU_PIPE), written through the second port of
+    // either register file
+    logic        fpu_out_valid, fpu_out_is_int, fpo_fp, fpo_int;
+    logic [63:0] fpu_out_result;
+    logic [4:0]  fpu_out_rd, fpu_out_flags;
     logic        wb_valid, wb_we_rd;
     logic [4:0]  wb_rd;
     logic [63:0] wb_data;
@@ -360,7 +365,10 @@ module CPU_CORE
             .rs2_data (rf_rs2_data),
             .we       ((wb_valid & wb_we_rd) | dbg_rf_we),
             .rd       (dbg_rf_we ? dbg_rw_idx  : wb_rd),
-            .rd_data  (dbg_rf_we ? dbg_rw_data : wb_data)
+            .rd_data  (dbg_rf_we ? dbg_rw_data : wb_data),
+            .we_b     (fpo_int),
+            .rd_b     (fpu_out_rd),
+            .rd_data_b(fpu_out_result)
         );
 
     //=================================================================
@@ -383,7 +391,10 @@ module CPU_CORE
             .rs3_data (frf_fs3_data),
             .we       ((wb_valid & wb_fp_we) | dbg_frf_we),
             .rd       (dbg_frf_we ? dbg_rw_idx  : wb_fp_rd),
-            .rd_data  (dbg_frf_we ? dbg_rw_data : wb_fp_data)
+            .rd_data  (dbg_frf_we ? dbg_rw_data : wb_fp_data),
+            .we_b     (fpo_fp),
+            .rd_b     (fpu_out_rd),
+            .rd_data_b(fpu_out_result)
         );
 
     //=================================================================
@@ -467,7 +478,6 @@ module CPU_CORE
     logic [63:0] mr_br_a, mr_br_target, mr_pred_target;
     logic [63:0] mr_sfence_vaddr, mr_sfence_asid;
     logic        mr_is_fp, mr_fp_arith, mr_fp_we, mr_fp_box;
-    logic [4:0]  mr_fp_flags;
     logic        mr_csr_wr;
     logic [11:0] mr_csr_addr;
     logic [63:0] mr_csr_wdata;
@@ -493,7 +503,6 @@ module CPU_CORE
     logic [63:0] ma_sfence_vaddr, ma_sfence_asid;
     logic        ma_is_fp, ma_fp_arith, ma_fp_we, ma_fp_box;
     logic [4:0]  ma_fp_rd;
-    logic [4:0]  ma_fp_flags;
     logic        ma_csr_wr;
     logic [11:0] ma_csr_addr;
     logic [63:0] ma_csr_wdata;
@@ -562,23 +571,30 @@ module CPU_CORE
                                      : lsu_resp_data;
     assign ma_fp_fwd_data = (ma_mem & ma_is_load) ? ma_load_data : ma_result;
 
-    // what MR can forward : a floating point result EX computed (not a load)
+    // The answer of the FPU comes first: it is the youngest writer of its
+    // register, because nothing writes a register the FPU still owes
+    // (fp_waw). What MR can forward : a floating point result EX computed
+    // (not a load; since the FPU is pipelined nothing else computes one in
+    // EX, so this is left for clarity only)
     logic mr_fp_fwd;
     assign mr_fp_fwd = mr_valid & mr_fp_we & ~mr_mem;
 
     always @(*) begin
         ex_fs1_fwd = ex_fs1_data;
-        if      (ex_use_fs1 && mr_fp_fwd && (mr_rd == ex_fs1))                ex_fs1_fwd = mr_result;
+        if      (ex_use_fs1 && fpo_fp && (fpu_out_rd == ex_fs1))           ex_fs1_fwd = fpu_out_result;
+        else if (ex_use_fs1 && mr_fp_fwd && (mr_rd == ex_fs1))                ex_fs1_fwd = mr_result;
         else if (ex_use_fs1 && ma_valid && ma_fp_we && (ma_fp_rd == ex_fs1)) ex_fs1_fwd = ma_fp_fwd_data;
         else if (ex_use_fs1 && wb_valid && wb_fp_we && (wb_fp_rd == ex_fs1)) ex_fs1_fwd = wb_fp_data;
 
         ex_fs2_fwd = ex_fs2_data;
-        if      (ex_use_fs2 && mr_fp_fwd && (mr_rd == ex_fs2))                ex_fs2_fwd = mr_result;
+        if      (ex_use_fs2 && fpo_fp && (fpu_out_rd == ex_fs2))           ex_fs2_fwd = fpu_out_result;
+        else if (ex_use_fs2 && mr_fp_fwd && (mr_rd == ex_fs2))                ex_fs2_fwd = mr_result;
         else if (ex_use_fs2 && ma_valid && ma_fp_we && (ma_fp_rd == ex_fs2)) ex_fs2_fwd = ma_fp_fwd_data;
         else if (ex_use_fs2 && wb_valid && wb_fp_we && (wb_fp_rd == ex_fs2)) ex_fs2_fwd = wb_fp_data;
 
         ex_fs3_fwd = ex_fs3_data;
-        if      (ex_use_fs3 && mr_fp_fwd && (mr_rd == ex_fs3))                ex_fs3_fwd = mr_result;
+        if      (ex_use_fs3 && fpo_fp && (fpu_out_rd == ex_fs3))           ex_fs3_fwd = fpu_out_result;
+        else if (ex_use_fs3 && mr_fp_fwd && (mr_rd == ex_fs3))                ex_fs3_fwd = mr_result;
         else if (ex_use_fs3 && ma_valid && ma_fp_we && (ma_fp_rd == ex_fs3)) ex_fs3_fwd = ma_fp_fwd_data;
         else if (ex_use_fs3 && wb_valid && wb_fp_we && (wb_fp_rd == ex_fs3)) ex_fs3_fwd = wb_fp_data;
     end
@@ -646,12 +662,26 @@ module CPU_CORE
     assign mdu_ack    = mdu_active & mdu_done & ex_advance;
 
     //=================================================================
-    // floating point unit
+    // floating point unit (FPU_PIPE, CPU_CORE_SPEC.md 10.11)
+    //
+    //   An operation is handed over when it leaves EX and its answer comes
+    //   out 9 cycles later (the divide and the square root take longer and
+    //   hold the next one back, in_ready). In the pipeline the instruction
+    //   writes nothing; the answer goes into the register file through the
+    //   file's second port. P0 and P1 of the unit stand where MR and MA
+    //   stand, and stop and are taken back with them: MR and MA stop
+    //   together (stall_ma), a trap or an xRET at MA empties MR (flush), and
+    //   only a trap takes the instruction in MA itself back.
+    //
+    //   fp_pend / gpr_pend : the registers the FPU still owes. An instruction
+    //   that reads one waits: in EX for a floating point register (the
+    //   answer is forwarded the cycle it comes out), in ID for an integer
+    //   register (it reads the file once the answer is written; nothing new
+    //   enters the forwarding of the integer operands, which heads the
+    //   longest path of the design). An instruction that writes one waits as
+    //   well, so a register has one writer in flight at most.
     //=================================================================
-    logic        fpu_active, fpu_start, fpu_busy, fpu_done, fpu_ack;
-    logic [63:0] fpu_result;
-    logic        fpu_res_is_int;
-    logic [4:0]  fpu_flags;
+    logic        fpu_active, fpu_in_valid, fpu_in_ready, fpu_busy, fp_wait;
     logic [63:0] fpu_a;
     logic [2:0]  frm_csr;
     logic [1:0]  fs_csr;
@@ -659,32 +689,101 @@ module CPU_CORE
 
     assign fpu_a = ex_use_fs1 ? ex_fs1_fwd : ex_a_fwd;
 
-    CORE_FPU u_fpu
+    FPU_PIPE #(.TAG_W(5)) u_fpu
         (
             .clk           (clk),
             .rst_n         (rst_n),
-            .start         (fpu_start),
-            .kill          (flush | kill_ex),
-            .op            (ex_fp_op),
-            .fmt           (ex_fp_fmt),
-            .rm            (ex_rm_eff),
-            .int_signed    (ex_fp_int_signed),
-            .int_w         (ex_fp_int_w),
-            .a             (fpu_a),
-            .b             (ex_fs2_fwd),
-            .c             (ex_fs3_fwd),
-            .busy          (fpu_busy),
-            .done          (fpu_done),
-            .ack           (fpu_ack),
-            .result        (fpu_result),
-            .result_is_int (fpu_res_is_int),
-            .flags         (fpu_flags)
+            .in_valid      (fpu_in_valid),
+            .in_ready      (fpu_in_ready),
+            .in_op         (ex_fp_op),
+            .in_fmt        (ex_fp_fmt),
+            .in_rm         (ex_rm_eff),
+            .in_int_signed (ex_fp_int_signed),
+            .in_int_w      (ex_fp_int_w),
+            .in_a          (fpu_a),
+            .in_b          (ex_fs2_fwd),
+            .in_c          (ex_fs3_fwd),
+            .in_tag        (ex_rd),
+            .hold0         (stall_ma),
+            .hold1         (stall_ma),
+            .kill0         (flush),
+            .kill1         (trap_taken),
+            .out_valid     (fpu_out_valid),
+            .out_result    (fpu_out_result),
+            .out_is_int    (fpu_out_is_int),
+            .out_flags     (fpu_out_flags),
+            .out_tag       (fpu_out_rd),
+            .busy          (fpu_busy)
         );
 
-    assign fpu_active = ex_valid & ex_fp_arith & ~ex_exc_pre;
-    assign fpu_start  = fpu_active & ~fpu_busy & ~fpu_done & ~flush & ~stall_ma &
-                        ~lu_hazard;
-    assign fpu_ack    = fpu_active & fpu_done & ex_advance;
+    assign fpo_fp  = fpu_out_valid & ~fpu_out_is_int;
+    assign fpo_int = fpu_out_valid &  fpu_out_is_int & (fpu_out_rd != 5'd0);
+
+    // ex_exc_pre is all a floating point instruction can raise (it never
+    // goes to the translation)
+    assign fpu_active   = ex_valid & ex_fp_arith & ~ex_exc_pre;
+    assign fpu_in_valid = fpu_active & ex_advance & ~kill_ex & ~flush;
+
+    logic [31:0] fp_pend, gpr_pend;
+    logic        fp_raw, fp_waw;
+
+    // a floating point source of EX the FPU still owes, unless it comes out now
+    function automatic logic fs_owed(input logic use_fs, input logic [4:0] r);
+        return use_fs & fp_pend[r] & ~(fpo_fp & (fpu_out_rd == r));
+    endfunction
+
+    always_comb begin
+        fp_raw = fs_owed(ex_use_fs1, ex_fs1) | fs_owed(ex_use_fs2, ex_fs2) |
+                 fs_owed(ex_use_fs3, ex_fs3);
+        // FLD / FLW and the floating point operations
+        fp_waw = ex_fp_we_rd & fp_pend[ex_rd];
+    end
+    assign fp_wait = ex_valid & ~flush &
+                     (fp_raw | fp_waw | (fpu_active & ~fpu_in_ready));
+
+    // the integer registers, looked at in ID: owed by the FPU, or by the
+    // operation in EX that is about to be handed to it; unless the answer is
+    // written now (the file hands a write of its second port to the read in
+    // the same cycle)
+    function automatic logic gpr_owed(input logic [4:0] r);
+        return (r != 5'd0) &
+               (gpr_pend[r] | (ex_valid & ex_fp_arith & ex_we_rd & (ex_rd == r))) &
+               ~(fpo_int & (fpu_out_rd == r));
+    endfunction
+
+    logic id_gpr_wait;
+    always_comb
+        id_gpr_wait = fq_valid & ((dec_use_rs1 & gpr_owed(dec_rs1)) |
+                                  (dec_use_rs2 & gpr_owed(dec_rs2)) |
+                                  (dec_we_rd   & gpr_owed(dec_rd)));
+
+    // what MR and MA hold that the FPU took (to take back with them)
+    logic mr_fpu, mr_fpu_fp, ma_fpu, ma_fpu_fp;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            fp_pend  <= 32'd0;
+            gpr_pend <= 32'd0;
+        end else begin
+            // an answer out
+            if (fpo_fp)  fp_pend[fpu_out_rd]  <= 1'b0;
+            if (fpo_int) gpr_pend[fpu_out_rd] <= 1'b0;
+            // taken back in P0 (MR) or P1 (MA)
+            if (flush && mr_valid && mr_fpu) begin
+                if (mr_fpu_fp) fp_pend[mr_rd]  <= 1'b0;
+                else           gpr_pend[mr_rd] <= 1'b0;
+            end
+            if (trap_taken && ma_valid && ma_fpu) begin
+                if (ma_fpu_fp) fp_pend[ma_rd]  <= 1'b0;
+                else           gpr_pend[ma_rd] <= 1'b0;
+            end
+            // handed over
+            if (fpu_in_valid) begin
+                if (ex_fp_we_rd)            fp_pend[ex_rd]  <= 1'b1;
+                else if (ex_rd != 5'd0)     gpr_pend[ex_rd] <= 1'b1;
+            end
+        end
+    end
 
     //=================================================================
     // CSR file
@@ -822,8 +921,8 @@ module CPU_CORE
             .pmpaddr_out (pmpaddr),
             .instret_inc (commit),
             .hpm_ev      (hpm_ev),
-            .fflags_we   (commit & ma_fp_arith),
-            .fflags_set  (ma_fp_flags),
+            .fflags_we   (fpu_out_valid),
+            .fflags_set  (fpu_out_flags),
             .fs_dirty    ((commit & ma_is_fp) | dbg_frf_we),
             .frm_out     (frm_csr),
             .fs_out      (fs_csr),
@@ -1272,7 +1371,7 @@ module CPU_CORE
 
     assign stall_ex      = stall_mr | ex_mmu_wait | lu_hazard | ctrl_behind_late
                                     | (mdu_active & ~mdu_done & ~flush)
-                                    | (fpu_active & ~fpu_done & ~flush);
+                                    | fp_wait;
     assign ex_advance    = ~stall_ex;
 
     // A CSR access, an MRET and the fences are serialising in both
@@ -1285,7 +1384,9 @@ module CPU_CORE
     //   rounding mode of an instruction that asks for the dynamic one. An
     //   instruction decoded one cycle too early would see the old value of
     //   either and be turned into an illegal instruction.
-    assign pipe_busy   = ex_valid | mr_valid | ma_valid | wb_valid;
+    // the FPU too: fflags / fcsr, the debugger and the counters see its
+    // answers only when it is empty
+    assign pipe_busy   = ex_valid | mr_valid | ma_valid | wb_valid | fpu_busy;
     assign serial_busy = (ex_valid & ex_serial) | (mr_valid & mr_serial) |
                          (ma_valid & ma_serial);
     // WFI does not wait while stepping (it then completes as a NOP) or when
@@ -1294,7 +1395,7 @@ module CPU_CORE
     assign id_ready    = ~(fq_valid & (dec_is_csr | dec_is_mret | dec_is_sret |
                                        dec_is_sfence | dec_is_fence |
                                        dec_is_fence_i) & pipe_busy)
-                       & ~serial_busy & ~wfi_wait & ~dbg_halted;
+                       & ~serial_busy & ~wfi_wait & ~dbg_halted & ~id_gpr_wait;
     assign id_advance  = ex_advance & id_ready;
     assign fq_ready    = id_advance;
 
@@ -1566,7 +1667,7 @@ module CPU_CORE
 
     always @(*) begin
         if      (flush || kill_ex) nx_mr_wr = 1'b0;
-        else if (ex_advance) nx_mr_wr = ex_valid & ex_we_rd & ~ex_exc & ~ex_mem;
+        else if (ex_advance) nx_mr_wr = ex_valid & ex_we_rd & ~ex_exc & ~ex_mem & ~ex_fp_arith;
         else if (mr_advance) nx_mr_wr = 1'b0;
         else                 nx_mr_wr = mr_valid & mr_we_rd & ~mr_mem;
         nx_mr_wr = nx_mr_wr & (nx_mr_rd != 5'd0);
@@ -1699,7 +1800,8 @@ module CPU_CORE
             mr_fp_arith   <= 1'b0;
             mr_fp_we      <= 1'b0;
             mr_fp_box     <= 1'b0;
-            mr_fp_flags   <= 5'd0;
+            mr_fpu        <= 1'b0;
+            mr_fpu_fp     <= 1'b0;
             mr_exc_r      <= 1'b0;
             mr_exc_mem    <= 1'b0;
             mr_trig_r     <= '0;
@@ -1739,7 +1841,8 @@ module CPU_CORE
             ma_fp_we      <= 1'b0;
             ma_fp_box     <= 1'b0;
             ma_fp_rd      <= 5'd0;
-            ma_fp_flags   <= 5'd0;
+            ma_fpu        <= 1'b0;
+            ma_fpu_fp     <= 1'b0;
             ma_exc_r      <= 1'b0;
             ma_trig       <= '0;
             ma_exc_int_r  <= 1'b0;
@@ -1847,7 +1950,8 @@ module CPU_CORE
                 mr_pc         <= ex_pc;
                 mr_insn       <= ex_insn;
                 mr_rd         <= ex_rd;
-                mr_we_rd      <= ex_we_rd & ~ex_exc;
+                // an FPU operation writes its register from the FPU
+                mr_we_rd      <= ex_we_rd & ~ex_exc & ~ex_fp_arith;
                 mr_mem        <= ex_mem;
                 mr_is_load    <= ex_is_load;
                 mr_is_store   <= ex_is_store;
@@ -1872,9 +1976,10 @@ module CPU_CORE
                 mr_is_rvc     <= ex_is_rvc;
                 mr_is_fp      <= ex_is_fp;
                 mr_fp_arith   <= ex_fp_arith & ~ex_exc;
-                mr_fp_we      <= ex_fp_we_rd & ~ex_exc;
+                mr_fp_we      <= ex_fp_we_rd & ~ex_exc & ~ex_fp_arith;
                 mr_fp_box     <= ex_fp_box;
-                mr_fp_flags   <= fpu_flags;
+                mr_fpu        <= fpu_in_valid;
+                mr_fpu_fp     <= ex_fp_we_rd;
                 mr_csr_wr     <= ex_is_csr & ex_csr_wr & ~ex_exc;
                 mr_csr_addr   <= ex_csr_addr;
                 mr_csr_wdata  <= csr_wval;
@@ -1892,7 +1997,6 @@ module CPU_CORE
                 mr_signed     <= ex_mem_signed;
                 mr_wdata      <= ex_is_fp_store ? ex_fs2_fwd : ex_b_fwd;
                 if      (ex_is_csr)                mr_result <= csr_rdata;
-                else if (ex_fp_arith)              mr_result <= fpu_result;
                 else if (ex_is_mdu)                mr_result <= mdu_result;
                 else if (ex_is_jal || ex_is_jalr)  mr_result <= link_pc;
                 else                               mr_result <= alu_result;
@@ -1916,6 +2020,7 @@ module CPU_CORE
                 mr_is_fp   <= 1'b0;
                 mr_fp_arith<= 1'b0;
                 mr_fp_we   <= 1'b0;
+                mr_fpu     <= 1'b0;
             end
 
             //---------------------------------------------------------
@@ -1944,7 +2049,8 @@ module CPU_CORE
                 ma_fp_we      <= mr_fp_we & ~mr_exc;
                 ma_fp_rd      <= mr_rd;
                 ma_fp_box     <= mr_fp_box;
-                ma_fp_flags   <= mr_fp_flags;
+                ma_fpu        <= mr_fpu;
+                ma_fpu_fp     <= mr_fpu_fp;
                 ma_csr_wr     <= mr_csr_wr & ~mr_exc;
                 ma_csr_addr   <= mr_csr_addr;
                 ma_csr_wdata  <= mr_csr_wdata;
@@ -1974,6 +2080,7 @@ module CPU_CORE
                 ma_is_fp   <= 1'b0;
                 ma_fp_arith<= 1'b0;
                 ma_fp_we   <= 1'b0;
+                ma_fpu     <= 1'b0;
             end
 
             //---------------------------------------------------------
@@ -2026,6 +2133,7 @@ module CPU_CORE
                 mr_is_fp   <= 1'b0;
                 mr_fp_arith<= 1'b0;
                 mr_fp_we   <= 1'b0;
+                mr_fpu     <= 1'b0;
             end
 
             //---------------------------------------------------------
@@ -2051,6 +2159,7 @@ module CPU_CORE
                 mr_is_fp   <= 1'b0;
                 mr_fp_arith<= 1'b0;
                 mr_fp_we   <= 1'b0;
+                mr_fpu     <= 1'b0;
                 ma_valid   <= 1'b0;
                 ma_we_rd   <= 1'b0;
                 ma_mem     <= 1'b0;
@@ -2065,6 +2174,7 @@ module CPU_CORE
                 ma_is_fp   <= 1'b0;
                 ma_fp_arith<= 1'b0;
                 ma_fp_we   <= 1'b0;
+                ma_fpu     <= 1'b0;
             end
         end
     end
@@ -2194,7 +2304,9 @@ module CPU_CORE
                     if (halted_r) dra_state <= 2'd1;
                     else begin dra_err <= 1'b1; dra_state <= 2'd3; end
                 end
-                2'd1: begin
+                2'd1: if (!fpu_busy) begin
+                    // (an operation from before the halt may still be in
+                    // the FPU and owe the register)
                     if (!dra_exists || (dra_wr && dra_ro)) begin
                         dra_err   <= 1'b1;
                         dra_state <= 2'd3;
@@ -2246,7 +2358,7 @@ module CPU_CORE
     //   bench's profile uses: each lost cycle has one reason.
     //=================================================================
     logic hpm_unit_wait;
-    assign hpm_unit_wait = (mdu_active & ~mdu_done) | (fpu_active & ~fpu_done);
+    assign hpm_unit_wait = (mdu_active & ~mdu_done) | fp_wait;
 
     assign hpm_ev[0]  = 1'b0;                                  // nothing
     assign hpm_ev[1]  = 1'b1;                                  // cycles

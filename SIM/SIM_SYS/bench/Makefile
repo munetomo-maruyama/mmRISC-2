@@ -1,7 +1,9 @@
 #---------------------------------------------------------------------------
 # Makefile : CoreMark and Dhrystone on the bare machine of SIM_SYS
 #
-#   make -C bench        bench/coremark.hex, bench/dhrystone.hex
+#   make -C bench        bench/coremark.hex, bench/dhrystone.hex (and
+#                        ldloop.hex, fploop.hex: the loops and the floating
+#                        point kernels of micro.c)
 #   make bench           (in SIM_SYS) build and run both with +profile
 #
 # The same benchmark sources as LitexSystem/software/bench (the board, under
@@ -42,7 +44,7 @@ ee/ee_printf.c: $(COREMARK)/barebones/ee_printf.c
 	! grep -q '^#error' $@
 
 .PHONY: all clean
-all: coremark.hex dhrystone.hex ldloop.hex
+all: coremark.hex dhrystone.hex ldloop.hex fploop.hex
 
 %.hex: %.elf ../../SIM_CORE/tools/bin2hex.py
 	$(RVPREFIX)objcopy -O binary $< $*.bin
@@ -79,6 +81,12 @@ dhrystone.elf: $(ENV) dhry/dhrystone.h dhry_shim.c
 # against the board one for one
 ldloop.elf: $(ENV) ldloop.c ../../../LitexSystem/software/bench/loops.h
 	$(CC) $(CFLAGS) -I. -I$(COREMARK) crt.S minilib.c ee/ee_printf.c ldloop.c -lgcc -o $@
+
+# the floating point kernels of micro.c (LitexSystem/software/bench/fpkern.S)
+FPK := ../../../LitexSystem/software/bench
+fploop.elf: $(ENV) fploop.c $(FPK)/fpkern.S $(FPK)/fpkern.h
+	$(CC) $(CFLAGS) -I. -I$(COREMARK) crt.S minilib.c ee/ee_printf.c fploop.c \
+	    $(FPK)/fpkern.S -lgcc -o $@
 
 clean:
 	rm -rf dhry ee *.elf *.bin *.hex *.dis *.tohost

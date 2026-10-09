@@ -522,7 +522,7 @@ module tb_SYS
                 else if (`CORE.stall_ex) begin
                     if (`CORE.stall_ma)                q_ma++;
                     else if ((`CORE.mdu_active & ~`CORE.mdu_done) |
-                             (`CORE.fpu_active & ~`CORE.fpu_done))
+                             `CORE.fp_wait)
                                                        q_unit++;
                     else if (`CORE.lu_hazard) begin
                         q_lu++;
@@ -587,7 +587,7 @@ module tb_SYS
             else if (!prof_on)            ;
             else if (`CORE.stall_ma)      p_dcache++;
             else if ((`CORE.mdu_active & ~`CORE.mdu_done) |
-                     (`CORE.fpu_active & ~`CORE.fpu_done))
+                     `CORE.fp_wait)
                                           p_unit++;
             else if (`CORE.ex_mmu_wait)   p_mmu++;
             else if (~`CORE.fq_valid)     p_starve++;

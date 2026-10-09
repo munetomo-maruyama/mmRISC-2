@@ -45,7 +45,7 @@ RTL_SRCS := \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_MDU/CORE_MDU.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_FRF/CORE_FRF.sv \
 	$(RTL_DIR)/CPU/CPU_FPU/FPU_ROUND/FPU_ROUND.sv \
-	$(RTL_DIR)/CPU/CPU_FPU/CORE_FPU/CORE_FPU.sv \
+	$(RTL_DIR)/CPU/CPU_FPU/FPU_PIPE/FPU_PIPE.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_RF/CORE_RF.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_BTB/CORE_BTB.sv \
 	$(RTL_DIR)/CPU/CPU_CORE/CORE_IFU/CORE_IFU.sv \
@@ -73,7 +73,7 @@ VERILATOR_FLAGS := --binary --timing -j 0 --top-module $(TOP) \
 TESTS    := t01_alu t02_branch t03_ldst t04_hazard t05_csr t07_trap t08_rvc \
             t09_muldiv t10_atomic t11_fp t12_priv t13_pmp t14_mmu \
             t16_bench t17_btb t18_asid t19_ldbench t20_ptw_pmp t21_satp \
-            t24_predict t26_late t27_fence t30_trig t31_zicond t32_pmu
+            t24_predict t26_late t27_fence t30_trig t31_zicond t32_pmu t33_fpipe
 TEST     ?= t01_alu
 PLUSARGS ?=
 # parameters of tb_SYS, e.g. PARAMS=-GL2_SIZE=0 (without the L2) or

@@ -45,7 +45,7 @@ read_verilog -sv [list \
     $rtl/CPU/CPU_CORE/CORE_MDU/CORE_MDU.sv \
     $rtl/CPU/CPU_CORE/CORE_FRF/CORE_FRF.sv \
     $rtl/CPU/CPU_FPU/FPU_ROUND/FPU_ROUND.sv \
-    $rtl/CPU/CPU_FPU/CORE_FPU/CORE_FPU.sv \
+    $rtl/CPU/CPU_FPU/FPU_PIPE/FPU_PIPE.sv \
     $rtl/CPU/CPU_CORE/CORE_RF/CORE_RF.sv \
     $rtl/CPU/CPU_CORE/CORE_BTB/CORE_BTB.sv \
     $rtl/CPU/CPU_CORE/CORE_IFU/CORE_IFU.sv \

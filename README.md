@@ -7,7 +7,7 @@
 - Sv39 MMU(ITLB / DTLB、ハードウェアのページテーブルウォーカ)
 - 8 段のインオーダ・パイプライン
 - 分岐予測(BTB 256 エントリ、gshare、戻りアドレススタック)
-- FPU(単精度・倍精度)
+- FPU(単精度・倍精度)。加減算・乗算・積和・変換は毎サイクル 1 件のパイプライン
 - L1 キャッシュ(I$ / D$ 各 16 KB、D$ はノンブロッキング・書き戻し)
 - **L2 キャッシュ(256 KB)**
 - SoC の DMA も D$ を通し、キャッシュの一貫性をハードウェアで保つ
@@ -42,7 +42,7 @@ Ethernet・SD カードの同時照合)は、L2 キャッシュを入れた版�
 - 乗算 1〜2 サイクル、除算は早期終了つき
 - L1 キャッシュ: I$ / D$ 各 16 KiB(4 ウェイ、64 B 行)、D$ はノンブロッキング・ライトバック
 - SoC の DMA も D$ を通るので、一貫性はハードウェアで保つ
-- FPU(F / D): 積和 1 本、除算・平方根は反復
+- FPU(F / D): 積和 1 本の 9 段のパイプラインで、依存がなければ毎サイクル 1 件。除算・平方根は反復
 - L2 キャッシュ: 256 KB(4 ウェイ、64 B 行、書き戻し)を L1 と LiteDRAM の間に置く
 - L2 のヒットで L1 のミス 1 回が 31 → 14 サイクルになり、カーネルの負荷で 85〜95 % 当たる([`BENCH.md`](LitexSystem/docs/BENCH.md) 15 章)
 
@@ -83,8 +83,8 @@ RTL/
 │   │   ├── CORE_DECOMP/    圧縮命令(C)を 32bit 命令に伸張
 │   │   ├── CORE_CSR/       CSR とトラップ状態(M / S / U、デバッグ、トリガ、性能カウンタ)
 │   │   ├── CORE_MDU/       乗除算器(M)
-│   │   ├── CORE_FRF/       浮動小数点レジスタファイル(32×64、3R1W)
-│   │   ├── CORE_RF/        整数レジスタファイル(32×64bit、2R1W)
+│   │   ├── CORE_FRF/       浮動小数点レジスタファイル(32×64、3R2W)
+│   │   ├── CORE_RF/        整数レジスタファイル(32×64bit、2R2W)
 │   │   ├── CORE_EXU/       ALU(Zba / Zbb / Zicond を含む)、分岐条件、アドレス生成
 │   │   └── CORE_LSU/       ロード/ストアユニット(EX からの早出し、データキャッシュポート)
 │   ├── CPU_MMU/        Sv39 MMU と PMP
@@ -93,7 +93,8 @@ RTL/
 │   │   ├── MMU_PTW/        ページテーブルウォーカ
 │   │   └── MMU_PMP/        PMP(8 エントリ)
 │   ├── CPU_FPU/        浮動小数点ユニット(F/D)
-│   │   ├── CORE_FPU/       全演算(積和 1 本、反復除算/平方根)
+│   │   ├── FPU_PIPE/       全演算の 9 段のパイプライン(コアが使う版。除算/平方根は反復)
+│   │   ├── CORE_FPU/       全演算を 1 件ずつ(前の版。単体の試験と合成で比べる相手)
 │   │   └── FPU_ROUND/      正規化・丸め・詰め込み
 │   ├── CPU_CACHE/      L1 命令/データキャッシュ  → CPU_CACHE_SPEC.md
 │   │   ├── CPU_CACHE/      I$ + D$ + BUS_ARB
@@ -153,7 +154,7 @@ LitexRocket/        Rocket 構成の LiteX 一式(ワークスペース、カー
 | `cd SIM/SIM_CORE && make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / uzba / uzbb / uzicond / mi / si) | 167 PASS、既知の不合格 4(未実装機能を要求する試験) |
 | `cd SIM/SIM_CORE && make riscv-tests-v` | 同じ試験を仮想記憶(Sv39)の環境で | 143 PASS、既知の不合格 4 |
 | `cd SIM/SIM_CORE && make mdu / clint / plic` | 乗除算器(参照モデル 20 万演算)、CLINT(4 ハート)、PLIC | PASS |
-| `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 297 種(背圧あり/なしの両方) | 全て検出 |
+| `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 313 種(背圧あり/なしの両方) | 全て検出 |
 | `cd SIM/SIM_SYS && make` | コア + 本物の L1 / L2 キャッシュ + AXI + DMA ポート(自作試験 25 本、DMA・PMU などのプログラム 4 本)。`PARAMS=-GL2_SIZE=0` で L2 なし | 全 PASS(L2 あり / なし) |
 | `cd SIM/SIM_SYS && make riscv-tests` | riscv-tests を本物のキャッシュ越しに | 133 PASS、既知の不合格 4 |
 | `cd SIM/SIM_SYS && ./bug_inject.sh` | バグ注入 16 種 | 全て検出 |
@@ -162,7 +163,7 @@ LitexRocket/        Rocket 構成の LiteX 一式(ワークスペース、カー
 | `cd SIM/SIM_L2 && make` / `./sweep.sh` / `./bug_inject.sh` | L2 キャッシュ(256 KB・4 ウェイ)/ 容量・ウェイ・置き換えの 11 構成 / バグ注入 31 種 | PASS 約 150 万チェック / 全 PASS / 全て検出 |
 | `cd SIM/SIM_MMU && make` / `./bug_inject.sh` | PMP を参照モデルと比較 / バグ注入 21 種 | PASS 20 万チェック / 全て検出 |
 | `cd SIM/SIM_FPU && make` / `./bug_inject.sh` | FPU を Berkeley SoftFloat と比較 / バグ注入 34 種 | PASS 約 58 万チェック / 全て検出 |
-| `cd SIM/SIM_FPU && make pipe` / `./bug_inject_pipe.sh` | パイプライン版 FPU(開発中、毎サイクル 1 件)を SoftFloat と比較 / バグ注入 28 種 | PASS 約 70 万チェック / 全て検出 |
+| `cd SIM/SIM_FPU && make pipe` / `./bug_inject_pipe.sh` | パイプライン版 FPU(毎サイクル 1 件)を SoftFloat と比較 / バグ注入 28 種 | PASS 約 70 万チェック / 全て検出 |
 | `cd SIM/SIM_DBG && make` / `./bug_inject.sh` | デバッグ論理 / バグ注入 15 種 | PASS 3,026 チェック / 全て検出 |
 | `cd SIM/SIM_CPU && make` | CPU_TOP のバスと L1 キャッシュ経路 | PASS 46,718 チェック |
 | `cd SIM/SIM_BIOS && make check` | LiteX BIOS をそのまま実行(割り込み込み) | PASS |

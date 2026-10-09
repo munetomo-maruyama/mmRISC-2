@@ -9,7 +9,8 @@ CoreMark・Dhrystone・小さな測定(`micro`)を、静的リンクの Linux �
 |---|---|
 | `Makefile` | `make` で `out/coremark`、`out/dhrystone`、`out/micro`、Zba / Zbb で作った `out/coremark_zb`、`out/dhrystone_zb`。`make tftp` で TFTP サーバへ(sudo) |
 | `bench.sh` | ボードで実行。3 つを TFTP で `/tmp` に取ってきて順に走らせ、MHz あたりの値を出す。コアが Zba / Zbb を持ち(`/proc/cpuinfo`)、サーバに `*_zb` があればそれも走らせる |
-| `micro.c` | 帯域(D$ に入る / 入らない)、依存ロードの遅延、不整列ロード、倍精度の積和 |
+| `micro.c` | 帯域(D$ に入る / 入らない)、依存ロードの遅延、不整列ロード、倍精度の積和(C と、`fpkern.S` のアセンブラ)。`micro 50 fp` で浮動小数点だけ |
+| `fpkern.S` / `fpkern.h` | パイプライン化した FPU(`CPU_CORE_SPEC.md` 10.11)向けのアセンブラの核: 行列積(4×4 のブロック)、FIR 8 タップ、内積。`fpkern.h` に同じ計算の C 版(答えの照合用)。シミュレーションでは `SIM/SIM_SYS/bench/fploop.c` が同じ核を走らせる |
 | `dhry_shim.c` | riscv-tests の Dhrystone が裸の環境に求めるもの(タイマ、表示)を Linux で |
 | `workload.sh` | ボードで実行。CoreMark の外の負荷(gunzip、md5sum、awk、ls、ext4 と SD の読み出し、fork + exec、TFTP)を PMU で数え、1 行 1 負荷の表にする(下の「workload.sh」) |
 | `perf.sh` | ボードで実行。`perf` と CoreMark を TFTP で取ってきて、性能カウンタ(`CPU_CORE_SPEC.md` 決定 69)で CoreMark のサイクルの行き先を数える(下の「perf」) |
