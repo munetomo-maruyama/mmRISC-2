@@ -21,6 +21,7 @@
 #   dhrystone_lto / dhrystone_zb_lto     Dhrystone with -flto: inlined across
 #                                   its two files, which its rules forbid. A
 #                                   number to know, outside the rules
+#                                   ("off-rule" in the summary)
 #
 # CoreMark chooses its own count and runs for at least 10 seconds, which is
 # what a valid result needs. Dhrystone repeats with ten times the count
@@ -98,9 +99,9 @@ grep -q "zba_zbb" /proc/cpuinfo && ZB=yes
 fetch _max && run_pair _max ", max opt"
 [ $ZB = yes ] && fetch _zb_max && run_pair _zb_max ", Zba/Zbb, max opt"
 tftp -g -r dhrystone_lto -l dhrystone_lto "$SERVER" 2> /dev/null &&
-    chmod 755 dhrystone_lto && run_dhry _lto "LTO, outside the rules"
+    chmod 755 dhrystone_lto && run_dhry _lto "LTO, off-rule"
 [ $ZB = yes ] && tftp -g -r dhrystone_zb_lto -l dhrystone_zb_lto "$SERVER" 2> /dev/null &&
-    chmod 755 dhrystone_zb_lto && run_dhry _zb_lto "Zba/Zbb, LTO, outside the rules"
+    chmod 755 dhrystone_zb_lto && run_dhry _zb_lto "Zba/Zbb, LTO, off-rule"
 
 echo "" | tee -a "$LOG"
 echo "=== summary" | tee -a "$LOG"

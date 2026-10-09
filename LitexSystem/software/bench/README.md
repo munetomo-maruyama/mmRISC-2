@@ -38,7 +38,7 @@ CoreMark と Dhrystone を、速さだけを狙ったオプションでも作る
 - Dhrystone の規則(`dhrystone.h` の冒頭: 分割コンパイル、手続きを併合しない、それ以外の最適化は
   明記すれば可)に従うので、`dhrystone_max` は `-flto` を使わない。`-flto` は 2 つのファイルを
   またいで手続きを展開し、シミュレーションではいちばん速かった(+17 %)ので、
-  `dhrystone_lto` / `dhrystone_zb_lto` として別に作り、要約に「outside the rules」と付けて出す。
+  `dhrystone_lto` / `dhrystone_zb_lto` として別に作り、要約に「off-rule」と付けて出す。
 
 ## 手順
 
@@ -66,8 +66,8 @@ CoreMark       xxx.xx iterations/s   x.xxx CoreMark/MHz  (ok, max opt)
 Dhrystone    xxxxxxx per second      x.xxx DMIPS/MHz  (max opt)
 CoreMark       xxx.xx iterations/s   x.xxx CoreMark/MHz  (ok, Zba/Zbb, max opt)
 Dhrystone    xxxxxxx per second      x.xxx DMIPS/MHz  (Zba/Zbb, max opt)
-Dhrystone    xxxxxxx per second      x.xxx DMIPS/MHz  (LTO, outside the rules)
-Dhrystone    xxxxxxx per second      x.xxx DMIPS/MHz  (Zba/Zbb, LTO, outside the rules)
+Dhrystone    xxxxxxx per second      x.xxx DMIPS/MHz  (LTO, off-rule)
+Dhrystone    xxxxxxx per second      x.xxx DMIPS/MHz  (Zba/Zbb, LTO, off-rule)
 ```
 
 ログは `/tmp/bench.log`。他の仕事(`stress.sh` など)が動いていない状態で測ること。
