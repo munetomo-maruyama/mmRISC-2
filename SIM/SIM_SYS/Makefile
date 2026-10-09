@@ -115,7 +115,7 @@ progs/%.hex: progs/%.S ../SIM_CORE/tests/link.ld ../SIM_CORE/tests/test.h
 # profile of where the cycles went (bench/Makefile)
 bench: obj_dir/V$(TOP)
 	$(MAKE) -C bench
-	@for b in coremark dhrystone; do \
+	@for b in coremark dhrystone fploop; do \
 	    echo "=== $$b"; \
 	    ./obj_dir/V$(TOP) +hex=bench/$$b.hex +name=$$b +tohost=`cat bench/$$b.tohost` \
 	        +maxcycles=50000000 +profile $(PLUSARGS); \

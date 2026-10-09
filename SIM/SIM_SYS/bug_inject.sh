@@ -15,7 +15,9 @@
 # SIM_CORE, which is far quicker.
 #
 # The programs come from SIM_CORE, and one riscv-test is added because
-# rv64ui-p-fence_i is the sharpest of the lot.
+# rv64ui-p-fence_i is the sharpest of the lot. bench/fploop (make -C bench)
+# is run as well for its cycle bounds: it is the one place a loss of
+# cycles that changes no answer shows (M19).
 #
 # Not listed, because they cannot change what any program sees:
 #   - a fetch going out in the cycle another is cancelled (IFU). The cache
@@ -60,6 +62,7 @@ MUTATIONS=(
 "14#CPU_CACHE/CPU_CACHE/CPU_CACHE.sv#s%assign ev_ic_refill = ic_axi4_arvalid \& ic_axi4_arready;%assign ev_ic_refill = 1'b0;%#PMU: no I$ miss events (d04)"
 "15#CPU_MMU/CORE_MMU/CORE_MMU.sv#s%ptw_need \& ~kill \& ~d_need_walk;%ptw_need \& ~kill \&  d_need_walk;%#PMU: the ITLB miss event counts the walks of the data side (d04)"
 "16#CPU_MMU/CORE_MMU/CORE_MMU.sv#s%assign ev_dtlb_miss = ~grant \& lsu_idle \& ptw_need \& ~kill \&  d_need_walk;%assign ev_dtlb_miss = ptw_need \&  d_need_walk;%#PMU: a DTLB miss counted every cycle it waits for the walker (d04)"
+"19#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%~stall_ma \& ~lu_hazard \& ~fp_wait;%~stall_ma \& ~lu_hazard;%#core: an FSD waiting for the FPU asks the cache from EX, is taken back and goes from MA (fploop's cycle bound)"
 "17#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign hpm_ev\[18\] = ev_l2_read;%assign hpm_ev[18] = 1'b0;%#PMU: no L2 read events (d04)"
 "18#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign hpm_ev\[19\] = ev_l2_miss;%assign hpm_ev[19] = ev_l2_read;%#PMU: the L2 miss event counts every L2 read (d04)"
 )
@@ -104,6 +107,14 @@ for m in "${MUTATIONS[@]}"; do
         timeout 300 ./$WORK/obj/Vtb_SYS +hex=rvtests/rv64ui-p-fence_i.hex \
             +name=fence_i +tohost=$th +maxcycles=300000 > $WORK/fence.log 2>&1
         grep -q ": PASS" $WORK/fence.log || fails=$((fails+1))
+    fi
+
+    # the floating point kernels with their cycle bounds (bench/fploop.c):
+    # a loss of cycles that changes no answer
+    if [ -f bench/fploop.hex ]; then
+        timeout 600 ./$WORK/obj/Vtb_SYS +hex=bench/fploop.hex +name=fploop \
+            +tohost=$(cat bench/fploop.tohost) +maxcycles=5000000 > $WORK/fploop.log 2>&1
+        grep -q ": PASS" $WORK/fploop.log || fails=$((fails+1))
     fi
 
     if [ $fails -gt 0 ]; then

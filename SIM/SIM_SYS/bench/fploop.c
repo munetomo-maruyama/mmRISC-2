@@ -6,7 +6,10 @@
  *
  * Each one runs twice and the second run is timed, so that the caches hold
  * the code and the data. The sizes are small to keep the simulation short;
- * all of it fits in the D$. Returns the count of wrong answers.
+ * all of it fits in the D$. Returns the count of wrong answers and of
+ * kernels slower than their bound: a loss of a cycle or two in the core
+ * changes no answer, only these counts (an FSD that waited for the FPU
+ * once went from MA instead of EX: CPU_CORE_SPEC.md 10.11.2).
  *-------------------------------------------------------------------------*/
 #include "../../../LitexSystem/software/bench/fpkern.h"
 
@@ -27,12 +30,18 @@ static inline unsigned long cycles(void)
     return v;
 }
 
-/* cycles per multiply-add, two places after the point */
-static void report(const char *what, unsigned long cyc, unsigned long macs)
+static int slow;
+
+/* cycles per multiply-add, two places after the point; bound100 is the
+ * most it may take (in hundredths: about 5 % above what it takes) */
+static void report(const char *what, unsigned long cyc, unsigned long macs,
+                   unsigned long bound100)
 {
     unsigned long c100 = cyc * 100 / macs;
-    ee_printf("%s : %lu.%02lu cycles per multiply-add (%lu cycles, %lu)\n",
-              what, c100 / 100, c100 % 100, cyc, macs);
+    ee_printf("%s : %lu.%02lu cycles per multiply-add (%lu cycles, %lu)%s\n",
+              what, c100 / 100, c100 % 100, cyc, macs,
+              c100 > bound100 ? "  SLOWER THAN ITS BOUND" : "");
+    if (c100 > bound100) slow++;
 }
 
 int main(void)
@@ -58,14 +67,14 @@ int main(void)
         fpk_dgemm4(MN, a, b, c);
         c1 = cycles();
     }
-    report("dgemm 16x16, asm 4x4 ", c1 - c0, MN * MN * MN);
+    report("dgemm 16x16, asm 4x4 ", c1 - c0, MN * MN * MN, 230);
     for (int r = 0; r < 2; r++) {
         for (int i = 0; i < MN * MN; i++) c_ref[i] = 0.0;
         c0 = cycles();
         ref_dgemm(MN, a, b, c_ref);
         c1 = cycles();
     }
-    report("dgemm 16x16, C -O2   ", c1 - c0, MN * MN * MN);
+    report("dgemm 16x16, C -O2   ", c1 - c0, MN * MN * MN, 1650);
     for (int i = 0; i < MN * MN; i++)
         if (!fpk_close(c[i], c_ref[i])) bad++;
 
@@ -75,7 +84,7 @@ int main(void)
         fpk_fir8(FN, x, h, y);
         c1 = cycles();
     }
-    report("FIR 8 taps, asm      ", c1 - c0, FN * 8);
+    report("FIR 8 taps, asm      ", c1 - c0, FN * 8, 155);
     ref_fir8(FN, x, h, y_ref);
     for (int i = 0; i < FN; i++)
         if (!fpk_close(y[i], y_ref[i])) bad++;
@@ -87,9 +96,9 @@ int main(void)
         d = fpk_dot(DN, u, v);
         c1 = cycles();
     }
-    report("dot product, asm     ", c1 - c0, DN);
+    report("dot product, asm     ", c1 - c0, DN, 385);
     if (!fpk_close(d, ref_dot(DN, u, v))) bad++;
 
-    ee_printf("fploop : %d wrong answers\n", bad);
-    return bad;
+    ee_printf("fploop : %d wrong answers, %d slower than the bound\n", bad, slow);
+    return bad + slow;
 }

@@ -1152,9 +1152,12 @@ module CPU_CORE
     assign ex_ls       = ex_is_load | ex_is_store;
     // Only signals that settle early: nothing of the translation or of the
     // PMP. A request of an instruction that does not go on to MR (it waits
-    // for the page table walker) is taken back in the next cycle.
+    // for the page table walker) is taken back in the next cycle. A store
+    // or a load that waits for the FPU (the data of FSD, a register FLD
+    // writes) does not ask: it would be taken back and then go from MA,
+    // two cycles later than from EX once the answer is there.
     assign lsu_e_valid = ex_valid & ex_ls & ~ex_exc_r & ~ex_e_blocked &
-                         ~stall_ma & ~lu_hazard;
+                         ~stall_ma & ~lu_hazard & ~fp_wait;
 
     assign mr_spec_ok  = (mr_cmd == 4'd0) & (mr_paddr >= MEM_BASE);  // a cacheable load
     assign older_done  = ~ma_valid | commit;
