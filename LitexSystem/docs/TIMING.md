@@ -1576,3 +1576,20 @@ to the fetch queue's `pq_head`. The PMP → D$ ROB family of section 35 is no lo
 
 With 0.7 ns of margin, T4 and T2 are no longer urgent; they stay the first candidates for the next time
 added logic takes the margin away.
+
+## 37. The version with M5: +0.417 ns (2026-10-10)
+
+M5 of `ROADMAP.md` (`CPU_CACHE_SPEC.md` 4.3): the fill engine of the D$ raises the read address first and
+copies the dirty victim out alongside the fill (a small copy engine beside it, `m_axi4_rready` held by
+it). Only control in `DCACHE` changes.
+
+| | Section 36 | This version |
+|---|---|---|
+| WNS | +0.717 ns | **+0.417 ns** |
+| LUT | 44,631 (70.4 %) | 45,214 (71.3 %) |
+| Slices | 87.2 % (13,816) | 84.6 % (13,414) |
+
+The worst path is the same family as in section 36 (T2): `ma_is_load` (forwarding from MA) → EX's operand →
+address add → DTLB compare → the stall → the fetch queue's `pq_head` (25 levels, 73 % routing). The next 7
+start at the same register (`pq_head`, `head_pc`, `fwd_a_mr`). Nothing of `DCACHE` is near the top; the
+0.3 ns are placement.

@@ -820,3 +820,29 @@ What is left "before the fill is asked for" is the bus busy with another read an
 line (`f_ar_block`). On the board the copy was 0.4 to 3.7 % of the cycles of the Linux loads (18.1), so a
 gain of that order is expected there; event 24 now counts the copy running alongside the fill, so it no
 longer measures a wait of its own.
+
+### 19.1 On the board (2026-10-10)
+
+`workload.sh` on the bitstream of TIMING 37, against the run of 18.1 (M5 is the only change).
+
+| Load | CPI, 18.1 → M5 | Change | Victim copy in 18.1 (the expected gain) | MA's waits, 18.1 → M5 |
+|---|---|---|---|---|
+| `gunzip` | 1.260 → 1.254 | −0.5 % | 0.52 % | 6.69 → 6.15 % |
+| `md5sum` | 1.145 → 1.138 | −0.6 % | 0.71 % | 9.23 → 8.56 % |
+| `awk` | 1.582 → 1.560 | −1.4 % | 0.36 % | 5.90 → 5.45 % |
+| `ls -lR` | 2.118 → 2.069 | −2.3 % | 2.00 % | 16.01 → 14.87 % |
+| `ext4read` | 2.533 → 2.469 | −2.5 % | 3.11 % | 32.35 → 31.02 % |
+| `sdread` | 2.900 → 2.795 | **−3.6 %** | 3.68 % | 41.25 → 39.59 % |
+| `forkexec` | 2.250 → 2.187 | −2.8 % | 3.07 % | 27.31 → 25.47 % |
+| `tftp` | 2.900 → 2.792 | **−3.7 %** | 3.40 % | 21.86 → 19.55 % |
+
+- **The gain is what M0 said it would be**: in every load the CPI went down by about the share of the cycles
+  the victim copy took in 18.1 (0.5 to 3.7 %); the kernel loads gain most. MA's waits went down by 0.5 to
+  2.3 points.
+- `awk` gained more than its 0.36 % (−1.4 %); its D$ misses also changed (2.42 → 1.79 per 1000
+  instructions) and so did its DTLB walks, which M5 does not touch, so this is mostly the run to run
+  variation of `awk` (its table lands at other addresses).
+- Event 24 ("victim%") stays about the same, as expected: it now counts the copy running alongside the
+  fill, not a wait of its own.
+- Stores are now the largest item of MA's waits that the core can do something about (1.4 to 12.9 % of the
+  cycles): M1.
