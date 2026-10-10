@@ -1554,3 +1554,25 @@ Candidates:
    `mr_paddr`, a register, but the compare itself is 14 levels of CARRY4. Registering the comparisons of
    `pmpaddr` against the address range (or comparing in EX against the DTLB's answer and registering the
    result) would leave only the selection by priority in MR.
+
+## 36. The version with the memory wait events (M0): +0.717 ns (2026-10-10)
+
+M0 of `ROADMAP.md` (`CPU_CORE_SPEC.md` decision 71): five PMU events, two small fill counters in
+`CPU_CACHE` and two status outputs of `DCACHE`. All of it is registered once in `CORE_CSR` before it is
+counted, so it adds nothing to any path of the pipeline.
+
+| | Section 35 | This version |
+|---|---|---|
+| WNS | +0.048 ns | **+0.717 ns** |
+| WHS | +0.024 ns | +0.012 ns |
+| LUT | 45,530 (71.8 %) | 44,631 (70.4 %) |
+| Slices | 85.5 % (13,558) | 87.2 % (13,816) |
+
+The change cannot shorten a path, so the +0.67 ns is placement, in the other direction from section 35:
+the swing at 85 to 87 % slices is larger than the ±0.2 ns assumed there. The worst path is the family of
+T2 again: `ma_is_load` (forwarding from MA) → EX's operand → address add (`mr_vaddr`, CARRY4) → DTLB compare →
+`ex_advance` (fo=1,524) → `fpu_in_valid` → `fp_pend` (23 levels, 72 % routing, +0.717 ns); next, the same start
+to the fetch queue's `pq_head`. The PMP → D$ ROB family of section 35 is no longer among the first.
+
+With 0.7 ns of margin, T4 and T2 are no longer urgent; they stay the first candidates for the next time
+added logic takes the margin away.

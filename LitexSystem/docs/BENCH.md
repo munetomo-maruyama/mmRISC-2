@@ -754,4 +754,47 @@ load and the first use of its value could cover at one a cycle (an upper bound f
    at a time, so a second miss waits behind the first even though the D$ has 2 MSHRs. M3 / M4 would overlap
    misses with computation, not misses with each other; overlapping misses would also need the bus side.
 
-The board numbers (event 20 to 24 with `workload.sh`) are to follow.
+The board numbers are in 18.1.
+
+### 18.1 On the board (2026-10-10)
+
+`workload.sh` with events 20 to 24 (bitstream of TIMING 36). The first table agrees with section 15 within
+the noise (CPI `gunzip` 1.263 → 1.260, `ls` 2.113 → 2.118, `tftp` 2.884 → 2.900), and MA's waits counted in
+two different runs agree (event 11: 6.6 / 9.1 / 16.4 / 38.3 % against 6.69 / 9.23 / 16.01 / 41.25 %).
+
+| Load | MA waits | Stores | While a miss is handled | Dirty victim copy | Without a miss | Fill outstanding | Two outstanding | Front end empty |
+|---|---|---|---|---|---|---|---|---|
+| `gunzip` | 6.69 % | 1.48 % | 3.68 % | 0.52 % | 3.01 % | 4.54 % | 0.09 % | 2.9 % |
+| `md5sum` | 9.23 % | 2.80 % | 5.13 % | 0.71 % | 4.10 % | 6.28 % | 0.12 % | 1.8 % |
+| `awk` | 5.90 % | 1.32 % | 2.05 % | 0.36 % | 3.85 % | 3.00 % | 0.06 % | 9.7 % |
+| `ls -lR` | 16.01 % | 4.89 % | 11.49 % | 2.00 % | 4.52 % | 29.88 % | 0.89 % | 22.0 % |
+| `ext4read` | 32.35 % | 9.02 % | 14.59 % | 3.11 % | **17.76 %** | 34.19 % | 1.02 % | 23.0 % |
+| `sdread` | 41.25 % | 13.46 % | 20.48 % | 3.68 % | **20.77 %** | 36.89 % | 0.96 % | 20.1 % |
+| `forkexec` | 27.31 % | 10.72 % | 21.04 % | 3.07 % | 6.27 % | 36.35 % | 1.45 % | 19.1 % |
+| `tftp` | 21.86 % | 5.71 % | 17.03 % | 3.40 % | 4.83 % | 46.10 % | 2.12 % | 30.1 % |
+
+All are shares of the cycles; "without a miss" is MA's waits minus those while a miss is handled. The
+columns overlap (a store that misses is in both "stores" and "while a miss is handled").
+
+1. **Stores are 22 to 39 % of MA's waits, 1.3 to 13.5 % of the cycles** (`forkexec` 10.7 %, `sdread`
+   13.5 %). They include store hits that wait, and all of them go away with a store buffer for the
+   cacheable region (M1), short of it filling up. **The largest item on the core side.**
+2. **The dirty victim copy is 0.4 to 3.7 % of the cycles** (6 to 16 % of MA's waits, less than the 27 to 37 %
+   of the simulated kernels). M5 hides most of it, with a change to the D$ only.
+3. **Waits without a miss**: 3 to 6 % in most loads (hits issued from MA that wait 2 to 3 cycles, stores,
+   uncached accesses), but **18 to 21 % in `ext4read` / `sdread`**. These two are kernel loads that drive the
+   SD card; the most likely cause is the driver reading the registers of LiteSDCard (uncached, through
+   AXI4-Lite) while it waits for the card, that is time spent waiting for the device whatever the CPU does.
+   Not checked (it needs the uncached accesses as an event of their own).
+4. **Two fills outstanding: 0.06 to 2.1 % of the cycles**. The single-read bus costs at most that much now;
+   it becomes a limit only with prefetch.
+5. **The front end is as large as MA's waits in the kernel loads** (19 to 30 % of the cycles, I$ misses 19 to
+   61 per 1000 instructions), and a fill is outstanding in 30 to 46 % of their cycles, mostly the I$'s. The
+   L2 hit rate is high (86 to 95 % except `md5sum` and `forkexec`), so these are L2 hits of 14 to 22 cycles;
+   a next-line prefetch for the I$ (in the I$ or the L2, M3) works on them, which no D$-side theme touches.
+6. Missed loads: what is left of "while a miss is handled" after the stores (at least 0.7 to 11 % of the
+   cycles, kernel loads at the top). In simulation most missed loads are used by the next 1 or 2
+   instructions (section 18), so M4 would hide only part of it; prefetch fits better.
+
+**For the order**: M5 (small, up to 3.7 %) → M1 (medium, up to 13.5 %) → prefetch (M2 for the code we write,
+M3 in the L2 for the I$ and streams). M4 stays after them.
