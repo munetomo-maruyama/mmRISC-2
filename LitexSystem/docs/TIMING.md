@@ -1593,3 +1593,25 @@ The worst path is the same family as in section 36 (T2): `ma_is_load` (forwardin
 address add → DTLB compare → the stall → the fetch queue's `pq_head` (25 levels, 73 % routing). The next 7
 start at the same register (`pq_head`, `head_pc`, `fwd_a_mr`). Nothing of `DCACHE` is near the top; the
 0.3 ns are placement.
+
+## 38. The version with M1: +0.241 ns (2026-10-10)
+
+M1 of `ROADMAP.md` (`CPU_CACHE_SPEC.md` 4.3): store misses answered when accepted, a line-wide store buffer
+in each MSHR of the D$.
+
+| | Section 37 | This version |
+|---|---|---|
+| WNS | +0.417 ns | **+0.241 ns** |
+| LUT | 45,214 (71.3 %) | 45,966 (72.5 %) |
+| FF | | 25,740 (20.3 %) (+about 1,000 for the store buffers) |
+| Slices | 84.6 % (13,414) | 86.5 % (13,716) |
+
+**A new head**: `ex_csr_addr` → the CSR checks (`csr_check` of `CORE_CSR`, 6 levels of CARRY4 for the ranges
+of the PMP and counter registers) → `csr_exists` → EX's exception (`ex_exc_pre`) → the start of the FPU /
+MDU (`fpu_active` → `fp_wait`) → `lsu_e_valid` → the read address of the D$ tag array (`rd_valid`): 24
+levels, 75 % routing, +0.241 ns. Then the same start into the D$ ROB (`rob_data` CE, +0.296 ns).
+
+The path is not a real one: the CSR check only matters for a CSR instruction, which is never an FP, MDU,
+memory or branch instruction, but `ex_exc_pre` holds them all and four users that only care about those
+instructions read it (`mdu_active`, `fpu_active`, `d_tr_req`, `ex_late`). Giving them an `ex_exc_pre` without
+the CSR term takes this start off them (candidate T5). Left as is while it is MET.

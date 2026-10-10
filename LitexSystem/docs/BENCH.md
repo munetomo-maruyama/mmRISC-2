@@ -875,3 +875,29 @@ MSHR instead of waiting for the fill. The core is unchanged: it already waits in
 The gain is smaller than the store waits measured in M0 suggested, because a store that misses is mostly
 followed by stores to the same line, which wait for the fill to pass their word anyway. On the board the
 store waits were 1.4 to 12.9 % of the cycles; about a third of them going away would be 0.5 to 4 %.
+
+### 20.1 On the board (2026-10-10)
+
+`workload.sh` on the bitstream of TIMING 38, against 19.1 (M1 is the only change).
+
+| Load | CPI, M5 → M1 | Change | MA waits for stores, M5 → M1 | Change |
+|---|---|---|---|---|
+| `gunzip` | 1.254 → 1.250 | −0.3 % | 1.38 → 0.99 % | −28 % |
+| `md5sum` | 1.138 → 1.137 | −0.1 % | 2.77 → 2.52 % | −9 % |
+| `awk` | 1.560 → 1.551 | −0.6 % | 1.35 → 1.14 % | −16 % |
+| `ls -lR` | 2.069 → 2.057 | −0.6 % | 4.59 → 3.16 % | −31 % |
+| `ext4read` | 2.469 → 2.503 | +1.4 % (*) | 8.75 → 7.25 % | −17 % |
+| `sdread` | 2.795 → 2.725 | **−2.5 %** | 12.93 → 10.23 % | −21 % |
+| `forkexec` | 2.187 → 2.123 | **−2.9 %** | 10.23 → 6.52 % | **−36 %** |
+| `tftp` | 2.792 → 2.775 | −0.6 % | 5.52 → 3.42 % | −38 % |
+
+- **The store waits went down by 9 to 38 %** (0.25 to 3.7 points of the cycles), in line with the −31 % of
+  the simulation. The loads that gain most are those with the most store waits: `forkexec` (copying pages
+  at fork, 3.7 points) −2.9 %, `sdread` −2.5 %.
+- (*) `ext4read` got slower although its MA waits went down (31.02 → 30.04 %) and its back end too (40.9 →
+  39.9 %). Its DTLB walks went from 8.2 to 14.2 per 1000 instructions, and those of `tftp` from 10.1 to 15.2;
+  the DTLB numbers of these two loads have moved between 8 and 15 from run to run since section 14 (where the
+  kernel puts the page cache and the buffers), which M1 does not touch. +6 walks per 1000 instructions at
+  about 15 cycles each is +0.09 CPI, more than the +0.034 seen.
+- Since M0 (18.1) the three themes together (M5, M1) gave 0.8 to 5.6 % on the Linux loads (`forkexec`
+  2.250 → 2.123, −5.6 %; `sdread` 2.900 → 2.725, −6.0 %).
