@@ -705,3 +705,53 @@ looked at is the order:
 - The highest Dhrystone within the rules is **1.536 / 1.542 DMIPS/MHz**.
 - **Reproducibility**: run again after a reboot, CoreMark 2.497 / 2.787 / 2.681 / 3.020 and Dhrystone
   1.490 / 1.499 / 1.535 / 1.541 / 1.554 / 1.562; every value within 0.2 % of the first run.
+
+## 18. What the memory waits are made of (M0, 2026-10-10, simulation)
+
+M0 of `ROADMAP.md`: before choosing among M1 to M4, count which waits there are. Added for it
+(`CPU_CORE_SPEC.md` decision 71):
+
+- **PMU events 20 to 24**: MA waits for a store; MA waits while the D$ handles a miss; one / two or more
+  line fills outstanding; MA waits while the D$ copies a dirty victim out. `software/bench/workload.sh`
+  counts them on the board (two more runs per load, a second table "the memory waits").
+- **The SIM_SYS profiler** (`make profile`, `make bench`): MA's waits by kind of access and per access
+  (before the fill is asked for / while it is outstanding / after it), the distance from each retired load
+  to the first instruction that reads its value (the retired instructions are decoded again by a copy of
+  `CORE_DECOMP` + `CORE_DEC`), and how many fills are outstanding per cycle.
+
+| | Cycles | MA waits | On a miss: loads / stores | Dirty victim copy | Missed loads used by the next 1 / 2 instructions | M4 could hide at most | 2 fills outstanding |
+|---|---|---|---|---|---|---|---|
+| CoreMark | 3,908,920 | 178 (0.005 %) | 0 / 129 | 0 | ― | ― | 27 cycles |
+| Dhrystone | 221,979 | 0 | 0 / 0 | 0 | ― | ― | 0 |
+| `t19_ldbench` (C, lists, sorting) | 56,954 | 1,336 (2.3 %) | 25 / 1,172 | 0 | 1 / 0 of 1 | 0 % | 26 cycles |
+| `ldloop` (micro's loops, user mode) | 88,459 | 4,967 (5.6 %) | 4,335 / 294 | 1,830 | 13 / 341 of 355 | 7.5 % | 0 |
+| `fploop` (FP kernels, dgemm) | 613,197 | 82,124 (13.4 %) | 28,378 / 41,550 | 22,040 | 16 / 587 of 2,803 | 38.7 % | 123 cycles |
+
+"M4 could hide at most": of the cycles the missed loads waited, the part the instructions between the
+load and the first use of its value could cover at one a cycle (an upper bound for stall on use).
+
+**What it says**
+
+1. **CoreMark and Dhrystone have no memory waits** (they fit in the L1). What M1 to M4 could gain has to
+   be looked at on loads that do not fit: in simulation `fploop` and `ldloop`, on the board the Linux loads
+   of section 14 (D$ wait 12 to 40 %) with the new events.
+2. **The copy of a dirty victim is a large share**: in `fploop`, 22,040 of the 82,124 cycles of waiting
+   (27 %), in `ldloop` 1,830 of 4,967 (37 %). With a dirty victim the fill engine of the D$ first copies the
+   8 words of the victim into a writeback buffer (`F_WB_READ` → `F_WB_WAIT` → `F_WB_PUSH`, about 11 cycles)
+   and only then asks for the new line. Asking first and copying while the fill is outstanding would hide
+   it: the copy reads one word a cycle through the read port, the fill writes one beat a cycle through the
+   write port, and the first beat comes at the earliest 2 cycles after the address, so the copy stays ahead.
+   This is the cheapest overlap of all (candidate M5 of `ROADMAP.md`).
+3. **Stores**: on misses they wait as long as loads (16 to 31 cycles each, write-allocate). In `fploop`
+   they are 59 % of the waits on misses (writing C back), in `t19_ldbench` almost all of them. This is
+   what M1 (store buffer) takes away.
+4. **Missed loads are mostly used soon**: in `ldloop` 341 of 355 by the instruction 2 later (pointer
+   chasing and sums), so M4 could hide at most 7.5 % of their waits. In `fploop` the matrix kernels load
+   ahead, and up to 39 % could be hidden. M4 helps code that loads ahead; for code that uses the value at
+   once, prefetch (M2 / M3) is what helps.
+5. **Two misses at once are rare** (up to 0.02 % of the cycles), and **the bus takes one read at a time
+   anyway**: the arbiter of `CPU_CACHE` keeps a read until its last beat, and the L2 takes one transaction
+   at a time, so a second miss waits behind the first even though the D$ has 2 MSHRs. M3 / M4 would overlap
+   misses with computation, not misses with each other; overlapping misses would also need the bus side.
+
+The board numbers (event 20 to 24 with `workload.sh`) are to follow.

@@ -28,13 +28,17 @@
 # Runs 1-4 count the 16 events of the core four at a time (there are four
 # programmable counters; cycles and instructions have their own), run 5 the
 # L2 (r12 reads = L1 fills, r13 misses; both 0 on a bitstream without the
-# L2), run 6 splits cycles and instructions into user and kernel mode. rN
-# is event N of the core (CPU_CORE_SPEC.md decision 69). Each event is
-# divided by the cycles or instructions of its own run. The log is
-# /tmp/workload.log, the raw counts /tmp/wl/*.csv.
+# L2), runs 6-7 the memory waits of M0 (ROADMAP.md): r14 MA waits for a
+# store, r15 MA waits while the D$ handles a miss, r16 / r17 one / two or
+# more line fills outstanding, r18 MA waits while a dirty victim is copied
+# out, with rb (all of MA's waits) again. Run 0 splits cycles and
+# instructions into user and kernel mode. rN is event N of the core, in hex
+# (CPU_CORE_SPEC.md decision 69). Each event is divided by the cycles or
+# instructions of its own run. The log is /tmp/workload.log, the raw counts
+# /tmp/wl/*.csv.
 #
 # Needs the PMU (bitstream, fw_jump.bin, Image with perf; perf.sh works).
-# About 12 minutes.
+# About 14 minutes.
 #---------------------------------------------------------------------------
 SERVER=${1:?usage: sh workload.sh <tftp server>}
 DIR=${WL_DIR:-/tmp/wl}
@@ -78,7 +82,7 @@ cmd() {
     esac
 }
 
-EVSETS="r7,r8,r9,ra rb,rc,r11,rd r5,r6,r3,r4 re,rf,r10,r1 r12,r13"
+EVSETS="r7,r8,r9,ra rb,rc,r11,rd r5,r6,r3,r4 re,rf,r10,r1 r12,r13 r14,r15,r16,r17 r18,rb"
 WORKLOADS="gunzip md5sum awk ls ext4read sdread forkexec tftp"
 
 cold() { case $1 in ext4read|sdread) drop ;; esac; }
@@ -97,7 +101,7 @@ for w in $WORKLOADS; do
         g=$((g+1))
     done
     cold $w
-    ./perf stat -x, -o "$w.6.csv" -e "cycles:u,r1:k,instructions:u,r2:k" sh -c "$c" 2>> "$LOG"
+    ./perf stat -x, -o "$w.0.csv" -e "cycles:u,r1:k,instructions:u,r2:k" sh -c "$c" 2>> "$LOG"
     cat "$w".*.csv | grep -v "^#\|^$" >> "$LOG"
 done
 
@@ -110,17 +114,17 @@ echo "kern %: kernel share of the cycles; L2: reads per 1000 instructions, misse
 printf "%-9s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s\n" \
     workload Mcyc CPI 'I$' 'D$' ITLB DTLB exc 'D$w%' 'FE%' 'BE%' 'LU%' 'MDU%' 'mis%' 'kern%' L2 'L2m%' | tee -a "$LOG"
 for w in $WORKLOADS; do
-    if [ ! -f "$w.6.csv" ]; then
+    if [ ! -f "$w.0.csv" ]; then
         printf "%-9s FAILED\n" "$w"
         continue
     fi
-    for g in 1 2 3 4 5 6; do
+    for g in 0 1 2 3 4 5; do
         grep -v "^#\|^$" "$w.$g.csv" | sed "s/^/$g,/"
     done | awk -F, -v w="$w" '
         # $1 group, $2 count, $4 event
         { g = $1; v = $2 + 0; e = $4
-          if (e == "cycles")              cyc[g] = v
-          else if (e == "instructions")   ins[g] = v
+          if (e == "cycles" && g > 0)     cyc[g] = v
+          else if (e == "instructions" && g > 0) ins[g] = v
           else if (e == "cycles:u")       cu = v
           else if (e == "r1:k")           ck = v
           else                            { val[e] = v; grp[e] = g } }
@@ -135,6 +139,24 @@ for w in $WORKLOADS; do
             printf "%-9s %6.0f %6.3f %6.2f %6.2f %6.3f %6.3f %6.3f %6.1f %6.1f %6.1f %6.1f %6.1f %6.1f %6.1f %6.2f %6.1f\n",
                    w, c / 1e6, (i > 0) ? c / i : 0, k("r7"), k("r8"), k("r9"), k("ra"), k("rf"),
                    p("rb"), p("rc"), p("r11"), p("rd"), p("re"), mis, kern, k("r12"), l2m
+        }'
+done | tee -a "$LOG"
+echo "" | tee -a "$LOG"
+echo "=== the memory waits (M0), % of cycles: MA waits (all, as stores, while the D\$ handles a miss," | tee -a "$LOG"
+echo "    while a dirty victim is copied out), line fills outstanding (1 or more, 2 or more)" | tee -a "$LOG"
+printf "%-9s %7s %7s %7s %7s %7s %7s\n" workload 'MAw%' 'store%' 'miss%' 'victim%' 'fill1%' 'fill2%' | tee -a "$LOG"
+for w in $WORKLOADS; do
+    [ -f "$w.7.csv" ] || continue
+    for g in 6 7; do
+        grep -v "^#\|^$" "$w.$g.csv" | sed "s/^/$g,/"
+    done | awk -F, -v w="$w" '
+        { g = $1; v = $2 + 0; e = $4
+          if (e == "cycles") cyc[g] = v
+          else               { val[e] = v; grp[e] = g } }
+        function p(e) { return (cyc[grp[e]] > 0) ? 100 * val[e] / cyc[grp[e]] : 0 }
+        END {
+            printf "%-9s %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f\n",
+                   w, p("rb"), p("r14"), p("r15"), p("r18"), p("r16"), p("r17")
         }'
 done | tee -a "$LOG"
 echo "" | tee -a "$LOG"

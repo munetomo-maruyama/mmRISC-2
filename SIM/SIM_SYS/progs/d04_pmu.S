@@ -15,6 +15,17 @@
 //     4 way D$, eight sets of the L2) read again: at least four have left
 //     the D$, and each of those is an L2 read that hits. Without an L2
 //     both events stay 0
+//   5 the waits of MA and the fills outstanding (events 20 to 23, M0 of
+//     ROADMAP.md): eight stores to lines never touched wait (20) and wait
+//     on misses (21); stored again they hit, wait less and on no miss.
+//     Eight loads to fresh lines wait on misses but not as stores, with
+//     fills outstanding (22).
+//     A load miss at the end of a line whose next line was never fetched
+//     has the I$ fill of that line outstanding alongside its own (23;
+//     one of them waits: the bus takes one read at a time). Stores to
+//     eight lines of one set (4 KB apart, four ways) evict lines they have
+//     just made dirty, and MA waits while those are copied out (24).
+//     Uncached loads wait in MA on no miss (21 stays)
 #include "test.h"
 
 #define MHPMCOUNTER3  0xb03
@@ -28,6 +39,11 @@
 #define EV_DTLB_MISS  10
 #define EV_L2_READ    18
 #define EV_L2_MISS    19
+#define EV_MA_STORE   20
+#define EV_MA_FILL    21
+#define EV_FILLS_1    22
+#define EV_FILLS_2    23
+#define EV_VIC_COPY   24
 #define MHPMCOUNTER5  0xb05
 #define MHPMCOUNTER6  0xb06
 #define MHPMEVENT5    0x325
@@ -135,6 +151,90 @@ _start:
 44:
 
     //--------------------------------------------------------------
+    // 5 the waits of MA, the fills in flight
+    //   s3 .. s6 : events 20 .. 23 over each part
+    //--------------------------------------------------------------
+    li   t0, EV_MA_STORE
+    csrw MHPMEVENT3, t0
+    li   t0, EV_MA_FILL
+    csrw MHPMEVENT4, t0
+    li   t0, EV_FILLS_1
+    csrw MHPMEVENT5, t0
+    li   t0, EV_FILLS_2
+    csrw MHPMEVENT6, t0
+    // 5a eight store misses, then the same eight stores again (hits)
+    la   a0, st_lines
+    li   a1, 64
+    call store8
+    mv   s7, s3                           // the waits of the misses
+    li   gp, 20
+    li   t0, 16
+    blt  s3, t0, fail                     // they wait, two cycles each at least
+    li   gp, 21
+    li   t0, 8
+    blt  s4, t0, fail                     // on misses
+    la   a0, st_lines
+    li   a1, 64
+    call store8
+    TEST_EQ(23, s4, 0)                    // hits: no miss to wait on
+    li   gp, 24
+    slli t0, s3, 1
+    bge  t0, s7, fail                     // and less than half the waits
+    // 5b eight load misses: wait on misses, never as stores
+    la   a0, ld_lines
+    li   a1, 64
+    call count8
+    mv   s3, a2
+    mv   s4, a3
+    mv   s5, a4
+    TEST_EQ(25, s3, 0)                    // no store waited
+    li   gp, 26
+    li   t0, 8
+    blt  s4, t0, fail                     // the loads waited on misses
+    li   gp, 27
+    blt  s5, t0, fail                     // with their fills outstanding
+    // 5c a load miss next to an I$ fill
+    csrr s8, MHPMCOUNTER6
+    la   a0, tf_line
+    call two_fills
+    csrr s6, MHPMCOUNTER6
+    sub  s6, s6, s8
+    li   gp, 28
+    beqz s6, fail                         // two fills were in flight together
+    // the other way round: the line of the load is in the I$ already, so
+    // the D$ fill goes first; the fetch runs on into the next line and the
+    // I$ fill of it waits for the bus
+    call two_fills_b
+    csrr s8, MHPMCOUNTER6
+    la   a0, tf_line2
+    call two_fills_b_go
+    csrr s6, MHPMCOUNTER6
+    sub  s6, s6, s8
+    li   gp, 30
+    beqz s6, fail
+    // 5e uncached loads wait in MA, but on no miss of the D$
+    csrr s8, MHPMCOUNTER4
+    li   a0, L2_SIZE_ADDR
+    ld   t0, 0(a0)
+    ld   t0, 0(a0)
+    ld   t0, 0(a0)
+    ld   t0, 0(a0)
+    csrr s4, MHPMCOUNTER4
+    sub  s4, s4, s8
+    TEST_EQ(31, s4, 0)
+    // 5d stores that evict dirty lines
+    li   t0, EV_VIC_COPY
+    csrw MHPMEVENT6, t0
+    la   a0, far_lines
+    li   a1, 4096
+    call store8
+    la   a0, far_lines
+    li   a1, 4096
+    call store8
+    li   gp, 29
+    beqz s6, fail                         // MA waited for a victim copied out
+
+    //--------------------------------------------------------------
     // 3 TLB misses, in S mode
     //--------------------------------------------------------------
     li   t0, EV_ITLB_MISS
@@ -235,6 +335,52 @@ count8:
     ret
     .fill 16, 4, 0x00000013
 
+    // eight stores, a1 apart from a0, between two reads of the counters
+    // 3 .. 6; the differences in s3 .. s6
+    .balign 64
+store8:
+    csrr t1, MHPMCOUNTER3
+    csrr t2, MHPMCOUNTER4
+    csrr t3, MHPMCOUNTER5
+    csrr t4, MHPMCOUNTER6
+    mv   t5, a0
+    li   t6, 8
+1:  sd   a0, 0(t5)
+    add  t5, t5, a1
+    addi t6, t6, -1
+    bnez t6, 1b
+    fence
+    csrr s3, MHPMCOUNTER3
+    csrr s4, MHPMCOUNTER4
+    csrr s5, MHPMCOUNTER5
+    csrr s6, MHPMCOUNTER6
+    sub  s3, s3, t1
+    sub  s4, s4, t2
+    sub  s5, s5, t3
+    sub  s6, s6, t4
+    ret
+
+    // a load that misses, last in a line; the line after it has never
+    // been fetched, so the I$ fills it while the D$ fills the load's
+    .balign 256
+    .fill 64, 4, 0x00000013
+two_fills:
+    .fill 15, 4, 0x00000013
+    ld   t0, 0(a0)
+    addi t0, t0, 1                        // the next line
+    ret
+
+    .balign 256
+    .fill 64, 4, 0x00000013
+two_fills_b:                              // a call here only brings the line in
+    ret
+two_fills_b_go:
+    .fill 5, 4, 0x00000013
+    ld   t0, 0(a0)                        // misses with its line in the I$
+    .fill 9, 4, 0x00000013
+    addi t0, t0, 1                        // the next line
+    ret
+
     // code no instruction has come near yet
     .balign 256
     .fill 64, 4, 0x00000013               // nops in front, to keep it apart
@@ -256,6 +402,14 @@ page_table:
     .space 4096
 lines_l2:
     .space 512
+st_lines:
+    .space 512
+ld_lines:
+    .space 512
+tf_line:
+    .space 64
+tf_line2:
+    .space 64
     .balign 4096
 far_lines:
     .space 8 * 4096

@@ -437,6 +437,12 @@ cycle an AXI4 read request with which the I$ / D$ fills a line is accepted (`arv
 passes them to the core, and they become events 7 (I$ miss) and 8 (D$ miss) of the core's performance
 counters (`CPU_CORE_SPEC.md` decision 69). D$ line fills include those of DMA.
 
+For the memory waits (`CPU_CORE_SPEC.md` decision 71) it also gives: `ev_dc_miss`, the D$ is handling a miss
+(an MSHR in use; `ev_miss` of `DCACHE`); `ev_dc_vic_copy`, the D$ is copying the dirty victim of a miss out
+(`F_WB_READ` to `F_WB_PUSH` of the fill engine, before the fill is asked for); `ev_fills_1` / `ev_fills_2`,
+one / two or more line fills of the I$ and D$ outstanding (from `arvalid` to the last beat). `BUS_ARB` keeps a
+read until its last beat, so two fills are never under way together; a second one waits with `arvalid` up.
+
 ### 5.8 Mapping for the CPU core (reference)
 
 The CPU core's signal names are to map as follows: `if_req_*` → `i_req_*`, `ls_req_*` → `d_req_*`, and

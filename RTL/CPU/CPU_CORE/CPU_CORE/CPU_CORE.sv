@@ -91,6 +91,13 @@ module CPU_CORE
         input  logic                    ev_dc_refill,
         input  logic                    ev_l2_read,
         input  logic                    ev_l2_miss,
+        // PMU: the D$ is handling a miss, or copying its dirty victim out;
+        // line fills outstanding, the I$ and D$ together (one or more, two
+        // or more)
+        input  logic                    ev_dc_miss,
+        input  logic                    ev_dc_vic_copy,
+        input  logic                    ev_fills_1,
+        input  logic                    ev_fills_2,
 
         // retirement trace (verification)
         output logic                    trace_valid,
@@ -840,7 +847,7 @@ module CPU_CORE
     //-----------------------------------------------------------------
     // PMU (CPU_CORE_SPEC.md decision 69): the events, one bit each, set in
     // the cycle they happen (assigned at the end of this file)
-    localparam int HPM_EVENTS = 20;
+    localparam int HPM_EVENTS = 25;
     logic [HPM_EVENTS-1:0]  hpm_ev;
     logic                   ev_itlb_miss, ev_dtlb_miss;
 
@@ -2388,5 +2395,10 @@ module CPU_CORE
     assign hpm_ev[17] = ~id_issue & ~redirect_valid & stall_ex; // back end full
     assign hpm_ev[18] = ev_l2_read;                            // L2 reads (L1 fills)
     assign hpm_ev[19] = ev_l2_miss;                            // L2 read misses
+    assign hpm_ev[20] = stall_ma & (ma_cmd == 4'd1);           // MA waits for a store (not AMO / SC)
+    assign hpm_ev[21] = stall_ma & ev_dc_miss;                 // MA waits while the D$ handles a miss
+    assign hpm_ev[22] = ev_fills_1;                            // a line fill in flight
+    assign hpm_ev[23] = ev_fills_2;                            // two or more
+    assign hpm_ev[24] = stall_ma & ev_dc_vic_copy;             // MA waits while a dirty victim is copied out
 
 endmodule : CPU_CORE

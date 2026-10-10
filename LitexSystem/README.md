@@ -19,7 +19,7 @@ BusyBox shell, and Ethernet works (DHCP, ping, TFTP netboot from the BIOS). The 
 |---|---|
 | Performance | **2.747 CoreMark/MHz** (built with Zba/Zbb; 2.462 for rv64gc), **1.482 DMIPS/MHz** |
 | ISA (as Linux sees it) | `rv64imafdc_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zba_zbb_smcntrpmf_sscofpmf_sstc`, 4 debug triggers (Sdtrig) |
-| Performance counters | `hpmcounter3` to `6`, 17 events. Usable with Linux's `perf stat` / `perf record` (`software/bench/perf.sh`) |
+| Performance counters | `hpmcounter3` to `6`, 24 events (20 to 24 for the memory waits, `software/bench/workload.sh`). Usable with Linux's `perf stat` / `perf record` (`software/bench/perf.sh`) |
 | Timing | WNS +0.452 ns at 50 MHz (MET) |
 | Resources | LUT 45,598 / 63,400 (71.9 %), block RAM 40.5 / 135 tiles |
 

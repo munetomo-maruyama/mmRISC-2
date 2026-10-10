@@ -20,7 +20,7 @@ Linux を起動するための一式。
 |---|---|
 | 性能 | **2.747 CoreMark/MHz**(Zba/Zbb で作ったもの。rv64gc なら 2.462)、**1.482 DMIPS/MHz** |
 | ISA(Linux から見える) | `rv64imafdc_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zba_zbb_smcntrpmf_sscofpmf_sstc`、デバッグのトリガ 4 本(Sdtrig) |
-| 性能カウンタ | `hpmcounter3`〜`6`、イベント 17 種。Linux の `perf stat` / `perf record` で使える(`software/bench/perf.sh`) |
+| 性能カウンタ | `hpmcounter3`〜`6`、イベント 24 種(20〜24 はメモリの待ち。`software/bench/workload.sh`)。Linux の `perf stat` / `perf record` で使える(`software/bench/perf.sh`) |
 | タイミング | 50 MHz で WNS +0.452 ns(MET) |
 | 資源 | LUT 45,598 / 63,400(71.9 %)、ブロック RAM 40.5 / 135 タイル |
 

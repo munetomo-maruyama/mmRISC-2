@@ -118,7 +118,7 @@ Events as `perf` sees them:
 overflow interrupt, so use `-e r1` (cycles counted in an `hpmcounter`). This `perf` is built without
 libelf, so no function names are shown (`--sort dso` tells which binary).
 
-## workload.sh (loads other than CoreMark, 2026-10-06)
+## workload.sh (loads other than CoreMark, 2026-10-06; the memory waits 2026-10-10)
 
 CoreMark fits in the caches (section 13 of `../../docs/BENCH.md`), so ordinary Linux work is counted
 with the same counters (`ROADMAP.md` D1). `perf`, the kernel `Image` used as input and its first 2 MB
@@ -138,9 +138,12 @@ run once first to check that it succeeds; one that fails shows as FAILED in the 
 | `tftp` | TFTP of `perf` (3 MB) | Ethernet, IP stack |
 
 Runs 1 to 4 count the 16 events four at a time, run 5 counts L2 reads and misses (`r12` / `r13`, added
-2026-10-06; 0 with a bitstream without the L2), run 6 splits cycles and instructions into user and
-kernel (each event is divided by the cycles and instructions of the same run). About 12 minutes. The
-log is `/tmp/workload.log`, the raw counts `/tmp/wl/*.csv`.
+2026-10-06; 0 with a bitstream without the L2), runs 6 and 7 the memory waits of M0 (`r14` to `r18`, added
+2026-10-10, `../../docs/BENCH.md` 18; a second table: MA's waits in all, as stores, on misses, on the copy of
+a dirty victim, and one / two or more line fills outstanding), run 0 splits cycles and instructions into
+user and kernel (each event is divided by the cycles and instructions of the same run). About 14 minutes.
+The log is `/tmp/workload.log`, the raw counts `/tmp/wl/*.csv`. Events 20 to 24 need a bitstream from
+2026-10-10 on; on an older one they count 0.
 
 ```bash
 make tftp

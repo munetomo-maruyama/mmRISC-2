@@ -489,6 +489,7 @@ module tb_SYS
         e_mp_jalr = 0; e_mdu = 0; e_trap = 0; e_strad = 0; e_mp_strad = 0;
         p_dcache = 0; p_unit = 0; p_mmu = 0; p_starve = 0; p_serial = 0;
         p_other = 0; n_dacc = 0; n_ifetch = 0;
+        m0_clear();
     endtask
 
     initial begin
@@ -596,6 +597,254 @@ module tb_SYS
         end
     end
 
+    //-----------------------------------------------------------------
+    // The memory waits, taken apart (M0 of LitexSystem/docs/ROADMAP.md)
+    //
+    //   1 the cycles MA waits for the D$, by kind of access, and whether a
+    //     line fill of the D$ was outstanding (a miss) or not; and how
+    //     long each access waited
+    //   2 for every load retired, how many instructions later its value is
+    //     first read (1 = the next one), from the retired instructions
+    //     decoded again here; what "stall on use" (M4) could hide at most
+    //   3 the number of line fills outstanding (I$ + D$, waiting for the
+    //     bus or under way) in each cycle
+    //-----------------------------------------------------------------
+    localparam int WK_LOAD = 0, WK_STORE = 1, WK_AMO = 2, WK_FLUSH = 3, WK_IO = 4, WK_N = 5;
+    localparam int LB_N = 9;           // wait lengths 0 1 2 3 4-7 8-15 16-31 32-63 64-
+    localparam int DB_N = 7;           // distances 1 2 3 4 5-8 9-16 17-
+    int  w_cyc  [WK_N][2];             // [kind][miss]
+    int  w_len  [WK_N][2][LB_N];       // accesses by the length of their wait [kind][saw a fill]
+    int  w_acc  [WK_N];
+    int  ma_run;
+    bit  ma_run_miss, ma_run_fill;
+    int  ph_cur [3];                   // the wait of this access: before its fill is asked for, while
+                                       // a D$ fill is outstanding, after it
+    longint w_ph [WK_N][3];            // the same, summed over the accesses that waited on a miss
+    longint w_vic;                     // MA waits while the D$ copies a dirty victim out (f_state 1-3)
+    int  u_hist [2][DB_N];             // [missed][distance]
+    int  u_dead [2], u_left [2];       // overwritten before any use / never used
+    longint u_wait, u_hide;            // the waits of the missed loads, what M4 could hide
+    int  f_hist [4];                   // fills outstanding 0 1 2 3-
+    int  f_ma2;                        // MA waits with two outstanding
+    int  n_ret;
+    // the last load done in MA, for the retirement that follows
+    logic [63:0] ld_pc;
+    int  ld_len;
+    bit  ld_miss;
+    // per register: a load wrote it and nothing has read it yet
+    bit  pend    [2][32];              // [0] x, [1] f
+    int  pend_n  [2][32];
+    int  pend_len[2][32];
+    bit  pend_m  [2][32];
+
+    function automatic int wk_of(input logic [3:0] cmd, input logic [63:0] pa);
+        if (pa < 64'(MEM_BASE))  return WK_IO;
+        if (cmd == 4'd0)         return WK_LOAD;
+        if (cmd == 4'd1)         return WK_STORE;
+        if (cmd == 4'd14)        return WK_FLUSH;
+        return WK_AMO;
+    endfunction
+    function automatic int lb_of(input int n);
+        if (n < 4)   return n;
+        if (n < 8)   return 4;
+        if (n < 16)  return 5;
+        if (n < 32)  return 6;
+        if (n < 64)  return 7;
+        return 8;
+    endfunction
+    function automatic int db_of(input int d);
+        if (d <= 4)  return d - 1;
+        if (d <= 8)  return 4;
+        if (d <= 16) return 5;
+        return 6;
+    endfunction
+
+    task automatic m0_clear;
+        for (int k = 0; k < WK_N; k++) begin
+            w_cyc[k][0] = 0; w_cyc[k][1] = 0; w_acc[k] = 0;
+            w_ph[k][0] = 0; w_ph[k][1] = 0; w_ph[k][2] = 0;
+            for (int b = 0; b < LB_N; b++) begin w_len[k][0][b] = 0; w_len[k][1][b] = 0; end
+        end
+        for (int m = 0; m < 2; m++) begin
+            for (int b = 0; b < DB_N; b++) u_hist[m][b] = 0;
+            u_dead[m] = 0; u_left[m] = 0;
+        end
+        u_wait = 0; u_hide = 0; w_vic = 0;
+        for (int b = 0; b < 4; b++) f_hist[b] = 0;
+        f_ma2 = 0;
+        n_ret = 0;
+        ma_run = 0; ma_run_miss = 1'b0; ma_run_fill = 1'b0; ld_pc = '0;
+        ph_cur[0] = 0; ph_cur[1] = 0; ph_cur[2] = 0;
+        for (int f = 0; f < 2; f++)
+            for (int r = 0; r < 32; r++) pend[f][r] = 1'b0;
+    endtask
+
+    // the retired instruction, decoded again
+    logic [31:0] tr_insn32, tr_dc_insn;
+    logic        tr_dc_ill;
+    logic [4:0]  tr_rs1, tr_rs2, tr_rd;
+    logic        tr_use_rs1, tr_use_rs2, tr_we_rd, tr_is_load, tr_is_fp_load;
+    logic        tr_use_fs1, tr_use_fs2, tr_use_fs3, tr_fp_we_rd;
+    CORE_DECOMP u_tr_decomp (.insn_c (`CORE.trace_insn[15:0]), .insn (tr_dc_insn), .illegal (tr_dc_ill));
+    assign tr_insn32 = (`CORE.trace_insn[1:0] == 2'b11) ? `CORE.trace_insn : tr_dc_insn;
+    CORE_DEC u_tr_dec
+        (
+            .insn (tr_insn32), .rs1 (tr_rs1), .rs2 (tr_rs2), .rd (tr_rd),
+            .use_rs1 (tr_use_rs1), .use_rs2 (tr_use_rs2), .we_rd (tr_we_rd),
+            .imm (), .alu_op (), .a_uw (), .a_shift (), .a_sel (), .b_sel (), .word_op (),
+            .is_branch (), .is_jal (), .is_jalr (), .br_op (), .is_mdu (), .mdu_op (),
+            .is_load (tr_is_load), .is_store (), .mem_cmd (), .mem_size (), .mem_signed (),
+            .is_fence (), .is_fence_i (), .is_ecall (), .is_ebreak (), .is_mret (), .is_sret (),
+            .is_sfence (), .is_wfi (), .illegal (),
+            .is_fp (), .fp_arith (), .fp_op (), .fp_fmt (), .fp_rm (),
+            .use_fs1 (tr_use_fs1), .use_fs2 (tr_use_fs2), .use_fs3 (tr_use_fs3),
+            .fp_we_rd (tr_fp_we_rd), .fp_int_signed (), .fp_int_w (),
+            .is_fp_load (tr_is_fp_load), .is_fp_store (),
+            .is_csr (), .csr_addr (), .csr_op (), .csr_imm_sel (), .csr_wr (), .csr_rd ()
+        );
+
+    task automatic m0_use(input int f, input logic [4:0] r);
+        int d, b, m;
+        if (pend[f][r]) begin
+            d = n_ret - pend_n[f][r];
+            b = db_of(d);
+            m = int'(pend_m[f][r]);
+            u_hist[m][b] = u_hist[m][b] + 1;
+            if (pend_m[f][r]) begin
+                u_wait += pend_len[f][r];
+                u_hide += (pend_len[f][r] < d - 1) ? pend_len[f][r] : d - 1;
+            end
+            pend[f][r] = 1'b0;
+        end
+    endtask
+    task automatic m0_write(input int f, input logic [4:0] r);
+        if (pend[f][r]) begin
+            u_dead[pend_m[f][r]]++;
+            if (pend_m[f][r]) begin
+                u_wait += pend_len[f][r];
+                u_hide += pend_len[f][r];       // nothing needed it
+            end
+            pend[f][r] = 1'b0;
+        end
+    endtask
+
+    always @(posedge clk) begin
+        int k, nf, lb;
+        if (rst_n) begin
+            if (prof_on) begin
+                // 1 the waits of MA
+                k = wk_of(`CORE.ma_cmd, `CORE.ma_paddr);
+                if (`CORE.stall_ma) begin
+                    w_cyc[k][u_cpu_top.ev_dc_miss]++;
+                    ma_run++;
+                    if (u_cpu_top.ev_dc_miss) ma_run_miss = 1'b1;
+                    if ((int'(u_cpu_top.u_cpu_cache.u_dcache.f_state) >= 1) &&
+                        (int'(u_cpu_top.u_cpu_cache.u_dcache.f_state) <= 3)) w_vic++;
+                    if (u_cpu_top.u_cpu_cache.dc_outst != 3'd0) begin
+                        ph_cur[1]++;
+                        ma_run_fill = 1'b1;
+                    end
+                    else if (ma_run_fill) ph_cur[2]++;
+                    else                  ph_cur[0]++;
+                end
+                else if (`CORE.ma_valid && `CORE.ma_mem) begin
+                    w_acc[k]++;
+                    lb = lb_of(ma_run);
+                    w_len[k][ma_run_miss][lb] = w_len[k][ma_run_miss][lb] + 1;
+                    if ((`CORE.ma_cmd != 4'd1) && (`CORE.ma_cmd != 4'd14)) begin
+                        ld_pc   = `CORE.ma_pc;
+                        ld_len  = ma_run;
+                        ld_miss = ma_run_miss;
+                    end
+                    if (ma_run_miss)
+                        for (int p = 0; p < 3; p++) w_ph[k][p] += ph_cur[p];
+                    ma_run = 0; ma_run_miss = 1'b0; ma_run_fill = 1'b0;
+                    ph_cur[0] = 0; ph_cur[1] = 0; ph_cur[2] = 0;
+                end
+                // 3 fills outstanding
+                nf = int'(u_cpu_top.u_cpu_cache.ic_outst) + int'(u_cpu_top.u_cpu_cache.dc_outst);
+                f_hist[(nf > 3) ? 3 : nf]++;
+                if (`CORE.stall_ma && (nf >= 2)) f_ma2++;
+                // 2 from a load to the first use of its value
+                if (`CORE.trace_valid) begin
+                    n_ret++;
+                    if (tr_use_rs1 && (tr_rs1 != 5'd0)) m0_use(0, tr_rs1);
+                    if (tr_use_rs2 && (tr_rs2 != 5'd0)) m0_use(0, tr_rs2);
+                    if (tr_use_fs1) m0_use(1, tr_insn32[19:15]);
+                    if (tr_use_fs2) m0_use(1, tr_insn32[24:20]);
+                    if (tr_use_fs3) m0_use(1, tr_insn32[31:27]);
+                    if (tr_we_rd && (tr_rd != 5'd0)) begin
+                        m0_write(0, tr_rd);
+                        if (tr_is_load && !tr_is_fp_load) begin
+                            pend[0][tr_rd]     = 1'b1;
+                            pend_n[0][tr_rd]   = n_ret;
+                            pend_len[0][tr_rd] = (ld_pc == `CORE.trace_pc) ? ld_len : 0;
+                            pend_m[0][tr_rd]   = (ld_pc == `CORE.trace_pc) && ld_miss;
+                        end
+                    end
+                    if (tr_fp_we_rd) begin
+                        m0_write(1, tr_rd);
+                        if (tr_is_fp_load) begin
+                            pend[1][tr_rd]     = 1'b1;
+                            pend_n[1][tr_rd]   = n_ret;
+                            pend_len[1][tr_rd] = (ld_pc == `CORE.trace_pc) ? ld_len : 0;
+                            pend_m[1][tr_rd]   = (ld_pc == `CORE.trace_pc) && ld_miss;
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    task automatic report_m0;
+        string kn [WK_N] = '{"load", "store", "AMO/LR/SC", "fence.i", "uncached"};
+        int    tot, tm, nl, nm;
+        tot = 0; tm = 0;
+        for (int k = 0; k < WK_N; k++) begin
+            tot += w_cyc[k][0] + w_cyc[k][1];
+            tm  += w_cyc[k][1];
+        end
+        $display("");
+        $display(" the waits of MA (M0): %s, %0d of them while the D$ handles a miss",
+                 pct(tot), tm);
+        $display("   kind        cycles: miss / no miss     accesses");
+        for (int k = 0; k < WK_N; k++)
+            if (w_acc[k] > 0)
+                $display("   %-10s %9d / %-9d %9d", kn[k], w_cyc[k][1], w_cyc[k][0], w_acc[k]);
+        $display("   the accesses that waited on a miss: cycles before the fill is asked for (a dirty");
+        $display("   victim copied out, the bus busy) / while it is outstanding / after it");
+        for (int k = 0; k < WK_N; k++)
+            if (w_ph[k][0] + w_ph[k][1] + w_ph[k][2] > 0)
+                $display("   %-10s %9d / %9d / %9d", kn[k], w_ph[k][0], w_ph[k][1], w_ph[k][2]);
+        $display("   of all the waits, %0d cycles while the D$ copies a dirty victim out", w_vic);
+        $display("   accesses by the length of their wait, without / with a miss being handled");
+        $display("                        0      1      2      3    4-7   8-15  16-31  32-63    64-");
+        for (int k = 0; k < WK_N; k++)
+            for (int m = 0; m < 2; m++)
+                if (w_acc[k] > 0)
+                    $display("   %-10s %-4s %6d %6d %6d %6d %6d %6d %6d %6d %6d",
+                             (m == 0) ? kn[k] : "", (m == 0) ? "hit" : "miss",
+                             w_len[k][m][0], w_len[k][m][1], w_len[k][m][2], w_len[k][m][3],
+                             w_len[k][m][4], w_len[k][m][5], w_len[k][m][6], w_len[k][m][7],
+                             w_len[k][m][8]);
+        for (int f = 0; f < 2; f++)
+            for (int r = 0; r < 32; r++)
+                if (pend[f][r]) u_left[pend_m[f][r]]++;
+        $display(" from a load to the first use of its value (instructions; 1 = the next one)");
+        $display("               1      2      3      4    5-8   9-16    17-  overwritten  unused");
+        for (int m = 0; m < 2; m++)
+            $display("   %-7s %6d %6d %6d %6d %6d %6d %6d %12d %7d",
+                     m ? "missed" : "others",
+                     u_hist[m][0], u_hist[m][1], u_hist[m][2], u_hist[m][3],
+                     u_hist[m][4], u_hist[m][5], u_hist[m][6], u_dead[m], u_left[m]);
+        $display("   the missed loads waited %0d cycles; at most %0d (%0.1f%%) are covered by the instructions",
+                 u_wait, u_hide, (u_wait > 0) ? 100.0 * real'(u_hide) / real'(u_wait) : 0.0);
+        $display("   before the first use, at one a cycle (an upper bound for stall on use, M4)");
+        $display(" line fills outstanding (I$ + D$): 0 %s, 1 %s", pct(f_hist[0]), pct(f_hist[1]));
+        $display("                                   2 %s, 3- %s; MA waits with 2 or more: %0d",
+                 pct(f_hist[2]), pct(f_hist[3]), f_ma2);
+    endtask
+
     // +dtrace : the data port of the core, cycle by cycle
     always @(posedge clk) begin
         if (rst_n && $test$plusargs("dtrace")) begin
@@ -685,7 +934,7 @@ module tb_SYS
         else
             $display(" %s : FAIL   (check %0d, tohost=%016h)",
                      test_name, tohost >> 1, tohost);
-        if ($test$plusargs("profile")) report_profile();
+        if ($test$plusargs("profile")) begin report_profile(); report_m0(); end
         $display("==========================================================");
         $finish;
     end

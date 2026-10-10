@@ -133,7 +133,14 @@ module DCACHE
         input  logic [63:0]              m_axil_rdata,
         input  logic [1:0]               m_axil_rresp,
         input  logic                     m_axil_rvalid,
-        output logic                     m_axil_rready
+        output logic                     m_axil_rready,
+
+        // PMU: a miss is being handled (an MSHR is in use, from the miss to
+        // the end of its fill; the copy of a dirty victim included), and the
+        // dirty victim of a miss is being copied out (its fill not asked
+        // for yet)
+        output logic                     ev_miss,
+        output logic                     ev_vic_copy
     );
 
     //=================================================================
@@ -375,6 +382,7 @@ module DCACHE
 
     assign ms_full  = ((MSHR_BITS+1)'(ms_count) == (MSHR_BITS+1)'(NUM_MSHR));
     assign ms_empty = (ms_count == '0);
+    assign ev_miss  = ~ms_empty;
 
     logic [NUM_WB-1:0]     wb_valid;
     logic [LINE_BITS-1:0]  wb_line [0:NUM_WB-1];
@@ -448,6 +456,7 @@ module DCACHE
 
     assign fl_rd_busy    = (fl_state == FL_READ);
     assign f_rd_busy     = (f_state  == F_WB_READ);
+    assign ev_vic_copy   = (f_state == F_WB_READ) | (f_state == F_WB_WAIT) | (f_state == F_WB_PUSH);
     assign array_rd_busy = fl_rd_busy | f_rd_busy;
     assign fl_busy       = (fl_state != FL_IDLE);
 

@@ -115,11 +115,11 @@ _start:
     csrw MHPMCOUNTER31, x11
     csrr x10, MHPMCOUNTER31
     TEST_EQ(4, x10, 0)
-    li   x11, MINH | SINH | 19            // the last event (L2 read misses)
+    li   x11, MINH | SINH | 24            // the last event (a dirty victim copied out)
     csrw MHPMEVENT4, x11
     csrr x10, MHPMEVENT4
     TEST_EQ_REG(5, x10, x11)
-    li   x11, 20                          // no such event
+    li   x11, 25                          // no such event
     csrw MHPMEVENT4, x11
     csrr x10, MHPMEVENT4
     TEST_EQ(6, x10, 0)

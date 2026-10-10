@@ -67,11 +67,12 @@ There are 4 levels of overlap, from the lightest, and they can be combined.
 
 | # | Theme | Size | Contents | Where it helps |
 |---|---|---|---|---|
-| M0 | **Measure what the waits are made of** | Small | Count first which waits are worth removing: (1) the share of stores and of loads in MA's waits, (2) the distribution of the distance (in instructions) from a load to the instruction that uses its value, (3) the number of misses in flight per cycle. Add them to the profiler of SIM_SYS and as PMU events (2 or 3), and look with `workload.sh` and `micro` | Decides which of M1 to M4 to do |
+| M0 | **Measure what the waits are made of** | Small | **Simulation done (2026-10-10, section 18 of `BENCH.md`; events 20 to 24, decision 71 of `CPU_CORE_SPEC.md`), board numbers with `workload.sh` to follow.** Count first which waits are worth removing: (1) the share of stores and of loads in MA's waits, (2) the distribution of the distance (in instructions) from a load to the instruction that uses its value, (3) the number of misses in flight per cycle. Add them to the profiler of SIM_SYS and as PMU events (2 or 3), and look with `workload.sh` and `micro` | Decides which of M1 to M4 to do |
 | M1 | **Do not wait for stores** (store buffer) | Medium | A store to the cacheable region retires when the D$ accepts it, without waiting for the answer. The D$ always performs the stores it accepted in order, so later loads line up behind them and the order is kept. Cacheable stores get no bus errors (only the uncached region, AMO and SC do, and those keep waiting as now). Add the rule that `fence` waits for it to be empty | Store misses (`memset`, `memcpy`, copying pages at fork, writing C back in the matrix multiply). (1) of M0 tells how much |
 | M2 | **Software prefetch** (Zicbop, `prefetch.r` / `prefetch.w`) | Small to medium | A prefetch instruction only makes the D$ start handling a miss (MSHR); the core does not wait for the answer (the D$ answers as soon as it accepts it and does not block the ROB). Zicbop is a hint shaped like an ORI, so the core today runs it as an instruction that does nothing. **The running kernel is already built with `CONFIG_RISCV_ISA_ZICBOP=y`**, so putting `zicbop` in the device tree makes the kernel's `prefetch` / `prefetchw` start to work. GCC 13.2 turns `__builtin_prefetch` into `prefetch.r` with `-march=..._zicbop` (checked) | The assembler kernels (the matrix multiply reading the rows of A and C one panel ahead: 2.42 → about 2.0 expected), hand-written loops like `memcpy`, parts of the kernel |
 | M3 | **Hardware prefetch** | Medium | The D$ or the L2 watches the pattern of accesses (next line, constant stride) and starts reading the next line by itself. No software change needed. Putting it in the L2 is safer (does not pollute the L1, far from the core's timing). Follows 1 or 2 streams with the L2's spare capacity | Streaming loads (`md5sum` with its 71 % L2 hit rate, `gunzip`, the copy of SD reads). The "kind that prefetch reduces" of section 14 of `BENCH.md` |
 | M4 | **Do not stop on a load miss** (stall on use) | Large | A load that misses leaves MA without waiting for the result, and the result is written later through **the second write port of the register file** (the port C2 made for the FPU). The destination register gets a pending bit (the same form as C2's `gpr_pend` / `fp_pend`), and only instructions that read it wait. The D$ answers in order, so a FIFO of the loads' destinations is enough | Matrix multiply (getting close to the kernel's 1.7), integer code with independent work after a load. Pointer-chasing loops use the value right away and gain nothing |
+| M5 | **Ask for the fill before copying the dirty victim out** (new, from M0) | Small | Today the fill engine of the D$ copies the 8 words of a dirty victim into a writeback buffer (`F_WB_READ` → `F_WB_PUSH`, about 11 cycles) and only then raises the read address of the new line. Raise it first and copy while the fill is outstanding: the copy reads a word a cycle through the read port, the fill writes a beat a cycle through the write port and its first beat comes at the earliest 2 cycles after the address, so the copy stays ahead (an interlock holds `rready` should it ever fall behind). Only the D$ changes | Every miss that evicts a dirty line: 27 % of MA's waits in `fploop`, 37 % in `ldloop` (`BENCH.md` 18); on the board, event 24 of `workload.sh` |
 
 **The hard parts of M4** (which M1 and M2 do not have):
 
@@ -88,6 +89,14 @@ There are 4 levels of overlap, from the lightest, and they can be combined.
 
 **Recommended order**: M0 → M1 and M2 (both medium and independent; M2 also helps Linux) → M3 or M4
 depending on M0's numbers. M4 helps the widest range, but it is about as large as stage 2 of C2.
+
+**What M0 found** (simulation, `BENCH.md` 18): (1) the copy of dirty victims is a large and cheap part (M5);
+(2) on misses stores wait as long as loads (M1); (3) missed loads are mostly used one or two instructions
+later, so M4 hides little in code that uses the value at once (7.5 % in `ldloop`, 39 % in the matrix
+kernels, which load ahead); (4) **the bus takes one read at a time** (the arbiter of `CPU_CACHE` keeps a read
+until its last beat, the L2 takes one transaction at a time): two misses at once are rare now, but a
+prefetch (M2 / M3) would occupy the bus, and a demand miss behind it waits for the whole prefetch. Before
+M3, or if M2 shows that, the read side of the bus needs to take a second read (or let a demand miss go first).
 
 **Considered only (probably not done)**: issuing an FLD and an FP operation in the same cycle (dual issue
 of memory and floating point). The FIR would go 1.53 → about 1.0 and the matrix multiply kernel 1.7 →
@@ -143,10 +152,12 @@ WNS is +0.113 ns. Before adding logic with a large theme, deal with the paths th
 ## 4. Recommended order
 
 1. **T1** (small): get timing margin back. Only cutting the debugger's path
-2. **M0** (small): measure what the memory waits are made of. Check E1b with the same tools
-3. **M2 (Zicbop) and M1 (store buffer)**: both medium and independent. M2 helps Linux right away and is
-   easy to check with the assembler kernels
-4. Choose among **E3 (TLB)**, **M3 (hardware prefetch)** and **M4 (no stop on load misses)** with the
+2. **M0** (small): measure what the memory waits are made of. Check E1b with the same tools. **Simulation
+   done**; the board numbers (`workload.sh`) decide between the next ones
+3. **T4** (small to medium): get the margin back before adding logic around the LSU and the D$
+4. **M5** (small, new): the cheapest overlap M0 found. Then **M2 (Zicbop) and M1 (store buffer)**: both
+   medium and independent. M2 helps Linux right away and is easy to check with the assembler kernels
+5. Choose among **E3 (TLB)**, **M3 (hardware prefetch)** and **M4 (no stop on load misses)** with the
    results of M0. T2 before M4
-5. In between, **F1 (Zbs)**, F2 / F3, G2
-6. C1 and C3 stay on hold
+6. In between, **F1 (Zbs)**, F2 / F3, G2
+7. C1 and C3 stay on hold

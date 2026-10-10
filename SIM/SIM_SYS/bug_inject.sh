@@ -65,6 +65,12 @@ MUTATIONS=(
 "19#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%~stall_ma \& ~lu_hazard \& ~fp_wait;%~stall_ma \& ~lu_hazard;%#core: an FSD waiting for the FPU asks the cache from EX, is taken back and goes from MA (fploop's cycle bound)"
 "17#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign hpm_ev\[18\] = ev_l2_read;%assign hpm_ev[18] = 1'b0;%#PMU: no L2 read events (d04)"
 "18#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign hpm_ev\[19\] = ev_l2_miss;%assign hpm_ev[19] = ev_l2_read;%#PMU: the L2 miss event counts every L2 read (d04)"
+"20#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign hpm_ev\[20\] = stall_ma \& (ma_cmd == 4'd1);%assign hpm_ev[20] = stall_ma;%#PMU (M0): the store wait event counts the waits of loads too (d04)"
+"21#CPU_CACHE/DCACHE/DCACHE.sv#s%assign ev_miss  = ~ms_empty;%assign ev_miss  = 1'b0;%#PMU (M0): no wait on a miss is seen (d04)"
+"22#CPU_CACHE/DCACHE/DCACHE.sv#s%assign ev_miss  = ~ms_empty;%assign ev_miss  = 1'b1;%#PMU (M0): every wait of MA counted as one on a miss (d04)"
+"23#CPU_CACHE/CPU_CACHE/CPU_CACHE.sv#s%assign ic_outst   = {1'b0, ic_fills} + 3'(ic_axi4_arvalid);%assign ic_outst   = {1'b0, ic_fills};%#PMU (M0): an I$ fill waiting for the bus is not outstanding (d04)"
+"24#CPU_CACHE/CPU_CACHE/CPU_CACHE.sv#s%assign ev_fills_2 = ({1'b0, dc_outst} + {1'b0, ic_outst}) >= 4'd2;%assign ev_fills_2 = (dc_outst >= 3'd2);%#PMU (M0): two fills outstanding only when both are the D$'s (d04)"
+"25#CPU_CACHE/DCACHE/DCACHE.sv#s%assign ev_vic_copy   = (f_state == F_WB_READ) | (f_state == F_WB_WAIT) | (f_state == F_WB_PUSH);%assign ev_vic_copy   = 1'b0;%#PMU (M0): no wait for a dirty victim copied out (d04)"
 )
 
 SEL=("$@")

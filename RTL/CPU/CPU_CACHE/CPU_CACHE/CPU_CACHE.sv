@@ -144,7 +144,15 @@ module CPU_CACHE
 
         // PMU: a line fill of each cache starts (CPU_CORE_SPEC.md decision 69)
         output logic                     ev_ic_refill,
-        output logic                     ev_dc_refill
+        output logic                     ev_dc_refill,
+        // PMU: the D$ is handling a miss (an MSHR in use), or copying the
+        // dirty victim of a miss out; line fills outstanding now, asked
+        // for (waiting for the bus or under way) and not ended, of the two
+        // caches together: one or more, two or more
+        output logic                     ev_dc_miss,
+        output logic                     ev_dc_vic_copy,
+        output logic                     ev_fills_1,
+        output logic                     ev_fills_2
     );
 
     //=================================================================
@@ -272,6 +280,35 @@ module CPU_CACHE
     // PMU: one pulse per line the caches read (their misses)
     assign ev_ic_refill = ic_axi4_arvalid & ic_axi4_arready;
     assign ev_dc_refill = dc_axi4_arvalid & dc_axi4_arready;
+
+    logic       dc_miss;
+    assign ev_dc_miss = dc_miss;
+
+    // a fill is under way from its read address to the last beat of its
+    // data (the I$ has one at a time, the D$ one per MSHR). The arbiter
+    // below and the L2 take one read at a time, so two are never under way
+    // together; a second one waits with its arvalid up. Outstanding = under
+    // way + waiting: how many misses there are at once, whatever the bus
+    // makes of them.
+    logic [1:0] ic_fills;
+    logic [2:0] dc_fills;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            ic_fills <= 2'd0;
+            dc_fills <= 3'd0;
+        end else begin
+            ic_fills <= ic_fills + 2'(ev_ic_refill)
+                                 - 2'(ic_axi4_rvalid & ic_axi4_rready & ic_axi4_rlast);
+            dc_fills <= dc_fills + 3'(ev_dc_refill)
+                                 - 3'(dc_axi4_rvalid & dc_axi4_rready & dc_axi4_rlast);
+        end
+    end
+    // (fills counts a fill from the cycle after its address handshake)
+    logic [2:0] ic_outst, dc_outst;
+    assign ic_outst   = {1'b0, ic_fills} + 3'(ic_axi4_arvalid);
+    assign dc_outst   = dc_fills + 3'(dc_axi4_arvalid);
+    assign ev_fills_1 = (ic_outst != 3'd0) | (dc_outst != 3'd0);
+    assign ev_fills_2 = ({1'b0, dc_outst} + {1'b0, ic_outst}) >= 4'd2;
 
     ICACHE
         #(
@@ -485,7 +522,9 @@ module CPU_CACHE
             .m_axil_rdata   (dc_axil_rdata),
             .m_axil_rresp   (dc_axil_rresp),
             .m_axil_rvalid  (dc_axil_rvalid),
-            .m_axil_rready  (dc_axil_rready)
+            .m_axil_rready  (dc_axil_rready),
+            .ev_miss        (dc_miss),
+            .ev_vic_copy    (ev_dc_vic_copy)
         );
 
     assign dc_axi4_awlock  = 1'b0;
