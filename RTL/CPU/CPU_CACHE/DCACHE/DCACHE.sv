@@ -137,8 +137,7 @@ module DCACHE
 
         // PMU: a miss is being handled (an MSHR is in use, from the miss to
         // the end of its fill; the copy of a dirty victim included), and the
-        // dirty victim of a miss is being copied out (its fill not asked
-        // for yet)
+        // dirty victim of a miss is being copied out (alongside its fill)
         output logic                     ev_miss,
         output logic                     ev_vic_copy
     );
@@ -271,13 +270,15 @@ module DCACHE
     //=================================================================
     // State declarations
     //=================================================================
-    typedef enum logic [2:0] {F_IDLE, F_WB_READ, F_WB_WAIT, F_WB_PUSH, F_ARW, F_AR, F_DATA} f_state_t;
+    typedef enum logic [1:0] {F_IDLE, F_AR, F_DATA} f_state_t;
+    typedef enum logic [1:0] {C_IDLE, C_READ, C_WAIT, C_PUSH} c_state_t;
     typedef enum logic [1:0] {W_IDLE, W_ADDR, W_DATA, W_RESP} w_state_t;
     typedef enum logic [2:0] {U_IDLE, U_AR, U_R, U_AW, U_B} u_state_t;
     typedef enum logic [2:0] {FL_IDLE, FL_TAG, FL_LOOK, FL_READ, FL_WAIT, FL_PUSH, FL_INV,
                               FL_DRAIN} fl_state_t;
 
     f_state_t              f_state;
+    c_state_t              c_state;    // copying the dirty victim of the fill out
     w_state_t              w_state;
     u_state_t              u_state;
     fl_state_t             fl_state;
@@ -455,8 +456,8 @@ module DCACHE
     logic fl_rd_busy, f_rd_busy, array_rd_busy, fl_busy;
 
     assign fl_rd_busy    = (fl_state == FL_READ);
-    assign f_rd_busy     = (f_state  == F_WB_READ);
-    assign ev_vic_copy   = (f_state == F_WB_READ) | (f_state == F_WB_WAIT) | (f_state == F_WB_PUSH);
+    assign f_rd_busy     = (c_state  == C_READ);
+    assign ev_vic_copy   = (c_state != C_IDLE);
     assign array_rd_busy = fl_rd_busy | f_rd_busy;
     assign fl_busy       = (fl_state != FL_IDLE);
 
@@ -692,7 +693,7 @@ module DCACHE
     assign all_idle = ms_empty && wb_empty && (f_state == F_IDLE) &&
                       (w_state == W_IDLE) && (u_state == U_IDLE) && !sw_pend;
 
-    assign fill_beat_now = (f_state == F_DATA) && m_axi4_rvalid;
+    assign fill_beat_now = (f_state == F_DATA) && m_axi4_rvalid && m_axi4_rready;
     assign fill_wr_en    = fill_beat_now && (m_axi4_rresp == 2'b00);
 
     // A request can only join a fill while the beat carrying its word has not
@@ -946,6 +947,7 @@ module DCACHE
             res_valid    <= 1'b0;
             res_line     <= '0;
             f_state      <= F_IDLE;
+            c_state      <= C_IDLE;
             f_beat       <= '0;
             f_wb_word    <= '0;
             f_err        <= 1'b0;
@@ -1276,53 +1278,29 @@ module DCACHE
             //---------------------------------------------------------
             // fill engine
             //---------------------------------------------------------
+            // A miss whose victim is dirty asks for its line first and copies
+            // the victim out while the fill is on its way (c_state, below):
+            // the copy reads a word a cycle through the read port, the fill
+            // writes a beat a cycle through the write port, and a beat is
+            // only taken once the copy has read its word (m_axi4_rready).
+            // The first beat comes two cycles after the address at the
+            // earliest, so the fill hardly ever waits for the copy
+            // (ROADMAP.md M5; it used to copy first, about 11 cycles more on
+            // every miss with a dirty victim).
             case (f_state)
                 F_IDLE: begin
-                    if (!ms_empty) begin
-                        f_err  <= 1'b0;
-                        f_beat <= '0;
+                    if (!ms_empty && !f_ar_block &&
+                        !(ms_wb_needed[ms_head] && wb_full)) begin
+                        f_err          <= 1'b0;
+                        f_beat         <= '0;
+                        m_axi4_araddr  <= {ms_line[ms_head], {OFF_BITS{1'b0}}};
+                        m_axi4_arvalid <= 1'b1;
+                        f_state        <= F_AR;
                         if (ms_wb_needed[ms_head]) begin
-                            if (!wb_full) begin
-                                f_wb_word <= '0;
-                                f_wb_way  <= ms_way[ms_head];
-                                f_state   <= F_WB_READ;
-                            end
-                        end else if (!f_ar_block) begin
-                            m_axi4_araddr  <= {ms_line[ms_head], {OFF_BITS{1'b0}}};
-                            m_axi4_arvalid <= 1'b1;
-                            f_state        <= F_AR;
+                            f_wb_word <= '0;
+                            f_wb_way  <= ms_way[ms_head];
+                            c_state   <= C_READ;
                         end
-                    end
-                end
-                F_WB_READ: begin
-                    if (f_wb_word == WOFF_BITS'(WORDS_PER_BLOCK-1)) f_state <= F_WB_WAIT;
-                    else                                            f_wb_word <= f_wb_word + WOFF_BITS'(1);
-                end
-                F_WB_WAIT: begin
-                    f_state <= F_WB_PUSH;          // wait for the last captured word
-                end
-                F_WB_PUSH: begin
-                    wb_valid[wb_tail] <= 1'b1;
-                    wb_line[wb_tail]  <= {ms_wb_tag[ms_head], ms_line[ms_head][IDX_BITS-1:0]};
-                    for (i = 0; i < WORDS_PER_BLOCK; i++)
-                        wb_data[wb_tail][i] <= f_wb_buf[i];
-                    wb_tail        <= wb_next(wb_tail);
-                    wb_push        = 1'b1;
-                    // the victim is another line of the set, so it does not
-                    // hold this fill up; an older writeback may
-                    if (!f_ar_block) begin
-                        m_axi4_araddr  <= {ms_line[ms_head], {OFF_BITS{1'b0}}};
-                        m_axi4_arvalid <= 1'b1;
-                        f_state        <= F_AR;
-                    end else begin
-                        f_state        <= F_ARW;
-                    end
-                end
-                F_ARW: begin
-                    if (!f_ar_block) begin
-                        m_axi4_araddr  <= {ms_line[ms_head], {OFF_BITS{1'b0}}};
-                        m_axi4_arvalid <= 1'b1;
-                        f_state        <= F_AR;
                     end
                 end
                 F_AR: begin
@@ -1332,7 +1310,7 @@ module DCACHE
                     end
                 end
                 F_DATA: begin
-                    if (m_axi4_rvalid) begin
+                    if (fill_beat_now) begin
                         if (m_axi4_rresp != 2'b00) f_err <= 1'b1;
                         f_beat <= f_beat + WOFF_BITS'(1);
                         for (i = 0; i < ROB_DEPTH; i++) begin
@@ -1369,6 +1347,29 @@ module DCACHE
                     end
                 end
                 default: f_state <= F_IDLE;
+            endcase
+
+            //---------------------------------------------------------
+            // victim copy, alongside the fill of the same MSHR (the head)
+            //---------------------------------------------------------
+            case (c_state)
+                C_IDLE: ;                          // started by the fill engine above
+                C_READ: begin
+                    if (f_wb_word == WOFF_BITS'(WORDS_PER_BLOCK-1)) c_state <= C_WAIT;
+                    else                                            f_wb_word <= f_wb_word + WOFF_BITS'(1);
+                end
+                C_WAIT: begin
+                    c_state <= C_PUSH;             // wait for the last captured word
+                end
+                C_PUSH: begin
+                    wb_valid[wb_tail] <= 1'b1;
+                    wb_line[wb_tail]  <= {ms_wb_tag[ms_head], ms_line[ms_head][IDX_BITS-1:0]};
+                    for (i = 0; i < WORDS_PER_BLOCK; i++)
+                        wb_data[wb_tail][i] <= f_wb_buf[i];
+                    wb_tail        <= wb_next(wb_tail);
+                    wb_push        = 1'b1;
+                    c_state        <= C_IDLE;
+                end
             endcase
 
             //---------------------------------------------------------
@@ -1565,7 +1566,19 @@ module DCACHE
     assign m_axi4_arlen   = 8'(WORDS_PER_BLOCK - 1);
     assign m_axi4_arsize  = 3'd3;
     assign m_axi4_arburst = 2'b01;
-    assign m_axi4_rready  = (f_state == F_DATA);
+    // a beat overwrites a word of the victim's way: only once the copy has
+    // read that word, in an earlier cycle (the array gives undefined data
+    // for a word read and written in the same cycle). The last beat ends
+    // the MSHR, so it waits for the cycle the victim is pushed (which still
+    // reads the MSHR's fields before they change). The copy starts in the
+    // cycle the read address goes out and reads a word a cycle, while the
+    // first beat comes two cycles after the address at the earliest from
+    // the L2 and the memory models here, so this never actually holds a
+    // beat back; it is there for a slave that answers in one.
+    assign m_axi4_rready  = (f_state == F_DATA) &&
+                            ((c_state == C_IDLE) || (c_state == C_PUSH) ||
+                             ((f_beat != WOFF_BITS'(WORDS_PER_BLOCK-1)) &&
+                              ((c_state != C_READ) || (f_beat < f_wb_word))));
 
     assign m_axi4_awid    = AXI4_ID_WB[AXI4_ID_WIDTH-1:0];
     assign m_axi4_awlen   = w_single ? 8'd0 : 8'(WORDS_PER_BLOCK - 1);

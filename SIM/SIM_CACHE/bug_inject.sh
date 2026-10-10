@@ -59,6 +59,8 @@ MUTATIONS=(
 "38#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                            !fl_busy \&\& !s1_first;/                            !fl_busy;/#19#19#D\$: a miss starts its fill in the first cycle, taken back or not"
 "39#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/tag_wr_dirty = s1_kill ? eff_dirty\[hit_way\] : 1'b1;/tag_wr_dirty = 1'b1;/#19#19#D\$: a store hit taken back makes the line dirty"
 "40#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/^                    if (s1_kill) begin/                    if (1'b0) begin/#19#19#D\$: an LR or SC taken back changes the reservation"
+"41#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                            c_state   <= C_READ;/                            c_state   <= C_IDLE;/#3#3#D\$ (M5): the dirty victim of a fill is never copied out"
+"42#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                            f_wb_way  <= ms_way\[ms_head\];/                            f_wb_way  <= '0;/#3#3#D\$ (M5): the victim is copied from way 0"
 )
 
 # Not listed, equivalent to the design:
@@ -67,6 +69,11 @@ MUTATIONS=(
 #   word: a fill that evicts the line brings it back with the same value
 #   before the atomic runs again. The clear stays as a safeguard for a
 #   coherent probe (CPU_CACHE_SPEC.md 6.4), which would change that.
+#   the hold of m_axi4_rready while a dirty victim is copied out (M5). The
+#   copy starts in the cycle the read address goes out and reads a word a
+#   cycle, and the memory model (like the L2) gives the first beat two
+#   cycles after the address at the earliest, so the copy is always ahead
+#   and the hold never acts. It stays for a slave that answers in one.
 
 run_one() {
     local line="$1"

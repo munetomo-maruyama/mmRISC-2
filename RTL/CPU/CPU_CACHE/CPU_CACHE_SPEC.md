@@ -214,6 +214,15 @@ automatically.
    on AXI4.
    - `AWBURST=INCR`, `AWSIZE=3`, `AWLEN = BLOCK_BYTES/8 - 1`, `WSTRB` all bytes enabled.
    - The write-back proceeds in parallel with the refill.
+   - **The fill is asked for first** (since 2026-10-10, M5 of `LitexSystem/docs/ROADMAP.md`): the read
+     address of the new line goes out in the same cycle the copy of the victim into the write-back
+     buffer starts (one word a cycle through the read port of the data array, `c_state` of `DCACHE`).
+     The fill writes its beats through the write port into the victim's way, so a beat is taken
+     (`m_axi4_rready`) only once the copy has read that word in an earlier cycle, and the last beat (which
+     ends the MSHR) only in the cycle the victim is pushed. The first beat comes two cycles after the
+     address at the earliest, so the copy is always ahead and the hold never acts with the L2 or the
+     memory models here. Until then the victim was copied out first (about 11 cycles) and the read address
+     went out after it.
 4. **Order with lines being written back**: entries of the write-back queue and single writes of
    `STWTHR` stay marked "memory is still old" until their B response returns. The read and write
    channels of AXI4 have no order between them, so:
@@ -439,7 +448,7 @@ counters (`CPU_CORE_SPEC.md` decision 69). D$ line fills include those of DMA.
 
 For the memory waits (`CPU_CORE_SPEC.md` decision 71) it also gives: `ev_dc_miss`, the D$ is handling a miss
 (an MSHR in use; `ev_miss` of `DCACHE`); `ev_dc_vic_copy`, the D$ is copying the dirty victim of a miss out
-(`F_WB_READ` to `F_WB_PUSH` of the fill engine, before the fill is asked for); `ev_fills_1` / `ev_fills_2`,
+(`c_state` of `DCACHE`; since M5 alongside the fill, 4.3); `ev_fills_1` / `ev_fills_2`,
 one / two or more line fills of the I$ and D$ outstanding (from `arvalid` to the last beat). `BUS_ARB` keeps a
 read until its last beat, so two fills are never under way together; a second one waits with `arvalid` up.
 
@@ -883,7 +892,7 @@ AXI4 slave model disabled and the default configuration (64 sets × 4 ways × 64
 | Consecutive D$ store hits | 32 stores | **1.00** |
 | Consecutive D$ load misses (fill only) | 8 lines | **12.0** |
 | Consecutive D$ store misses (fill + write-allocate) | 8 lines | **12.0** |
-| Consecutive D$ misses (dirty eviction = write-back + fill) | 8 lines | **22.0** |
+| Consecutive D$ misses (dirty eviction = write-back + fill) | 8 lines | **12.7** (22.0 before 2026-10-10) |
 
 - Hits are **one access every cycle** for both the I$ and the D$, loads and stores alike; array reads and
   writes in the same cycle are resolved by forwarding.
@@ -894,9 +903,9 @@ AXI4 slave model disabled and the default configuration (64 sets × 4 ways × 64
   (A1 of `RTL/CPU/CPU_CORE/PLAN_LOAD_LATENCY.md`).
 - The 12 to 13 cycles of a miss are **a burst of 8 beats** for 64B plus a few cycles of AR and tag update.
   The requested word is returned when it arrives (early restart), so the answer itself comes earlier.
-- An eviction of a dirty line takes about twice as long, because the write-back (8 beats) and the fill (8
-  beats) appear in series. With the write-back buffer, later accesses do not wait for the write-back to
-  complete.
+- An eviction of a dirty line costs about the same as a clean miss: the victim is copied into the write-back
+  buffer while the fill is on its way (4.3), and the write-back itself goes out on the write channel
+  after it. Until 2026-10-10 the copy came first and a dirty eviction took 22 cycles.
 - "Steady" is from the first answer in the burst to the last, divided by (number of accesses − 1). The
   total cycles include the pipeline start-up.
 

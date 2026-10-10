@@ -56,14 +56,24 @@
     // load other lines of `set` until line `n` of it has left the cache.
     // Every load is given time to finish its fill, which is when the tag
     // changes; a fence would wait for the write-backs as well, and those may
-    // be held on purpose.
+    // be held on purpose. The victim is chosen by an LFSR and the memory
+    // window holds only a few lines of a set, so the lines are taken round
+    // and round, skipping those still in the cache (a hit evicts nothing),
+    // instead of giving up after one pass (with four ways a single pass
+    // misses the line a few times in a hundred).
     task automatic evict(input string name, input int set, input int n);
-        for (int m = 1; m < 64 && dc_line_present(a_mem(set_word(set, n))); m++) begin
-            if (set_word(set, n + m) >= MEM_WORDS) break;
-            d_load($sformatf("%s : evicting load %0d", name, m),
-                   a_mem(set_word(set, n + m)), 2'd3);
-            d_drain();
-            repeat (40) @(posedge clk);
+        int span, m;
+        span = 0;
+        while (set_word(set, n + span + 1) < MEM_WORDS) span++;
+        m = 0;
+        for (int t = 0; t < 256 && span > 0 && dc_line_present(a_mem(set_word(set, n))); t++) begin
+            m = (m % span) + 1;
+            if (!dc_line_present(a_mem(set_word(set, n + m)))) begin
+                d_load($sformatf("%s : evicting load %0d", name, t),
+                       a_mem(set_word(set, n + m)), 2'd3);
+                d_drain();
+                repeat (40) @(posedge clk);
+            end
         end
         check({name, " : the line was evicted"}, !dc_line_present(a_mem(set_word(set, n))));
     endtask

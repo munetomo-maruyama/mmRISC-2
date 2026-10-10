@@ -620,7 +620,7 @@ module tb_SYS
     int  ph_cur [3];                   // the wait of this access: before its fill is asked for, while
                                        // a D$ fill is outstanding, after it
     longint w_ph [WK_N][3];            // the same, summed over the accesses that waited on a miss
-    longint w_vic;                     // MA waits while the D$ copies a dirty victim out (f_state 1-3)
+    longint w_vic;                     // MA waits while the D$ copies a dirty victim out
     int  u_hist [2][DB_N];             // [missed][distance]
     int  u_dead [2], u_left [2];       // overwritten before any use / never used
     longint u_wait, u_hide;            // the waits of the missed loads, what M4 could hide
@@ -738,8 +738,7 @@ module tb_SYS
                     w_cyc[k][u_cpu_top.ev_dc_miss]++;
                     ma_run++;
                     if (u_cpu_top.ev_dc_miss) ma_run_miss = 1'b1;
-                    if ((int'(u_cpu_top.u_cpu_cache.u_dcache.f_state) >= 1) &&
-                        (int'(u_cpu_top.u_cpu_cache.u_dcache.f_state) <= 3)) w_vic++;
+                    if (u_cpu_top.u_cpu_cache.u_dcache.ev_vic_copy) w_vic++;
                     if (u_cpu_top.u_cpu_cache.dc_outst != 3'd0) begin
                         ph_cur[1]++;
                         ma_run_fill = 1'b1;
@@ -811,8 +810,8 @@ module tb_SYS
         for (int k = 0; k < WK_N; k++)
             if (w_acc[k] > 0)
                 $display("   %-10s %9d / %-9d %9d", kn[k], w_cyc[k][1], w_cyc[k][0], w_acc[k]);
-        $display("   the accesses that waited on a miss: cycles before the fill is asked for (a dirty");
-        $display("   victim copied out, the bus busy) / while it is outstanding / after it");
+        $display("   the accesses that waited on a miss: cycles before the fill is asked for (the bus");
+        $display("   busy, a write-back of the same line) / while it is outstanding / after it");
         for (int k = 0; k < WK_N; k++)
             if (w_ph[k][0] + w_ph[k][1] + w_ph[k][2] > 0)
                 $display("   %-10s %9d / %9d / %9d", kn[k], w_ph[k][0], w_ph[k][1], w_ph[k][2]);

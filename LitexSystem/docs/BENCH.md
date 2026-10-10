@@ -798,3 +798,25 @@ columns overlap (a store that misses is in both "stores" and "while a miss is ha
 
 **For the order**: M5 (small, up to 3.7 %) → M1 (medium, up to 13.5 %) → prefetch (M2 for the code we write,
 M3 in the L2 for the I$ and streams). M4 stays after them.
+
+## 19. Asking for the fill before copying the dirty victim out (M5, 2026-10-10, simulation)
+
+M5 of `ROADMAP.md`, the cheapest overlap M0 found (section 18). A miss whose victim is dirty now raises
+the read address of its line in the same cycle the copy of the victim into the write-back buffer starts;
+the copy reads a word a cycle through the read port while the fill writes its beats through the write
+port (`CPU_CACHE_SPEC.md` 4.3). Only `DCACHE` changes.
+
+| | Before | M5 | Difference |
+|---|---|---|---|
+| SIM_CACHE, 8 dirty evictions in a row (cycles per miss) | 22.0 | **12.7** | −42 % (a clean miss is 12.0) |
+| `fploop` (cycles) | 613,197 | **594,887** | **−3.0 %** |
+| `fploop`, MA's waits | 82,124 | 63,766 | −22 % |
+| `fploop`, before the fill is asked for: loads / stores | 10,777 / 17,346 | 4,010 / 4,295 | |
+| `ldloop` (user mode part, cycles) | 88,459 | **87,532** | **−1.0 %** |
+| `ldloop`, MA's waits | 4,967 | 4,077 | −18 % |
+| CoreMark | 3,908,920 | 3,908,920 | 0 (no dirty misses) |
+
+What is left "before the fill is asked for" is the bus busy with another read and a write-back of the same
+line (`f_ar_block`). On the board the copy was 0.4 to 3.7 % of the cycles of the Linux loads (18.1), so a
+gain of that order is expected there; event 24 now counts the copy running alongside the fill, so it no
+longer measures a wait of its own.
