@@ -901,3 +901,43 @@ store waits were 1.4 to 12.9 % of the cycles; about a third of them going away w
   about 15 cycles each is +0.09 CPI, more than the +0.034 seen.
 - Since M0 (18.1) the three themes together (M5, M1) gave 0.8 to 5.6 % on the Linux loads (`forkexec`
   2.250 → 2.123, −5.6 %; `sdread` 2.900 → 2.725, −6.0 %).
+
+## 21. Next-line prefetch of the I$ (M3, 2026-10-11, simulation)
+
+M3 of `ROADMAP.md`, the front end first: in the kernel loads of section 18.1 the front end is empty 19 to 30 %
+of the cycles, mostly on I$ misses that hit in the L2 (about 13 cycles each), and no D$-side theme touches
+that. A prefetch into the L2 would not help those; the line has to come closer.
+
+**Measured first** (Linux boot to the shell prompt in SIM_BIOS, `+fillstat`): of 3.45 M I$ fills, 52.7 %
+are the line after one of the last 4, mostly 16 to 63 cycles after it (the code runs through a line in
+between); the front end is empty 6.7 % of the boot while an I$ fill is outstanding.
+
+**Built** (`CPU_CACHE_SPEC.md` 4.2): after a miss of line X the I$ reads X+1 (same 4 KB page) into a
+one-line buffer; a miss of it is served from there (also while it is still arriving) and asks for the next
+line again; a miss of another line waits for the prefetch to leave the bus.
+
+**Linux boot, prefetch off and on** (the boot is not a fixed amount of work: drivers poll and wait in WFI
+for the SD card and the timers, so cycles are compared outside WFI):
+
+| | Off | On |
+|---|---|---|
+| Instructions | 138.0 M | 131.6 M |
+| Cycles outside WFI | 254.2 M | 239.8 M |
+| **CPI outside WFI** | 1.842 | **1.822 (−1.1 %)** |
+| Front end empty (of the cycles outside WFI) | 18.6 % | 17.9 % |
+| Demand fills of the I$ | 3.45 M | 1.64 M |
+| Prefetches / misses served from the buffer | ― | 3.03 M / 1.46 M (48 %) |
+
+- **Half the misses are now served from the buffer, but the gain is small**: 1.46 M misses saved several
+  cycles each (about 10 M cycles), the CPI shows about 2.6 M. The other half of the prefetches are not used,
+  and each holds the single-read bus for a burst that a miss of the I$ or the D$ then waits behind (`BENCH.md`
+  18 (5)).
+- **Prefetching only after a miss that continues a sequence** (the line after the last miss, or the one the
+  buffer held) was played against the demand fills of the boot: 46.7 % of its prefetches would be used
+  against 46.8 % for every miss, with half as many prefetches. It is not more accurate, only covers less.
+- So the prefetch stays as built (`IC_PREFETCH = 1`, 0 switches it off). What would make it pay better is
+  the bus: a miss behind an unused prefetch should not wait for its whole burst (a second read in the L2 and
+  the arbiter, or letting the demand go first), which is the same limit M0 found.
+
+CoreMark and Dhrystone do not change (their code fits in the I$). The board numbers (events 25 and 26 of
+`workload.sh`) are to follow.

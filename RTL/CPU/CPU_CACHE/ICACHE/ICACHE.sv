@@ -19,6 +19,12 @@
 //     only knows once it has the physical address (CPU_CORE_SPEC.md 6.3).
 //   - A bus error (SLVERR/DECERR) is reported with i_resp_error and the line
 //     is not cached.
+//   - Next-line prefetch (PREFETCH != 0, ROADMAP.md M3): once a miss of line
+//     X has been served, line X+1 (in the same 4 KB page) is read into a
+//     one-line buffer. A miss of that line is served from the buffer, also
+//     while it is still arriving, and asks for the next line again. A miss
+//     of another line waits until the prefetch is off the bus (a burst
+//     cannot be called back). fence.i drops the buffer.
 //
 //   Note on coding style: the combinational blocks are written as
 //   "always @(*)" instead of "always_comb". Icarus Verilog re-triggers an
@@ -39,6 +45,7 @@ module ICACHE
         parameter int          BLOCK_BYTES = 64,
         parameter int          FETCH_WIDTH = 64,
         parameter int          REPLACE_RANDOM = 0,
+        parameter int          PREFETCH       = 1,
         parameter int          AXI4_ID_WIDTH  = 4,
         parameter logic [3:0]  AXI4_ID        = 4'd2
     )
@@ -85,7 +92,12 @@ module ICACHE
         input  logic [63:0]                 m_axil_rdata,
         input  logic [1:0]                  m_axil_rresp,
         input  logic                        m_axil_rvalid,
-        output logic                        m_axil_rready
+        output logic                        m_axil_rready,
+
+        // PMU: the read address on the bus is a prefetch; a miss is served
+        // from the prefetch buffer (one pulse)
+        output logic                        ev_ar_pf,
+        output logic                        ev_pf_hit
     );
 
     //-----------------------------------------------------------------
@@ -98,6 +110,8 @@ module ICACHE
     localparam int TAG_BITS        = PADDR_WIDTH - OFF_BITS - IDX_BITS;
     localparam int WAY_BITS        = (WAYS > 1) ? $clog2(WAYS) : 1;
     localparam int DADDR_BITS      = $clog2(SETS * WORDS_PER_BLOCK);
+    localparam int LINE_BITS       = PADDR_WIDTH - OFF_BITS;
+    localparam int PAGE_LINES      = (4096 / BLOCK_BYTES > 0) ? 4096 / BLOCK_BYTES : 1;
 
     initial begin
     // The index and the offset have to fit into the page offset, so that the
@@ -194,7 +208,9 @@ module ICACHE
     //-----------------------------------------------------------------
     // Pipeline stage 1 (lookup result)
     //-----------------------------------------------------------------
-    typedef enum logic [1:0] {S_IDLE, S_FILL, S_UNC} state_t;
+    // S_PFC : a miss served from the prefetch buffer (the line is copied
+    // into the arrays a word a cycle, as a fill would write it)
+    typedef enum logic [1:0] {S_IDLE, S_FILL, S_UNC, S_PFC} state_t;
     state_t state;
 
     logic                    s1_valid;
@@ -232,6 +248,33 @@ module ICACHE
     logic                    fill_flushed;   // fence.i happened during the fill
     logic                    fill_hold_valid;
     logic [63:0]             fill_hold_data;
+
+    // prefetch buffer
+    logic                    pf_valid;      // pf_line is in the buffer or on its way
+    logic                    pf_busy;       // its burst is on the bus
+    logic                    pf_drop;       // fence.i came while it was on its way
+    logic                    pf_err;
+    logic [LINE_BITS-1:0]    pf_line;
+    logic [WOFF_BITS:0]      pf_cnt;        // beats arrived
+    logic [63:0]             pf_buf [0:WORDS_PER_BLOCK-1];
+    logic                    pf_start;      // ask for pf_next in this cycle
+    logic [LINE_BITS-1:0]    pf_next;
+    logic                    pfc_beat;      // S_PFC copies a word in this cycle
+    logic                    pf_match;      // the miss of stage 1 is in the buffer
+    logic                    line_done;     // a miss has been served in this cycle
+
+    assign pf_match = (PREFETCH != 0) && pf_valid && !pf_drop &&
+                      (pf_line == s1_paddr[PADDR_WIDTH-1:OFF_BITS]);
+    assign pfc_beat = (state == S_PFC) && ({1'b0, fill_beat} < pf_cnt);
+    assign line_done = ((state == S_FILL) && m_axi4_rvalid && m_axi4_rlast &&
+                        !fill_err && (m_axi4_rresp == 2'b00)) ||
+                       (pfc_beat && (fill_beat == WOFF_BITS'(WORDS_PER_BLOCK-1)) && !pf_err);
+    assign pf_next  = fill_addr[PADDR_WIDTH-1:OFF_BITS] + LINE_BITS'(1);
+    assign pf_start = (PREFETCH != 0) && line_done && !fill_flushed && !i_flush_valid &&
+                      ((pf_next % PAGE_LINES) != 0);
+    assign ev_ar_pf  = pf_busy;
+    assign ev_pf_hit = (state == S_IDLE) && s1_valid && !hit && s1_cacheable &&
+                       !(i_kill || i_cancel) && pf_match;
 
     // A new request is accepted while stage 1 hits (one request per cycle).
     // When stage 1 misses, the pipeline stops until the fill has finished.
@@ -279,9 +322,47 @@ module ICACHE
             m_axi4_araddr   <= '0;
             m_axil_arvalid  <= 1'b0;
             m_axil_araddr   <= '0;
+            pf_valid        <= 1'b0;
+            pf_busy         <= 1'b0;
+            pf_drop         <= 1'b0;
+            pf_err          <= 1'b0;
+            pf_line         <= '0;
+            pf_cnt          <= '0;
         end else begin
             i_resp_valid <= 1'b0;
             i_resp_error <= 1'b0;
+
+            if (m_axi4_arvalid && m_axi4_arready)
+                m_axi4_arvalid <= 1'b0;
+
+            //-------------------------------------------------------
+            // prefetch : the beats of the next line go to the buffer
+            //-------------------------------------------------------
+            if (pf_busy && m_axi4_rvalid) begin
+                pf_buf[pf_cnt[WOFF_BITS-1:0]] <= m_axi4_rdata;
+                pf_cnt <= pf_cnt + (WOFF_BITS+1)'(1);
+                if (m_axi4_rresp != 2'b00) pf_err <= 1'b1;
+                if (m_axi4_rlast) begin
+                    pf_busy <= 1'b0;
+                    if (pf_drop || i_flush_valid) pf_valid <= 1'b0;
+                end
+            end
+            if (i_flush_valid) begin
+                if (pf_busy) pf_drop  <= 1'b1;
+                else         pf_valid <= 1'b0;
+            end
+            if (state == S_PFC && pfc_beat && (fill_beat == WOFF_BITS'(WORDS_PER_BLOCK-1)))
+                pf_valid <= 1'b0;                  // used up
+            if (pf_start) begin
+                pf_valid       <= 1'b1;
+                pf_busy        <= 1'b1;
+                pf_drop        <= 1'b0;
+                pf_err         <= 1'b0;
+                pf_cnt         <= '0;
+                pf_line        <= pf_next;
+                m_axi4_araddr  <= {pf_next, {OFF_BITS{1'b0}}};
+                m_axi4_arvalid <= 1'b1;
+            end
 
             // stage 0 -> stage 1
             if (i_req_valid && i_req_ready) begin
@@ -306,6 +387,21 @@ module ICACHE
                     end else if (s1_valid && hit) begin
                         i_resp_valid <= 1'b1;
                         i_resp_data  <= hit_data[FETCH_WIDTH-1:0];
+                    end else if (s1_valid && s1_cacheable && pf_match) begin
+                        // miss of the prefetched line : copy it from the buffer
+                        fill_addr      <= s1_paddr;
+                        fill_way       <= (REPLACE_RANDOM != 0) ? WAY_BITS'(lfsr[WAY_BITS-1:0])
+                                                         : onehot_to_bin(rr_way);
+                        fill_beat      <= '0;
+                        fill_err       <= 1'b0;
+                        fill_kill      <= 1'b0;
+                        fill_flushed   <= 1'b0;
+                        fill_hold_valid<= 1'b0;
+                        state          <= S_PFC;
+                    end else if (s1_valid && s1_cacheable && pf_busy) begin
+                        // another line: wait until the prefetch is off the bus
+                        // (stage 1 stays, see above)
+                        s1_valid <= 1'b1;
                     end else if (s1_valid && s1_cacheable) begin
                         // miss : start a line fill
                         fill_addr      <= s1_paddr;
@@ -331,8 +427,6 @@ module ICACHE
                 //-----------------------------------------------------
                 S_FILL: begin
                     if (i_kill) fill_kill <= 1'b1;
-                    if (m_axi4_arvalid && m_axi4_arready)
-                        m_axi4_arvalid <= 1'b0;
                     if (i_flush_valid) fill_flushed <= 1'b1;
                     if (m_axi4_rvalid) begin
                         if (m_axi4_rresp != 2'b00) fill_err <= 1'b1;
@@ -348,6 +442,26 @@ module ICACHE
                             end
                         end
                         if (m_axi4_rlast) begin
+                            state    <= S_IDLE;
+                            s1_valid <= 1'b0;
+                        end
+                    end
+                end
+                //-----------------------------------------------------
+                S_PFC: begin
+                    if (i_kill) fill_kill <= 1'b1;
+                    if (i_flush_valid) fill_flushed <= 1'b1;
+                    if (pfc_beat) begin
+                        fill_beat <= fill_beat + WOFF_BITS'(1);
+                        if ((fill_beat == addr_woff(fill_addr)) && !fill_hold_valid) begin
+                            fill_hold_valid <= 1'b1;
+                            if (!fill_kill && !i_kill) begin
+                                i_resp_valid <= 1'b1;
+                                i_resp_error <= pf_err;
+                                i_resp_data  <= pf_buf[fill_beat][FETCH_WIDTH-1:0];
+                            end
+                        end
+                        if (fill_beat == WOFF_BITS'(WORDS_PER_BLOCK-1)) begin
                             state    <= S_IDLE;
                             s1_valid <= 1'b0;
                         end
@@ -376,15 +490,15 @@ module ICACHE
     //-----------------------------------------------------------------
     // Array writes during a fill
     //-----------------------------------------------------------------
-    assign dat_wr_en   = (state == S_FILL) && m_axi4_rvalid && (m_axi4_rresp == 2'b00);
+    assign dat_wr_en   = ((state == S_FILL) && m_axi4_rvalid && (m_axi4_rresp == 2'b00)) ||
+                         (pfc_beat && !pf_err);
     assign dat_wr_way  = fill_way;
     assign dat_wr_addr = {addr_index(fill_addr), fill_beat};
-    assign dat_wr_data = m_axi4_rdata;
+    assign dat_wr_data = (state == S_PFC) ? pf_buf[fill_beat] : m_axi4_rdata;
 
-    // the tag is written when the last beat arrived without error
-    assign tag_wr_en    = (state == S_FILL) && m_axi4_rvalid && m_axi4_rlast &&
-                          !fill_err && (m_axi4_rresp == 2'b00) &&
-                          !fill_flushed && !i_flush_valid;
+    // the tag is written when the last beat arrived without error (or the
+    // last word was copied from the prefetch buffer)
+    assign tag_wr_en    = line_done && !fill_flushed && !i_flush_valid;
     assign tag_wr_index = addr_index(fill_addr);
     assign tag_wr_way   = fill_way;
     assign tag_wr_tag   = addr_tag(fill_addr);
@@ -396,7 +510,7 @@ module ICACHE
     assign m_axi4_arlen   = 8'(WORDS_PER_BLOCK - 1);
     assign m_axi4_arsize  = 3'd3;
     assign m_axi4_arburst = 2'b01;                 // INCR
-    assign m_axi4_rready  = (state == S_FILL);
+    assign m_axi4_rready  = (state == S_FILL) || pf_busy;
     assign m_axil_rready  = (state == S_UNC);
 
     //-----------------------------------------------------------------

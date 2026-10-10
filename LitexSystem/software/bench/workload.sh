@@ -31,7 +31,8 @@
 # L2), runs 6-7 the memory waits of M0 (ROADMAP.md): r14 MA waits for a
 # store, r15 MA waits while the D$ handles a miss, r16 / r17 one / two or
 # more line fills outstanding, r18 MA waits while a dirty victim is copied
-# out, with rb (all of MA's waits) again. Run 0 splits cycles and
+# out, with rb (all of MA's waits) again, r19 / r1a the prefetches of the I$
+# and the misses served by them (M3). Run 0 splits cycles and
 # instructions into user and kernel mode. rN is event N of the core, in hex
 # (CPU_CORE_SPEC.md decision 69). Each event is divided by the cycles or
 # instructions of its own run. The log is /tmp/workload.log, the raw counts
@@ -82,7 +83,7 @@ cmd() {
     esac
 }
 
-EVSETS="r7,r8,r9,ra rb,rc,r11,rd r5,r6,r3,r4 re,rf,r10,r1 r12,r13 r14,r15,r16,r17 r18,rb"
+EVSETS="r7,r8,r9,ra rb,rc,r11,rd r5,r6,r3,r4 re,rf,r10,r1 r12,r13 r14,r15,r16,r17 r18,rb,r19,r1a"
 WORKLOADS="gunzip md5sum awk ls ext4read sdread forkexec tftp"
 
 cold() { case $1 in ext4read|sdread) drop ;; esac; }
@@ -143,20 +144,24 @@ for w in $WORKLOADS; do
 done | tee -a "$LOG"
 echo "" | tee -a "$LOG"
 echo "=== the memory waits (M0), % of cycles: MA waits (all, as stores, while the D\$ handles a miss," | tee -a "$LOG"
-echo "    while a dirty victim is copied out), line fills outstanding (1 or more, 2 or more)" | tee -a "$LOG"
-printf "%-9s %7s %7s %7s %7s %7s %7s\n" workload 'MAw%' 'store%' 'miss%' 'victim%' 'fill1%' 'fill2%' | tee -a "$LOG"
+echo "    while a dirty victim is copied out), line fills outstanding (1 or more, 2 or more);" | tee -a "$LOG"
+echo "    I\$ prefetches per 1000 instructions and the share of them that served a miss" | tee -a "$LOG"
+printf "%-9s %7s %7s %7s %7s %7s %7s %7s %7s\n" workload 'MAw%' 'store%' 'miss%' 'victim%' 'fill1%' 'fill2%' 'pfI$' 'pfuse%' | tee -a "$LOG"
 for w in $WORKLOADS; do
     [ -f "$w.7.csv" ] || continue
     for g in 6 7; do
         grep -v "^#\|^$" "$w.$g.csv" | sed "s/^/$g,/"
     done | awk -F, -v w="$w" '
         { g = $1; v = $2 + 0; e = $4
-          if (e == "cycles") cyc[g] = v
-          else               { val[e] = v; grp[e] = g } }
+          if (e == "cycles")            cyc[g] = v
+          else if (e == "instructions") ins[g] = v
+          else                          { val[e] = v; grp[e] = g } }
         function p(e) { return (cyc[grp[e]] > 0) ? 100 * val[e] / cyc[grp[e]] : 0 }
+        function k(e) { return (ins[grp[e]] > 0) ? 1000 * val[e] / ins[grp[e]] : 0 }
         END {
-            printf "%-9s %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f\n",
-                   w, p("rb"), p("r14"), p("r15"), p("r18"), p("r16"), p("r17")
+            use = (val["r19"] > 0) ? 100 * val["r1a"] / val["r19"] : 0
+            printf "%-9s %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %7.1f\n",
+                   w, p("rb"), p("r14"), p("r15"), p("r18"), p("r16"), p("r17"), k("r19"), use
         }'
 done | tee -a "$LOG"
 echo "" | tee -a "$LOG"

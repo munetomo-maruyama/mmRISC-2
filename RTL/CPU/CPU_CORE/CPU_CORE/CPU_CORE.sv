@@ -98,6 +98,9 @@ module CPU_CORE
         input  logic                    ev_dc_vic_copy,
         input  logic                    ev_fills_1,
         input  logic                    ev_fills_2,
+        // PMU: a prefetch of the I$ goes out; a miss is served from it
+        input  logic                    ev_ic_pf,
+        input  logic                    ev_ic_pf_hit,
 
         // retirement trace (verification)
         output logic                    trace_valid,
@@ -847,7 +850,7 @@ module CPU_CORE
     //-----------------------------------------------------------------
     // PMU (CPU_CORE_SPEC.md decision 69): the events, one bit each, set in
     // the cycle they happen (assigned at the end of this file)
-    localparam int HPM_EVENTS = 25;
+    localparam int HPM_EVENTS = 27;
     logic [HPM_EVENTS-1:0]  hpm_ev;
     logic                   ev_itlb_miss, ev_dtlb_miss;
 
@@ -2400,5 +2403,7 @@ module CPU_CORE
     assign hpm_ev[22] = ev_fills_1;                            // a line fill in flight
     assign hpm_ev[23] = ev_fills_2;                            // two or more
     assign hpm_ev[24] = stall_ma & ev_dc_vic_copy;             // MA waits while a dirty victim is copied out
+    assign hpm_ev[25] = ev_ic_pf;                              // I$ prefetches
+    assign hpm_ev[26] = ev_ic_pf_hit;                          // I$ misses served from the prefetch buffer
 
 endmodule : CPU_CORE

@@ -25,6 +25,7 @@ module CPU_CACHE
         parameter int          IC_WAYS        = 4,
         parameter int          IC_BLOCK_BYTES = 64,
         parameter int          FETCH_WIDTH    = 64,
+        parameter int          IC_PREFETCH    = 1,      // next-line prefetch of the I$
 
         parameter int          DC_SETS        = 64,
         parameter int          DC_WAYS        = 4,
@@ -152,7 +153,11 @@ module CPU_CACHE
         output logic                     ev_dc_miss,
         output logic                     ev_dc_vic_copy,
         output logic                     ev_fills_1,
-        output logic                     ev_fills_2
+        output logic                     ev_fills_2,
+        // PMU: the I$ asks for a line by prefetch; a miss of the I$ is
+        // served from its prefetch buffer
+        output logic                     ev_ic_pf,
+        output logic                     ev_ic_pf_hit
     );
 
     //=================================================================
@@ -278,7 +283,10 @@ module CPU_CACHE
     // Instruction cache (read only : the write channels are tied off)
     //=================================================================
     // PMU: one pulse per line the caches read (their misses)
-    assign ev_ic_refill = ic_axi4_arvalid & ic_axi4_arready;
+    // (a prefetch of the I$ is not a miss: it has an event of its own)
+    logic  ic_ar_pf;
+    assign ev_ic_refill = ic_axi4_arvalid & ic_axi4_arready & ~ic_ar_pf;
+    assign ev_ic_pf     = ic_axi4_arvalid & ic_axi4_arready &  ic_ar_pf;
     assign ev_dc_refill = dc_axi4_arvalid & dc_axi4_arready;
 
     logic       dc_miss;
@@ -297,7 +305,7 @@ module CPU_CACHE
             ic_fills <= 2'd0;
             dc_fills <= 3'd0;
         end else begin
-            ic_fills <= ic_fills + 2'(ev_ic_refill)
+            ic_fills <= ic_fills + 2'(ic_axi4_arvalid & ic_axi4_arready)
                                  - 2'(ic_axi4_rvalid & ic_axi4_rready & ic_axi4_rlast);
             dc_fills <= dc_fills + 3'(ev_dc_refill)
                                  - 3'(dc_axi4_rvalid & dc_axi4_rready & dc_axi4_rlast);
@@ -319,6 +327,7 @@ module CPU_CACHE
             .BLOCK_BYTES    (IC_BLOCK_BYTES),
             .FETCH_WIDTH    (FETCH_WIDTH),
             .REPLACE_RANDOM (REPLACE_RANDOM),
+            .PREFETCH       (IC_PREFETCH),
             .AXI4_ID_WIDTH  (AXI4_ID_WIDTH),
             .AXI4_ID        (AXI4_ID_IFILL)
         )
@@ -355,7 +364,9 @@ module CPU_CACHE
             .m_axil_rdata   (ic_axil_rdata),
             .m_axil_rresp   (ic_axil_rresp),
             .m_axil_rvalid  (ic_axil_rvalid),
-            .m_axil_rready  (ic_axil_rready)
+            .m_axil_rready  (ic_axil_rready),
+            .ev_ar_pf       (ic_ar_pf),
+            .ev_pf_hit      (ev_ic_pf_hit)
         );
 
     // the instruction side never writes

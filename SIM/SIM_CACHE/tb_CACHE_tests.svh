@@ -1155,6 +1155,103 @@
         end
 
         //=============================================================
+        section("20. I$ next-line prefetch");
+        //=============================================================
+        //   (a) a run through four lines of a page: the misses after the
+        //       first one are served from the prefetch buffer
+        //   (b) nothing is prefetched across a 4 KB page
+        //   (c) a fence.i drops the buffer: the line changed in memory in
+        //       between is fetched again (with the new data)
+        //   (d) the same with the fence.i while the prefetch is on the bus
+        if (from_sec <= 20 && 20 <= to_sec) begin
+            int lw, pw, base, pf0, hit0;
+            e0   = n_error;
+            lw   = IC_BLOCK / 8;               // words of a line
+            pw   = 4096 / 8;                   // words of a page
+            base = 12 * pw;                    // page 12 of the window
+            i_flush_all();
+            // (a)
+            pf0 = n_ic_pf; hit0 = n_ic_pf_hit;
+            for (int i = 0; i < 4 * lw; i++)
+                i_push($sformatf("(a) sequential fetch %0d", i), a_mem(base + i));
+            i_drain();
+            repeat (40) @(posedge clk);
+            if (IC_PREFETCH != 0) begin
+                check("(a) three misses served from the prefetch buffer", n_ic_pf_hit - hit0 == 3);
+                check("(a) four prefetches", n_ic_pf - pf0 == 4);
+            end else begin
+                check("(a) no prefetch", (n_ic_pf == pf0) && (n_ic_pf_hit == hit0));
+            end
+            // (b) the last line of page 13, then the first of page 14
+            pf0 = n_ic_pf; hit0 = n_ic_pf_hit;
+            i_push("(b) last line of a page", a_mem(base + 2 * pw - lw));
+            i_drain();
+            repeat (40) @(posedge clk);
+            check("(b) no prefetch into the next page", n_ic_pf == pf0);
+            i_push("(b) first line of the next page", a_mem(base + 2 * pw));
+            i_drain();
+            repeat (40) @(posedge clk);
+            check("(b) a miss of its own", n_ic_pf_hit == hit0);
+            // (c) the buffer holds line A+1; it changes in memory, fence.i
+            i_flush_all();
+            i_push("(c) line A", a_mem(base + 3 * pw));
+            i_drain();
+            repeat (40) @(posedge clk);
+            d_store("(c) new data for line A+1", a_mem(base + 3 * pw + lw), 2'd3, 64'hC0DE_0000_0000_0001);
+            d_drain();
+            d_flush("(c) to memory");
+            d_drain();
+            i_flush_all();
+            i_push("(c) line A+1 after fence.i", a_mem(base + 3 * pw + lw));
+            i_drain();
+            // (d) fence.i right behind the miss, the prefetch still on its way
+            i_flush_all();
+            i_push("(d) line B", a_mem(base + 3 * pw + 4 * lw));
+            i_drain();
+            if (IC_PREFETCH != 0) begin
+                while (!u_cache.u_icache.pf_busy) @(posedge clk);
+                check("(d) the prefetch of B+1 is on the bus", u_cache.u_icache.pf_busy);
+            end
+            i_flush_all();
+            d_store("(d) new data for line B+1", a_mem(base + 3 * pw + 5 * lw), 2'd3, 64'hC0DE_0000_0000_0002);
+            d_drain();
+            d_flush("(d) to memory");
+            d_drain();
+            i_push("(d) line B+1 after fence.i", a_mem(base + 3 * pw + 5 * lw));
+            i_drain();
+            // (e) a miss of the prefetched line while the prefetch, dropped
+            //     by fence.i, is still on the bus: it must not take the old
+            //     words the prefetch brings, but read the line again
+            if (IC_PREFETCH != 0) begin
+                d_store("(e) new data for line C+1, in the D$", a_mem(base + 3 * pw + 9 * lw), 2'd3,
+                        64'hC0DE_0000_0000_0003);
+                d_drain();
+                i_flush_all();
+                i_push("(e) line C", a_mem(base + 3 * pw + 8 * lw));
+                i_drain();
+                // the first word of C+1 (old) is in the buffer, the rest of
+                // the burst stays on the bus
+                while (!(u_cache.u_icache.pf_busy && (u_cache.u_icache.pf_cnt != 0))) @(posedge clk);
+                u_mem.r_hold = 1'b1;
+                d_flush("(e) the new data to memory");
+                d_drain();
+                i_flush_all();
+                fork
+                    begin
+                        repeat (60) @(posedge clk);
+                        u_mem.r_hold = 1'b0;
+                    end
+                    begin
+                        i_push("(e) line C+1, the prefetch dropped and still on its way",
+                               a_mem(base + 3 * pw + 9 * lw));
+                        i_drain();
+                    end
+                join
+            end
+            if (n_error == e0) ok("next-line prefetch: runs, page limit, fence.i");
+        end
+
+        //=============================================================
         // Throughput patterns (only with +perf, see tb_CACHE_perf.svh)
         //=============================================================
         if ($test$plusargs("perf")) perf_run();

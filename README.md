@@ -166,8 +166,8 @@ official tests, down to confirming that the tests find deliberately broken RTL (
 | `cd SIM/SIM_SYS && make` | Core + real L1 / L2 caches + AXI + DMA port (25 home-made tests, 4 programs for DMA, PMU and others). `PARAMS=-GL2_SIZE=0` for no L2 | All PASS (with / without L2) |
 | `cd SIM/SIM_SYS && make riscv-tests` | riscv-tests through the real caches | 133 PASS, 4 known failures |
 | `cd SIM/SIM_SYS && ./bug_inject.sh` | 23 bug injections (including the cycle bounds of the floating point kernels, `bench/fploop`, and the memory wait events of M0) | All detected |
-| `cd SIM/SIM_CACHE && make` | All tests of the L1 caches (CPU and DMA port random on the same lines at the same time, cancel included) | PASS 64,884 checks |
-| `cd SIM/SIM_CACHE && ./bug_inject.sh` | 46 bug injections | All detected |
+| `cd SIM/SIM_CACHE && make` | All tests of the L1 caches (CPU and DMA port random on the same lines at the same time, cancel included) | PASS 64,829 checks |
+| `cd SIM/SIM_CACHE && ./bug_inject.sh` | 53 bug injections | All detected |
 | `cd SIM/SIM_L2 && make` / `./sweep.sh` / `./bug_inject.sh` | L2 cache (256 KB, 4 ways) / 11 configurations of capacity, ways and replacement / 31 bug injections | PASS about 1.5 million checks / all PASS / all detected |
 | `cd SIM/SIM_MMU && make` / `./bug_inject.sh` | PMP against a reference model / 21 bug injections | PASS 200,000 checks / all detected |
 | `cd SIM/SIM_FPU && make` / `./bug_inject.sh` | FPU against Berkeley SoftFloat / 34 bug injections | PASS about 580,000 checks / all detected |

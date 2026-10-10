@@ -28,6 +28,10 @@
 //     Uncached loads wait in MA on no miss (21 stays)
 #include "test.h"
 
+    // no linker relaxation: two_fills_b is placed with .org at the end of the
+    // code's page, and relaxing the calls in front of it would move it
+    .option norelax
+
 #define MHPMCOUNTER3  0xb03
 #define MHPMCOUNTER4  0xb04
 #define MHPMEVENT3    0x323
@@ -95,10 +99,16 @@ _start:
     sub  x21, x21, x20
     li   gp, 4
     beqz x21, fail
-    csrr x20, MHPMCOUNTER3
+    // called again: no miss. Measured twice, and the second pass checked:
+    // the fetch of the code around the counters can still be on its way
+    // in the first (behind a prefetch, with the memory holding the bus)
+    li   s9, 2
+1:  csrr x20, MHPMCOUNTER3
     call far_code
     csrr x21, MHPMCOUNTER3
     sub  x21, x21, x20
+    addi s9, s9, -1
+    bnez s9, 1b
     TEST_EQ(5, x21, 0)
 
     //--------------------------------------------------------------
@@ -173,6 +183,11 @@ _start:
     li   gp, 21
     li   t0, 8
     blt  s4, t0, fail                     // on misses
+    // the misses were answered when accepted (M1): give their fills time
+    // to end (FENCE only waits for the answers), then store again
+    li   t0, 1000
+1:  addi t0, t0, -1
+    bnez t0, 1b
     la   a0, st_lines
     li   a1, 64
     call store8
@@ -370,17 +385,6 @@ two_fills:
     addi t0, t0, 1                        // the next line
     ret
 
-    .balign 256
-    .fill 64, 4, 0x00000013
-two_fills_b:                              // a call here only brings the line in
-    ret
-two_fills_b_go:
-    .fill 5, 4, 0x00000013
-    ld   t0, 0(a0)                        // misses with its line in the I$
-    .fill 9, 4, 0x00000013
-    addi t0, t0, 1                        // the next line
-    ret
-
     // code no instruction has come near yet
     .balign 256
     .fill 64, 4, 0x00000013               // nops in front, to keep it apart
@@ -390,6 +394,21 @@ far_code:
     ret
 
     TEST_FAIL_HANDLER
+
+    // the last line of the page of the code: the I$ does not prefetch the
+    // next line across a page, so that line (the first one of .data, which
+    // the linker puts at 0x8000_1000) is fetched on demand, behind the D$
+    // fill. Placed after all other code.
+    .org 0xfc0
+two_fills_b:                              // a call here only brings the line in
+    ret
+two_fills_b_go:
+    .fill 5, 4, 0x00000013
+    ld   t0, 0(a0)                        // misses with its line in the I$
+    .fill 9, 4, 0x00000013
+    .section .data
+    addi t0, t0, 1                        // the next line, the next page
+    ret
 
     .section .data
     .balign 64

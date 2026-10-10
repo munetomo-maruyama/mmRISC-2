@@ -21,7 +21,9 @@
 //
 //  aw_hold = 1 keeps AWREADY low (from the next cycle on) until it is
 //  cleared: writes wait while reads go on, which is how a test holds a
-//  write-back in the queue of a cache. w_hold = 1 does the same to WREADY:
+//  write-back in the queue of a cache. r_hold = 1 keeps the next read beat
+//  back (RVALID stays low) until it is cleared: a read burst stays on the bus.
+//  w_hold = 1 does the same to WREADY:
 //  a write whose address was taken waits for its data.
 //
 //  Protocol checks (counted in protocol_err):
@@ -107,11 +109,13 @@ module AXI4_SLAVE_MEM
     logic stall_en;         // 1 = inject random ready drops / valid delays
     logic aw_hold;          // 1 = no write address is accepted
     logic w_hold;           // 1 = no write data is accepted
+    logic r_hold;           // 1 = the next read beat waits
 
     initial begin
         stall_en = 1'b0;
         aw_hold  = 1'b0;
         w_hold   = 1'b0;
+        r_hold   = 1'b0;
     end
 
     // Number of AXI protocol violations detected (write + read channels)
@@ -379,7 +383,9 @@ module AXI4_SLAVE_MEM
 
                 // Idle cycles before presenting the next beat
                 R_DLY: begin
-                    if (rdly == 2'd0) begin
+                    if (r_hold) begin
+                        // held by the test bench
+                    end else if (rdly == 2'd0) begin
                         rdata  <= mem[idx_of(raddr_r)];
                         rlast  <= (rbeat == {1'b0, rlen_r});
                         rvalid <= 1'b1;
@@ -398,12 +404,12 @@ module AXI4_SLAVE_MEM
                             arready <= ar_rdy_nx;
                             rstate  <= R_IDLE;
                         end
-                        else if (r_dly_nx != 2'd0) begin
+                        else if ((r_dly_nx != 2'd0) || r_hold) begin
                             // withdraw VALID only after the handshake, then wait
                             rvalid  <= 1'b0;
                             raddr_r <= next_addr(raddr_r, rsize_r);
                             rbeat   <= rbeat + 9'd1;
-                            rdly   <= r_dly_nx - 2'd1;
+                            rdly   <= (r_dly_nx == 2'd0) ? 2'd0 : r_dly_nx - 2'd1;
                             rstate <= R_DLY;
                         end
                         else begin

@@ -557,6 +557,7 @@ module CPU_TOP
     logic                       ev_ic_refill, ev_dc_refill;
     logic                       ev_dc_miss, ev_dc_vic_copy;          // a D$ miss, its victim copied out
     logic                       ev_fills_1, ev_fills_2;              // fills outstanding
+    logic                       ev_ic_pf, ev_ic_pf_hit;              // I$ prefetch
 
     logic                       dbg_dc_req_valid, dbg_dc_req_ready;
     logic [AXI4_ADDR_WIDTH-1:0] dbg_dc_req_addr, dbg_dc_req_paddr;
@@ -952,7 +953,9 @@ module CPU_TOP
             .ev_dc_miss      (ev_dc_miss),
             .ev_dc_vic_copy  (ev_dc_vic_copy),
             .ev_fills_1      (ev_fills_1),
-            .ev_fills_2      (ev_fills_2)
+            .ev_fills_2      (ev_fills_2),
+            .ev_ic_pf        (ev_ic_pf),
+            .ev_ic_pf_hit    (ev_ic_pf_hit)
         );
 
     //=================================================================
@@ -1709,6 +1712,8 @@ module CPU_TOP
                     .ev_dc_vic_copy(ev_dc_vic_copy),
                     .ev_fills_1    (ev_fills_1),
                     .ev_fills_2    (ev_fills_2),
+                    .ev_ic_pf      (ev_ic_pf),
+                    .ev_ic_pf_hit  (ev_ic_pf_hit),
                     .trace_valid   (),
                     .trace_pc      (),
                     .trace_insn    (),

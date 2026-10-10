@@ -145,6 +145,8 @@ module tb_CORE;
             .ev_l2_miss    (1'b0),
             .ev_dc_miss    (1'b0),
             .ev_dc_vic_copy(1'b0),
+            .ev_ic_pf      (1'b0),
+            .ev_ic_pf_hit  (1'b0),
             .ev_fills_1    (1'b0),
             .ev_fills_2    (1'b0),
             .trace_valid   (trace_valid),

@@ -125,6 +125,7 @@ value changes, and synthesizes to the same thing.
 | `BLOCK_BYTES` | 64 | Block size (power of 2, 8 or more) |
 | `FETCH_WIDTH` | 64 | Fetch width returned to the CPU (bits). Extracting RV64GC's compressed instructions is the CPU's job |
 | `AXI4_ID` | 2 | AXI ID used for fills |
+| `PREFETCH` | 1 | Next-line prefetch (4.2). `IC_PREFETCH` of `CPU_CACHE` |
 
 The default is 64 × 4 × 64B = **16 KiB** (the same as Rocket `linux`).
 
@@ -205,6 +206,18 @@ automatically.
    - AXI4: `ARBURST=INCR`, `ARSIZE=3`, `ARLEN = BLOCK_BYTES/8 - 1`, `ARADDR` = start of the block.
    - When the requested word arrives, answer the waiting request first (early restart).
    - When the whole block has arrived, update the data array and the tag array.
+4. **Next-line prefetch of the I$** (since 2026-10-11, M3 of `LitexSystem/docs/ROADMAP.md`, `PREFETCH`): once a
+   miss of line X has been served, the I$ reads line X+1 into a one-line buffer (not into the arrays), if
+   X+1 is in the same 4 KB page (the next page may not be memory). A miss of the buffered line is served
+   from the buffer, also while its beats are still arriving: the words are copied into the arrays one a
+   cycle as a fill would write them, the requested one answered when it is there, and the next line is
+   asked for again. A miss of another line waits until the prefetch is off the bus (a burst cannot be
+   called back, and the bus takes one read at a time). `fence.i` drops the buffer, and a prefetch still on
+   its way is not used. In the Linux boot (SIM_BIOS) 48 % of the prefetches serve a miss and the CPI
+   outside WFI goes down by 1.1 % (`LitexSystem/docs/BENCH.md` 21); the prefetches that are not used hold the
+   bus for a miss behind them, which eats more than half of what the others save. Prefetching only after
+   a miss that continues a sequence was evaluated and is not better (the same 47 % used, half the
+   prefetches).
 
 ### 4.3 Writes (D$, write-back + write-allocate)
 
@@ -221,8 +234,10 @@ automatically.
      their word with those bytes merged in. A store does not join behind a load of its word that is still
      waiting (the load must not see it); it waits for the fill and runs again as a hit. The lock is now
      only for AMO / LR / SC, which wait for the line and run again.
-   - A FENCE (and `fence.i`, which flushes) waits until every MSHR is empty, so it still orders the stores
-     answered early.
+   - FENCE needs nothing more: it is not sent to the D$ and waits until the earlier accesses have been
+     answered (`CPU_CORE_SPEC.md` 5.3), and a store answered early is in the D$ (in its MSHR), where every
+     port of the D$ sees it (the DMA's reads join the fill and get the stored bytes merged in). `fence.i`
+     (`CMD_FLUSH`) waits until every MSHR is empty.
 3. **Eviction**: if the victim is dirty, move the whole block to the write-back buffer and write it out
    on AXI4.
    - `AWBURST=INCR`, `AWSIZE=3`, `AWLEN = BLOCK_BYTES/8 - 1`, `WSTRB` all bytes enabled.

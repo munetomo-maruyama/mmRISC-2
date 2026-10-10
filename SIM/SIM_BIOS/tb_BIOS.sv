@@ -423,6 +423,118 @@ module tb_BIOS
         end
     end
 
+    //-----------------------------------------------------------------
+    // +fillstat : how the line fills of the I$ and the D$ follow each
+    // other (for a next-line prefetch). For every fill: is it the line
+    // after one of the last FS_RECENT fills of the same cache (what a
+    // prefetch of the next line on each miss would have asked for), and
+    // how many cycles after that one. Also the cycles the front end is
+    // empty while an I$ fill is outstanding, the D$ waits while a D$ fill
+    // is, both for the whole run and for user mode.
+    //-----------------------------------------------------------------
+    localparam int FS_RECENT = 4;
+    localparam int FS_GAPS   = 6;     // gap buckets: <8 <16 <32 <64 <256 more
+    typedef struct { longint line; longint cyc; } fs_ent_t;
+    fs_ent_t fs_rec [2][FS_RECENT];
+    longint  fs_fills [2], fs_next [2], fs_prev [2], fs_gap [2][FS_GAPS];
+    longint  fs_ife, fs_ife_u, fs_cyc_u, fs_dw, fs_dw_u;
+    longint  fs_pf, fs_pf_hit, fs_fe, fs_wfi;
+    // policies of a one-line prefetch buffer, played against the demand
+    // fills of the I$ (meaningful with the prefetch switched off):
+    //   A : the next line after every miss
+    //   B : the next line only after a miss that continues a sequence (the
+    //       line after the last miss, or the line the buffer held)
+    longint  pa_line, pb_line, pa_iss, pa_use, pb_iss, pb_use, last_ic;
+    bit      fillstat;
+    initial begin
+        fillstat = $test$plusargs("fillstat");
+        for (int c = 0; c < 2; c++) begin
+            fs_fills[c] = 0; fs_next[c] = 0; fs_prev[c] = 0;
+            for (int g = 0; g < FS_GAPS; g++) fs_gap[c][g] = 0;
+            for (int k = 0; k < FS_RECENT; k++) begin fs_rec[c][k].line = -10; fs_rec[c][k].cyc = 0; end
+        end
+        fs_ife = 0; fs_ife_u = 0; fs_cyc_u = 0; fs_dw = 0; fs_dw_u = 0; fs_pf = 0; fs_pf_hit = 0; fs_fe = 0; fs_wfi = 0;
+        pa_line = -10; pb_line = -10; pa_iss = 0; pa_use = 0; pb_iss = 0; pb_use = 0; last_ic = -10;
+    end
+    task automatic fs_fill(input int c, input longint line);
+        longint gap;
+        int     hit;
+        hit = -1;
+        for (int k = 0; k < FS_RECENT; k++)
+            if (fs_rec[c][k].line == line - 1) hit = k;
+        fs_fills[c]++;
+        if (hit >= 0) begin
+            fs_next[c]++;
+            gap = longint'(cycle_count) - fs_rec[c][hit].cyc;
+            if      (gap < 8)   fs_gap[c][0]++;
+            else if (gap < 16)  fs_gap[c][1]++;
+            else if (gap < 32)  fs_gap[c][2]++;
+            else if (gap < 64)  fs_gap[c][3]++;
+            else if (gap < 256) fs_gap[c][4]++;
+            else                fs_gap[c][5]++;
+        end
+        for (int k = 0; k < FS_RECENT; k++)
+            if (fs_rec[c][k].line == line + 1) fs_prev[c]++;
+        if (c == 0) begin
+            bit seq;
+            if (line == pa_line) pa_use++;
+            pa_line = line + 1; pa_iss++;
+            seq = (line == last_ic + 1) || (line == pb_line);
+            if (line == pb_line) pb_use++;
+            if (seq) begin pb_line = line + 1; pb_iss++; end
+            last_ic = line;
+        end
+        for (int k = FS_RECENT-1; k > 0; k--) fs_rec[c][k] = fs_rec[c][k-1];
+        fs_rec[c][0].line = line;
+        fs_rec[c][0].cyc  = cycle_count;
+    endtask
+    always @(posedge clk) begin
+        if (rst_n && fillstat) begin
+            // demand fills only (a prefetch is counted on its own)
+            if (u_cpu_top.u_cpu_cache.ic_axi4_arvalid && u_cpu_top.u_cpu_cache.ic_axi4_arready &&
+                !u_cpu_top.u_cpu_cache.ic_ar_pf)
+                fs_fill(0, longint'(u_cpu_top.u_cpu_cache.ic_axi4_araddr >> 6));
+            if (u_cpu_top.ev_ic_pf)     fs_pf++;
+            if (!`CORE.fq_valid)        fs_fe++;
+            if (`CORE.wfi_wait)         fs_wfi++;
+            if (u_cpu_top.ev_ic_pf_hit) fs_pf_hit++;
+            if (u_cpu_top.u_cpu_cache.dc_axi4_arvalid && u_cpu_top.u_cpu_cache.dc_axi4_arready)
+                fs_fill(1, longint'(u_cpu_top.u_cpu_cache.dc_axi4_araddr >> 6));
+            if (!`CORE.fq_valid && (u_cpu_top.u_cpu_cache.ic_outst != 0)) begin
+                fs_ife++;
+                if (in_user) fs_ife_u++;
+            end
+            if (`CORE.stall_ma && u_cpu_top.ev_dc_miss) begin
+                fs_dw++;
+                if (in_user) fs_dw_u++;
+            end
+            if (in_user) fs_cyc_u++;
+        end
+    end
+    task automatic fs_report;
+        string cn [2] = '{"I$", "D$"};
+        $display("");
+        $display(" line fills (+fillstat), %0d cycles, %0d of them in user mode", cycle_count, fs_cyc_u);
+        for (int c = 0; c < 2; c++)
+            $display("   %s: %0d fills; the line after one of the last %0d: %0d (%0.1f%%), before one: %0d; gap <8 %0d <16 %0d <32 %0d <64 %0d <256 %0d more %0d",
+                     cn[c], fs_fills[c], FS_RECENT, fs_next[c],
+                     (fs_fills[c] > 0) ? 100.0 * real'(fs_next[c]) / real'(fs_fills[c]) : 0.0, fs_prev[c],
+                     fs_gap[c][0], fs_gap[c][1], fs_gap[c][2], fs_gap[c][3], fs_gap[c][4], fs_gap[c][5]);
+        $display("   %0d cycles waiting in WFI; outside them %0d cycles for %0d instructions, CPI %0.3f; front end empty %0d (%0.1f%% of them)",
+                 fs_wfi, longint'(cycle_count) - fs_wfi, n_retired,
+                 real'(longint'(cycle_count) - fs_wfi) / real'(n_retired),
+                 fs_fe, 100.0 * real'(fs_fe) / real'(longint'(cycle_count) - fs_wfi));
+        $display("   policy A (every miss): %0d prefetches, %0d used (%0.1f%%); policy B (sequential misses): %0d, %0d used (%0.1f%%)",
+                 pa_iss, pa_use, (pa_iss > 0) ? 100.0 * real'(pa_use) / real'(pa_iss) : 0.0,
+                 pb_iss, pb_use, (pb_iss > 0) ? 100.0 * real'(pb_use) / real'(pb_iss) : 0.0);
+        $display("   I$ prefetches %0d, misses served from the prefetch buffer %0d (%0.1f%% of the prefetches)",
+                 fs_pf, fs_pf_hit, (fs_pf > 0) ? 100.0 * real'(fs_pf_hit) / real'(fs_pf) : 0.0);
+        $display("   front end empty while an I$ fill is outstanding: %0d (%0.1f%%), in user mode %0d",
+                 fs_ife, 100.0 * real'(fs_ife) / real'(cycle_count), fs_ife_u);
+        $display("   MA waits while the D$ handles a miss: %0d (%0.1f%%), in user mode %0d",
+                 fs_dw, 100.0 * real'(fs_dw) / real'(cycle_count), fs_dw_u);
+    endtask
+
     initial begin
         rst_n       = 1'b0;
         rst_dbg_n   = 1'b0;
@@ -473,6 +585,7 @@ module tb_BIOS
                  u_cpu_top.u_mmio.u_plic.gw_ready[1], u_cpu_top.u_mmio.u_plic.enable[0][1],
                  u_cpu_top.u_mmio.u_plic.threshold[0], u_cpu_top.u_mmio.u_plic.irq);
         $display(" mie=%h mip=%h mstatus.MIE=%b", `CORE.u_csr.mie_val, `CORE.u_csr.mip_val, `CORE.u_csr.mstatus_mie);
+        if (fillstat) fs_report();
         $display("==========================================================");
         $finish;
     end

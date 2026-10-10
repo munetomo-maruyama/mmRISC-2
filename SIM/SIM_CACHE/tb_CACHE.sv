@@ -40,6 +40,7 @@ module tb_CACHE;
     parameter int NUM_MSHR      = 2;
     parameter int NUM_WB        = 2;
     parameter int REPLACE_RANDOM = 0;
+    parameter int IC_PREFETCH    = 1;
 
     // cacheable / uncached windows (enlarged by the parameter sweep so that
     // the test addresses of big cache geometries still fit)
@@ -224,7 +225,8 @@ module tb_CACHE;
             .DC_BLOCK_BYTES (DC_BLOCK),
             .NUM_MSHR       (NUM_MSHR),
             .NUM_WB         (NUM_WB),
-            .REPLACE_RANDOM (REPLACE_RANDOM)
+            .REPLACE_RANDOM (REPLACE_RANDOM),
+            .IC_PREFETCH    (IC_PREFETCH)
         )
     u_cache
         (
@@ -327,7 +329,9 @@ module tb_CACHE;
             .ev_dc_miss     (),
             .ev_dc_vic_copy (),
             .ev_fills_1     (),
-            .ev_fills_2     ()
+            .ev_fills_2     (),
+            .ev_ic_pf       (),
+            .ev_ic_pf_hit   ()
         );
 
     //=================================================================
@@ -618,6 +622,12 @@ module tb_CACHE;
 
     int n_d_resp = 0;
     int n_i_resp = 0;
+    // I$ prefetches issued, and misses served from the prefetch buffer
+    int n_ic_pf = 0, n_ic_pf_hit = 0;
+    always @(posedge clk) begin
+        if (rst_n && u_cache.ev_ic_pf)     n_ic_pf++;
+        if (rst_n && u_cache.ev_ic_pf_hit) n_ic_pf_hit++;
+    end
 
     //=================================================================
     // Request FIFOs and drivers

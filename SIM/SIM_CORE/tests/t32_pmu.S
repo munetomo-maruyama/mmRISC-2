@@ -115,11 +115,11 @@ _start:
     csrw MHPMCOUNTER31, x11
     csrr x10, MHPMCOUNTER31
     TEST_EQ(4, x10, 0)
-    li   x11, MINH | SINH | 24            // the last event (a dirty victim copied out)
+    li   x11, MINH | SINH | 26            // the last event (I$ misses served by the prefetch)
     csrw MHPMEVENT4, x11
     csrr x10, MHPMEVENT4
     TEST_EQ_REG(5, x10, x11)
-    li   x11, 25                          // no such event
+    li   x11, 27                          // no such event
     csrw MHPMEVENT4, x11
     csrr x10, MHPMEVENT4
     TEST_EQ(6, x10, 0)

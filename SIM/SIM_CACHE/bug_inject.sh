@@ -65,6 +65,13 @@ MUTATIONS=(
 "45#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                            !(s1_is_store \&\& ms_ld_same_word);/                            1'b1;/#11#17#D\$ (M1): a store joins behind a load of its word, which then sees it"
 "46#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/? size_strb(s1_addr\[2:0\], s1_size) : 8'h00;/? size_strb(s1_addr[2:0], s1_size) : ms_st_strb[ms_tail][w];/#11#17#D\$ (M1): a new fill keeps the stores of the last one of its MSHR"
 "47#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/assign s1_st_ack = ({s1_line, {OFF_BITS{1'b0}}} < PADDR_WIDTH'(STORE_ACK_LIMIT));/assign s1_st_ack = 1'b1;/#8#8#D\$ (M1): a store miss that can get a bus error is answered at once, the error is lost"
+"48#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/                else         pf_valid <= 1'b0;/                else         pf_valid <= pf_valid;/#20#20#I\$ (M3): fence.i leaves a complete prefetch buffer valid"
+"49#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/if (pf_busy) pf_drop  <= 1'b1;/if (pf_busy) pf_drop  <= 1'b0;/#20#20#I\$ (M3): fence.i does not drop a prefetch on its way"
+"50#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/assign pf_match = (PREFETCH != 0) \&\& pf_valid \&\& !pf_drop \&\&/assign pf_match = (PREFETCH != 0) \&\& pf_valid \&\&/#20#20#I\$ (M3): a dropped prefetch still serves a miss"
+"51#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/((pf_next % PAGE_LINES) != 0)/1'b1/#20#20#I\$ (M3): prefetches into the next 4 KB page"
+"52#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/i_resp_data  <= pf_buf\[fill_beat\]/i_resp_data  <= pf_buf[0]/#10#20#I\$ (M3): a miss served from the buffer gets its first word"
+"53#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/({1'b0, fill_beat} < pf_cnt)/({1'b0, fill_beat} <= pf_cnt)/#10#20#I\$ (M3): the copy from the buffer runs ahead of the beats"
+"54#CPU/CPU_CACHE/ICACHE/ICACHE.sv#s/assign m_axi4_rready  = (state == S_FILL) || pf_busy;/assign m_axi4_rready  = (state == S_FILL);/#10#20#I\$ (M3): the beats of a prefetch are not taken"
 )
 
 # Not listed, equivalent to the design:
