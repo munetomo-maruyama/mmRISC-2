@@ -210,6 +210,19 @@ automatically.
 
 1. **Hit**: update only the bytes concerned in the data array and set dirty.
 2. **Miss**: write-allocate. The store data is merged into the beats of the fill as they are written.
+   - **Answered when accepted** (since 2026-10-10, M1 of `LitexSystem/docs/ROADMAP.md`): a store miss
+     below `STORE_ACK_LIMIT` (4 GiB) is answered at once, like a hit; the core does not wait for the fill.
+     Memory there (LiteDRAM through the L2) never answers a read with an error, so there is nothing to
+     report. At and above it (the bridges give DECERR to bits 39:32 set) the answer waits for the fill as
+     before, so that a bus error stays a precise access fault.
+   - Each MSHR keeps **a word and its byte enables for every word of the line**; later stores to a line
+     being filled join it there (instead of waiting for the fill, as when an MSHR held one store and
+     locked the line) as long as the beat of their word has not been written. Loads that join the fill get
+     their word with those bytes merged in. A store does not join behind a load of its word that is still
+     waiting (the load must not see it); it waits for the fill and runs again as a hit. The lock is now
+     only for AMO / LR / SC, which wait for the line and run again.
+   - A FENCE (and `fence.i`, which flushes) waits until every MSHR is empty, so it still orders the stores
+     answered early.
 3. **Eviction**: if the victim is dirty, move the whole block to the write-back buffer and write it out
    on AXI4.
    - `AWBURST=INCR`, `AWSIZE=3`, `AWLEN = BLOCK_BYTES/8 - 1`, `WSTRB` all bytes enabled.
@@ -891,7 +904,7 @@ AXI4 slave model disabled and the default configuration (64 sets × 4 ways × 64
 | Consecutive D$ load hits | 32 loads | **1.00** |
 | Consecutive D$ store hits | 32 stores | **1.00** |
 | Consecutive D$ load misses (fill only) | 8 lines | **12.0** |
-| Consecutive D$ store misses (fill + write-allocate) | 8 lines | **12.0** |
+| Consecutive D$ store misses (fill + write-allocate) | 8 lines | **10.6** (12.0 before 2026-10-10; the fills, one at a time, are the limit) |
 | Consecutive D$ misses (dirty eviction = write-back + fill) | 8 lines | **12.7** (22.0 before 2026-10-10) |
 
 - Hits are **one access every cycle** for both the I$ and the D$, loads and stores alike; array reads and

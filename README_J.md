@@ -164,8 +164,8 @@ LitexRocket/        Rocket 構成の LiteX 一式(ワークスペース、OpenSB
 | `cd SIM/SIM_SYS && make` | コア + 本物の L1 / L2 キャッシュ + AXI + DMA ポート(自作試験 25 本、DMA・PMU などのプログラム 4 本)。`PARAMS=-GL2_SIZE=0` で L2 なし | 全 PASS(L2 あり / なし) |
 | `cd SIM/SIM_SYS && make riscv-tests` | riscv-tests を本物のキャッシュ越しに | 133 PASS、既知の不合格 4 |
 | `cd SIM/SIM_SYS && ./bug_inject.sh` | バグ注入 23 種(浮動小数点の核のサイクルの上限 `bench/fploop` と M0 のメモリの待ちのイベントを含む) | 全て検出 |
-| `cd SIM/SIM_CACHE && make` | L1 キャッシュ全試験(CPU と DMA ポートを同じラインで同時にランダムに、取り消しを含む) | PASS 64,547 チェック |
-| `cd SIM/SIM_CACHE && ./bug_inject.sh` | バグ注入 42 種 | 全て検出 |
+| `cd SIM/SIM_CACHE && make` | L1 キャッシュ全試験(CPU と DMA ポートを同じラインで同時にランダムに、取り消しを含む) | PASS 64,884 チェック |
+| `cd SIM/SIM_CACHE && ./bug_inject.sh` | バグ注入 46 種 | 全て検出 |
 | `cd SIM/SIM_L2 && make` / `./sweep.sh` / `./bug_inject.sh` | L2 キャッシュ(256 KB・4 ウェイ)/ 容量・ウェイ・置き換えの 11 構成 / バグ注入 31 種 | PASS 約 150 万チェック / 全 PASS / 全て検出 |
 | `cd SIM/SIM_MMU && make` / `./bug_inject.sh` | PMP を参照モデルと比較 / バグ注入 21 種 | PASS 20 万チェック / 全て検出 |
 | `cd SIM/SIM_FPU && make` / `./bug_inject.sh` | FPU を Berkeley SoftFloat と比較 / バグ注入 34 種 | PASS 約 58 万チェック / 全て検出 |

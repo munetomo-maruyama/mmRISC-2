@@ -63,6 +63,8 @@
     // misses the line a few times in a hundred).
     task automatic evict(input string name, input int set, input int n);
         int span, m;
+        check({name, " : the line is in the cache to begin with"},
+              dc_line_present(a_mem(set_word(set, n))));
         span = 0;
         while (set_word(set, n + span + 1) < MEM_WORDS) span++;
         m = 0;
@@ -755,6 +757,9 @@
             d_store("(a) make the line dirty, word 0", lx,       2'd3, 64'hA160_0000_0000_0000);
             d_store("(a) make the line dirty, word 1", lx + 8,   2'd3, 64'hA160_0000_0000_0001);
             d_drain();
+            // a store miss is answered before its fill ends: wait for the line
+            d_fence("(a) the line is in the cache");
+            d_drain();
             u_mem.aw_hold = 1'b1;
             evict("(a)", sx, 0);
             check("(a) the write-back is held", u_mem.mem[ref_index(lx)] !== ref_mem[ref_index(lx)]);
@@ -774,6 +779,8 @@
                 d_store("(b) dirty line y",        ly,     2'd3, 64'hB160_0000_0000_0000);
                 d_store("(b) dirty line x word 0", lx,     2'd3, 64'hB160_0000_0000_0001);
                 d_store("(b) dirty line x word 1", lx + 8, 2'd3, 64'hB160_0000_0000_0002);
+                d_drain();
+                d_fence("(b) the lines are in the cache");
                 d_drain();
                 u_mem.aw_hold = 1'b1;
                 evict("(b) y, taken by the write engine", sy, 0);
@@ -810,6 +817,8 @@
             d_flush("(d) flush");
             d_drain();
             d_store("(d) make the line dirty", lx, 2'd3, 64'hD160_0000_0000_0000);
+            d_drain();
+            d_fence("(d) the line is in the cache");
             d_drain();
             u_mem.aw_hold = 1'b1;
             evict("(d)", sx, 0);

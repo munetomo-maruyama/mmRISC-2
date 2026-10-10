@@ -846,3 +846,32 @@ longer measures a wait of its own.
   fill, not a wait of its own.
 - Stores are now the largest item of MA's waits that the core can do something about (1.4 to 12.9 % of the
   cycles): M1.
+
+## 20. Not waiting for store misses (M1, 2026-10-10, simulation)
+
+M1 of `ROADMAP.md`, done in the D$ only (`CPU_CACHE_SPEC.md` 4.3): a store miss below 4 GiB is answered
+when the D$ accepts it, and later stores to the line being filled join it in a line-wide buffer of the
+MSHR instead of waiting for the fill. The core is unchanged: it already waits in MA only until the answer.
+
+| | M5 | M1 | Difference |
+|---|---|---|---|
+| SIM_CACHE, 8 store misses in a row (cycles per miss) | 12.0 | **10.6** | the fills, one at a time, are the limit |
+| `fploop` (cycles) | 594,887 | **584,470** | **−1.75 %** |
+| `fploop`, MA waits for stores: on a miss / without | 29,783 / 5,624 | 17,787 / 6,659 | −31 % in all |
+| `t19_ldbench` (cycles) | 56,954 | **56,532** | −0.74 % |
+| `t19_ldbench`, MA waits for stores: on a miss / without | 1,172 / 138 | 605 / 270 | −33 % |
+| `ldloop` (user mode part) | 87,532 | 87,611 | +0.09 % (no store misses to speak of) |
+| CoreMark | 3,908,920 | 3,908,847 | 0 |
+
+**What is left of the store waits** (`fploop`, cycles MA waits for a store, by what the D$ is doing):
+
+| Reason | Cycles | Note |
+|---|---|---|
+| The store's word has already been written by the fill | 6,782 | It waits for the end of the fill and runs again as a hit. Writing it into the array instead was tried: the beats come back to back, so the write port is never free before the fill ends |
+| Not in the D$ yet (stage 1 busy, the victim copy holding the read port) | 6,486 | |
+| Going this cycle / answered but behind older answers | 4,216 / 2,476 | The 1 to 2 cycles until the answer. Only the core could save these, by not waiting for the answer of an accepted store (the answers of the LSU would no longer all belong to MA; M1b, not done) |
+| Others (the first cycle of a miss, the write port busy for a hit) | 4,355 | |
+
+The gain is smaller than the store waits measured in M0 suggested, because a store that misses is mostly
+followed by stores to the same line, which wait for the fill to pass their word anyway. On the board the
+store waits were 1.4 to 12.9 % of the cycles; about a third of them going away would be 0.5 to 4 %.

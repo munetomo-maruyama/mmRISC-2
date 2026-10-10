@@ -26,12 +26,11 @@ MUTATIONS=(
 "5#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/ms_wb_needed\[ms_tail\]  <= victim_dirty;/ms_wb_needed[ms_tail]  <= 1'b0;/#3#3#D\$: dirty victim is not written back"
 "6#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_wr_strb   = size_strb(s1_addr\[2:0\], s1_size);/s1_wr_strb   = 8'hFF;/#2#2#D\$: store ignores the byte strobe"
 "7#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/assign sc_ok         = res_valid \&\&/assign sc_ok         = 1'b1 \&\&/#5#5#D\$: SC succeeds without a valid reservation"
-"8#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/assign ms_attach_ok = !((ms_match_id == ms_head)/assign ms_attach_ok = 1'b1 \&\& !((1'b0)/#9#11#D\$: joins a fill after its beat has passed"
-"9#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/hit_word = merge_bytes(hit_word, fwd_data, fwd_strb);/hit_word = merge_bytes(hit_word, fwd_data, 8'h00);/#11#11#D\$: no forwarding of a write issued with the read"
+"8#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/assign ms_attach_ok = !ms_in_fill ||/assign ms_attach_ok = 1'b1 ||/#9#17#D\$: joins a fill after its beat has passed"
+"9#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/hit_word = merge_bytes(hit_word, fwd_data, fwd_strb);/hit_word = merge_bytes(hit_word, fwd_data, 8'h00);/#1#17#D\$: no forwarding of a write issued with the read"
 "10#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/4'd9:    return (so < ss) ? o : s;/4'd9:    return (o < s) ? o : s;/#4#4#D\$: AMOMIN compares unsigned"
 "11#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/4'd5:    return o + s;/4'd5:    return o - s;/#4#4#D\$: AMOADD subtracts"
 "12#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/if (res_valid \&\& (res_line == s1_line)) res_valid <= 1'b0;/;/g#5#5#D\$: a store does not clear the reservation"
-"13#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/s1_can_go = !ms_locked\[ms_match_id\] \&\& ms_attach_ok \&\& !s1_first;/s1_can_go = ms_attach_ok \&\& !s1_first;/#9#12#D\$: ignores the MSHR lock of a pending store"
 "14#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/m_axil_wstrb   <= size_strb(s1_addr\[2:0\], s1_size);/m_axil_wstrb   <= 8'hFF;/#7#7#D\$: uncached store ignores the byte strobe"
 "15#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/rob_err\[i\]  <= f_err | (m_axi4_rresp != 2'b00);/rob_err[i]  <= 1'b0;/#8#8#D\$: bus error of a store fill is not reported"
 "16#CPU/CPU_CACHE/CACHE_DATA_ARRAY/CACHE_DATA_ARRAY.sv#s/(int'(wr_way) == gw)/(gw == 0)/#1#3#data array: writes always go to way 0"
@@ -61,6 +60,11 @@ MUTATIONS=(
 "40#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/^                    if (s1_kill) begin/                    if (1'b0) begin/#19#19#D\$: an LR or SC taken back changes the reservation"
 "41#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                            c_state   <= C_READ;/                            c_state   <= C_IDLE;/#3#3#D\$ (M5): the dirty victim of a fill is never copied out"
 "42#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                            f_wb_way  <= ms_way\[ms_head\];/                            f_wb_way  <= '0;/#3#3#D\$ (M5): the victim is copied from way 0"
+"43#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                            ms_st_strb\[ms_match_id\]\[addr_woff(s1_addr)\] | size_strb(s1_addr\[2:0\], s1_size);/                            size_strb(s1_addr[2:0], s1_size);/#11#17#D\$ (M1): a store joining a fill forgets the bytes stored before it in the word"
+"44#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/rob_data\[i\] <= extract(merge_bytes(m_axi4_rdata, ms_st_data\[ms_head\]\[f_beat\],/rob_data[i] <= extract(merge_bytes(m_axi4_rdata, 64'd0,/#11#17#D\$ (M1): a load joining a fill does not see the stores before it"
+"45#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/                            !(s1_is_store \&\& ms_ld_same_word);/                            1'b1;/#11#17#D\$ (M1): a store joins behind a load of its word, which then sees it"
+"46#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/? size_strb(s1_addr\[2:0\], s1_size) : 8'h00;/? size_strb(s1_addr[2:0], s1_size) : ms_st_strb[ms_tail][w];/#11#17#D\$ (M1): a new fill keeps the stores of the last one of its MSHR"
+"47#CPU/CPU_CACHE/DCACHE/DCACHE.sv#s/assign s1_st_ack = ({s1_line, {OFF_BITS{1'b0}}} < PADDR_WIDTH'(STORE_ACK_LIMIT));/assign s1_st_ack = 1'b1;/#8#8#D\$ (M1): a store miss that can get a bus error is answered at once, the error is lost"
 )
 
 # Not listed, equivalent to the design:
@@ -74,6 +78,13 @@ MUTATIONS=(
 #   cycle, and the memory model (like the L2) gives the first beat two
 #   cycles after the address at the earliest, so the copy is always ahead
 #   and the hold never acts. It stays for a slave that answers in one.
+#   ignoring the MSHR lock (M13 until M1). Since M1 only an AMO / LR / SC
+#   that waits for its line locks it, and that request stays in stage 1
+#   until the fill ends, so nothing else can reach the MSHR meanwhile. The
+#   lock stays as a safeguard.
+#   answering a store miss at once (M1, s1_st_ack forced to 0): the store
+#   then waits for its fill as before, which costs cycles but changes no
+#   result.
 
 run_one() {
     local line="$1"

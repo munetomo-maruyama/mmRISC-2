@@ -12,9 +12,12 @@
 //     do not block the pipeline:
 //       * a load miss allocates an MSHR (or attaches to the one that already
 //         covers the line) and takes its data from the fill beats;
-//       * a store miss allocates an MSHR and attaches the store, which is
-//         merged into the line while it is filled. The line is then locked
-//         and further requests to it wait for the fill;
+//       * a store miss allocates an MSHR (or joins the one of its line) and
+//         its bytes are kept there, one word with byte enables for every
+//         word of the line, and merged into the beats of the fill; below
+//         STORE_ACK_LIMIT it is answered at once (ROADMAP.md M1). Loads that
+//         join the fill get their word with those bytes merged in; a store
+//         does not join behind a load of its word that is still waiting;
 //       * AMO / LR / SC that miss wait for the line and are executed again.
 //   - Writeback buffers (NUM_WB entries) hold evicted dirty lines.
 //   - Responses come back in request order through a small reorder buffer.
@@ -48,6 +51,13 @@ module DCACHE
         parameter int          PADDR_WIDTH    = 40,
         parameter int          XLEN           = 64,
         parameter logic [39:0] MEM_BASE       = 40'h00_8000_0000,
+        // A store that misses below this address is answered when it is
+        // accepted, without waiting for its fill (ROADMAP.md M1): memory
+        // there never answers a read with an error, so there is nothing to
+        // report. At and above it (the bridges answer DECERR to addresses
+        // with bits 39:32 set) the answer waits for the fill as before, so
+        // that a bus error is still a precise access fault.
+        parameter logic [39:0] STORE_ACK_LIMIT = 40'h01_0000_0000,
         parameter int          SETS           = 64,
         parameter int          WAYS           = 4,
         parameter int          BLOCK_BYTES    = 64,
@@ -373,9 +383,10 @@ module DCACHE
     logic [NUM_MSHR-1:0]   ms_valid, ms_locked, ms_wb_needed, ms_st_pending;
     logic [LINE_BITS-1:0]  ms_line   [0:NUM_MSHR-1];
     logic [WAY_BITS-1:0]   ms_way    [0:NUM_MSHR-1];
-    logic [WOFF_BITS-1:0]  ms_st_woff[0:NUM_MSHR-1];
-    logic [7:0]            ms_st_strb[0:NUM_MSHR-1];
-    logic [63:0]           ms_st_data[0:NUM_MSHR-1];
+    // stores waiting for the fill of their line, merged into its beats:
+    // one word and its byte enables for every word of the line
+    logic [7:0]            ms_st_strb[0:NUM_MSHR-1][0:WORDS_PER_BLOCK-1];
+    logic [63:0]           ms_st_data[0:NUM_MSHR-1][0:WORDS_PER_BLOCK-1];
     logic [TAG_BITS-1:0]   ms_wb_tag [0:NUM_MSHR-1];
     logic [MSHR_BITS-1:0]  ms_head, ms_tail;
     logic [MSHR_BITS:0]    ms_count;
@@ -617,6 +628,16 @@ module DCACHE
             end
     end
 
+    // a load waits on the fill of this MSHR for the word of stage 1
+    logic ms_ld_same_word;
+    always @(*) begin
+        ms_ld_same_word = 1'b0;
+        for (int r = 0; r < ROB_DEPTH; r++)
+            if (rob_valid[r] && rob_wait[r] && !rob_st[r] && (rob_mshr[r] == ms_match_id) &&
+                (rob_woff[r] == addr_woff(s1_addr)))
+                ms_ld_same_word = 1'b1;
+    end
+
     // ways of this set that an in-flight MSHR is using: the tag still shows
     // the victim line while its data is being copied out and overwritten, so
     // an access that "hits" such a way has to wait for the fill
@@ -669,6 +690,10 @@ module DCACHE
     assign s1_kill     = s1_valid & ~s1_ptag_v & d_req_cancel;
     assign s1_paddr    = {s1_ptag, s1_addr[PADDR_WIDTH-TAG_BITS-1:0]};
     assign s1_line     = {s1_ptag, addr_index(s1_addr)};
+
+    // a store miss answered at once (STORE_ACK_LIMIT)
+    logic s1_st_ack;
+    assign s1_st_ack = ({s1_line, {OFF_BITS{1'b0}}} < PADDR_WIDTH'(STORE_ACK_LIMIT));
     assign s1_cacheable = (s1_paddr >= PADDR_WIDTH'(MEM_BASE));
 
     //=================================================================
@@ -697,9 +722,14 @@ module DCACHE
     assign fill_wr_en    = fill_beat_now && (m_axi4_rresp == 2'b00);
 
     // A request can only join a fill while the beat carrying its word has not
-    // been written yet; otherwise it waits for the fill and is executed again.
-    assign ms_attach_ok = !((ms_match_id == ms_head) && (f_state == F_DATA) &&
-                            !(addr_woff(s1_addr) > f_beat));
+    // been written yet (its beat is ahead, or due but not in this cycle);
+    // otherwise it waits for the fill and is executed again. (Writing a late
+    // store straight into the array was tried: the beats come back to back,
+    // so the write port is never free before the fill ends anyway.)
+    logic ms_in_fill;
+    assign ms_in_fill   = (ms_match_id == ms_head) && (f_state == F_DATA);
+    assign ms_attach_ok = !ms_in_fill || (addr_woff(s1_addr) > f_beat) ||
+                          ((addr_woff(s1_addr) == f_beat) && !fill_beat_now);
 
     logic s1_can_retire, s1_can_go, s1_busy;
     logic s1_amo_rd;            // the old value of the atomic is in amo_old_r
@@ -747,7 +777,10 @@ module DCACHE
             end else if (s1_needs_line) begin
                 s1_can_go = 1'b0;                     // wait for the fill, then retry
             end else if (ms_match) begin
-                s1_can_go = !ms_locked[ms_match_id] && ms_attach_ok && !s1_first;
+                // a store does not join behind a load of the same word that
+                // is waiting for the fill: that load must not see it
+                s1_can_go = !ms_locked[ms_match_id] && ms_attach_ok && !s1_first &&
+                            !(s1_is_store && ms_ld_same_word);
             end else begin
                 s1_can_go = !ms_full && victim_avail && !(victim_dirty && wb_full) &&
                             !fl_busy && !s1_first;
@@ -839,8 +872,8 @@ module DCACHE
             dat_wr_addr = {ms_line[ms_head][IDX_BITS-1:0], f_beat};
             dat_wr_data = m_axi4_rdata;
             dat_wr_strb = 8'hFF;
-            if (ms_st_pending[ms_head] && (ms_st_woff[ms_head] == f_beat))
-                dat_wr_data = merge_bytes(m_axi4_rdata, ms_st_data[ms_head], ms_st_strb[ms_head]);
+            dat_wr_data = merge_bytes(m_axi4_rdata, ms_st_data[ms_head][f_beat],
+                                      ms_st_strb[ms_head][f_beat]);
         end else begin
             dat_wr_en   = s1_store_hit | s1_thr_hit;
             dat_wr_way  = s1_wr_way;
@@ -937,6 +970,8 @@ module DCACHE
             ms_locked    <= '0;
             ms_wb_needed <= '0;
             ms_st_pending<= '0;
+            for (i = 0; i < NUM_MSHR; i++)
+                for (int w = 0; w < WORDS_PER_BLOCK; w++) ms_st_strb[i][w] <= '0;
             ms_head      <= '0;
             ms_tail      <= '0;
             ms_count     <= '0;
@@ -1202,16 +1237,24 @@ module DCACHE
                         rob_mshr[s1_rob] <= ms_match_id;
                         rob_woff[s1_rob] <= addr_woff(s1_addr);
                     end else begin                      // store
+                        // merged into the bytes stored before it in the line
                         ms_st_pending[ms_match_id] <= 1'b1;
-                        ms_locked[ms_match_id]     <= 1'b1;
-                        ms_st_woff[ms_match_id]    <= addr_woff(s1_addr);
-                        ms_st_strb[ms_match_id]    <= size_strb(s1_addr[2:0], s1_size);
-                        ms_st_data[ms_match_id]    <= align_wdata(s1_addr[2:0], s1_wdata);
-                        // the response waits for the fill so that a bus error
-                        // of the line can be reported to the CPU
-                        rob_wait[s1_rob] <= 1'b1;
-                        rob_st[s1_rob]   <= 1'b1;
-                        rob_mshr[s1_rob] <= ms_match_id;
+                        ms_st_strb[ms_match_id][addr_woff(s1_addr)] <=
+                            ms_st_strb[ms_match_id][addr_woff(s1_addr)] | size_strb(s1_addr[2:0], s1_size);
+                        ms_st_data[ms_match_id][addr_woff(s1_addr)] <=
+                            merge_bytes(ms_st_data[ms_match_id][addr_woff(s1_addr)],
+                                        align_wdata(s1_addr[2:0], s1_wdata), size_strb(s1_addr[2:0], s1_size));
+                        // answered now (its word is merged as the fill
+                        // passes, and the line stays locked until then), or,
+                        // where memory can answer with an error, after the
+                        // fill so that the error can be reported
+                        if (s1_st_ack) begin
+                            rob_done[s1_rob] <= 1'b1;
+                        end else begin
+                            rob_wait[s1_rob] <= 1'b1;
+                            rob_st[s1_rob]   <= 1'b1;
+                            rob_mshr[s1_rob] <= ms_match_id;
+                        end
                         if (res_valid && (res_line == s1_line)) res_valid <= 1'b0;
                     end
                 end
@@ -1222,21 +1265,26 @@ module DCACHE
                     ms_way[ms_tail]        <= victim_way;
                     ms_wb_needed[ms_tail]  <= victim_dirty;
                     ms_wb_tag[ms_tail]     <= victim_tag;
-                    ms_locked[ms_tail]     <= s1_is_store;
+                    ms_locked[ms_tail]     <= 1'b0;
                     ms_st_pending[ms_tail] <= s1_is_store;
-                    ms_st_woff[ms_tail]    <= addr_woff(s1_addr);
-                    ms_st_strb[ms_tail]    <= size_strb(s1_addr[2:0], s1_size);
-                    ms_st_data[ms_tail]    <= align_wdata(s1_addr[2:0], s1_wdata);
+                    for (int w = 0; w < WORDS_PER_BLOCK; w++)
+                        ms_st_strb[ms_tail][w] <= (s1_is_store && (WOFF_BITS'(w) == addr_woff(s1_addr)))
+                                                  ? size_strb(s1_addr[2:0], s1_size) : 8'h00;
+                    ms_st_data[ms_tail][addr_woff(s1_addr)] <= align_wdata(s1_addr[2:0], s1_wdata);
                     ms_tail                <= ms_next(ms_tail);
                     ms_push                = 1'b1;
                     if (s1_is_load) begin
                         rob_wait[s1_rob] <= 1'b1;
                         rob_mshr[s1_rob] <= ms_tail;
                         rob_woff[s1_rob] <= addr_woff(s1_addr);
-                    end else begin
-                        rob_wait[s1_rob] <= 1'b1;
-                        rob_st[s1_rob]   <= 1'b1;
-                        rob_mshr[s1_rob] <= ms_tail;
+                    end else begin                      // store (as above)
+                        if (s1_st_ack) begin
+                            rob_done[s1_rob] <= 1'b1;
+                        end else begin
+                            rob_wait[s1_rob] <= 1'b1;
+                            rob_st[s1_rob]   <= 1'b1;
+                            rob_mshr[s1_rob] <= ms_tail;
+                        end
                         if (res_valid && (res_line == s1_line)) res_valid <= 1'b0;
                     end
                     if (victim_valid && res_valid &&
@@ -1266,6 +1314,7 @@ module DCACHE
                     ms_wb_tag[ms_tail]     <= victim_tag;
                     ms_locked[ms_tail]     <= 1'b1;
                     ms_st_pending[ms_tail] <= 1'b0;
+                    for (int w = 0; w < WORDS_PER_BLOCK; w++) ms_st_strb[ms_tail][w] <= 8'h00;
                     ms_tail                <= ms_next(ms_tail);
                     ms_push                = 1'b1;
                     s1_wait_fill           <= 1'b1;
@@ -1323,7 +1372,10 @@ module DCACHE
                                         rob_err[i]  <= f_err | (m_axi4_rresp != 2'b00);
                                     end
                                 end else if (rob_woff[i] == f_beat) begin
-                                    rob_data[i] <= extract(m_axi4_rdata, rob_lsb[i], rob_size[i]);
+                                    // with the stores already merged into the word
+                                    rob_data[i] <= extract(merge_bytes(m_axi4_rdata, ms_st_data[ms_head][f_beat],
+                                                                       ms_st_strb[ms_head][f_beat]),
+                                                           rob_lsb[i], rob_size[i]);
                                     rob_done[i] <= 1'b1;
                                     rob_wait[i] <= 1'b0;
                                     rob_err[i]  <= (m_axi4_rresp != 2'b00);
