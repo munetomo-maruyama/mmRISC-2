@@ -2,6 +2,11 @@
 
 [English](README.md)
 
+> **Claude Code による完全自動設計。** このリポジトリの仕様書、RTL、テストベンチと検証(参照モデル、バグ注入)、
+> スクリプト、日英の文書は、すべて Anthropic の AI コーディングエージェント [Claude Code](https://claude.com/claude-code)
+> が書いた(モデルは Claude Sonnet 5、Opus 5、Opus 5.5。Rev.01 まで 2026-09-13〜10-12)。作者は目標を決め、
+> Claude Code が出した案から選び、Vivado と実機を動かしてその結果を渡した。
+
 64bit RISC-V CPU を SystemVerilog で自作し、Digilent Arty A7-100T 上で Linux を動かすプロジェクト。周辺回路は LiteX から持ってくる。CPU が持つもの:
 
 - RV64GC(IMAFDC)+ Zba / Zbb / Zbs / Zbc / Zicond / Zicboz

@@ -2,6 +2,12 @@
 
 [日本語](README_J.md)
 
+> **Designed entirely by Claude Code.** Everything in this repository (the specifications, the RTL, the
+> testbenches and the verification with reference models and bug injection, the scripts, and the documents in
+> two languages) was written by [Claude Code](https://claude.com/claude-code), Anthropic's AI coding agent
+> (Claude Sonnet 5, Opus 5 and Opus 5.5; 2026-09-13 to 10-12 up to Rev.01). The author set the goals, chose
+> among the options it proposed, and ran Vivado and the board, passing the results back to it.
+
 A home-made 64-bit RISC-V CPU written in SystemVerilog that runs Linux on a Digilent Arty A7-100T. The
 peripherals come from LiteX. The CPU has:
 
