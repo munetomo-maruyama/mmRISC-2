@@ -278,4 +278,5 @@ LiteX、OpenSBI、Linux のソースそのものはリポジトリに含めず�
 | RISC-V Profiles | 1.0(2023-04-02) | [riscv/riscv-profiles](https://github.com/riscv/riscv-profiles) |
 | RVA23 Profiles / RVB23 Profiles | 1.0(2024-10-17) | [riscv/riscv-profiles](https://github.com/riscv/riscv-profiles) |
 | Arty A7 Reference Manual、Arty A7 回路図 | | [Digilent Reference](https://digilent.com/reference/programmable-logic/arty-a7/start) |
+| LiteX(SoC ビルダ)とそのコア(LiteDRAM、LiteEth、LiteSDCard ほか) | `LitexSystem/scripts/litex_repos.py` で固定したコミット(litex 6d8a38c) | [enjoy-digital/litex](https://github.com/enjoy-digital/litex)、[LiteX Wiki](https://github.com/enjoy-digital/litex/wiki)、[litex-hub](https://github.com/litex-hub) |
 
