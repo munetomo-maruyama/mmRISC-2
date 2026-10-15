@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="26.4cm" height="14.4cm" viewBox="0 0 1320 720">
+<rect x="0" y="0" width="1320" height="720" fill="#FFFFFF"/>
+<rect x="335.0" y="15.0" width="330" height="120" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="500.0" y="59.3" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">① 仕様を書く</text>
+<text x="500.0" y="85.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">.md の仕様書と</text>
+<text x="500.0" y="108.4" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">設計判断(決定 78 件)</text>
+<rect x="665.0" y="155.0" width="330" height="120" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="830.0" y="199.29999999999998" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">② RTL を書く</text>
+<text x="830.0" y="224.99999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">SystemVerilog</text>
+<text x="830.0" y="248.39999999999998" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">(パラメータ化)</text>
+<rect x="665.0" y="385.0" width="330" height="120" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="830.0" y="429.3" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">③ 自作テスト + 参照モデル</text>
+<text x="830.0" y="455.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">ランダム、背圧、掃引</text>
+<text x="830.0" y="478.40000000000003" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">riscv-tests、Linux 起動</text>
+<rect x="335.0" y="540.0" width="330" height="120" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="500.0" y="584.3000000000001" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">④ バグ注入</text>
+<text x="500.0" y="610.0000000000001" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">RTL をわざと壊し</text>
+<text x="500.0" y="633.4000000000001" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">テストが気づくか</text>
+<rect x="5.0" y="385.0" width="330" height="120" rx="8" fill="#FFF3D6" stroke="#F2A900" stroke-width="3"/>
+<text x="170.0" y="429.3" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#222222">⑤ 実機で確かめる</text>
+<text x="170.0" y="455.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">Vivado 合成・書き込み</text>
+<text x="170.0" y="478.40000000000003" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">WNS、ベンチ、PMU</text>
+<rect x="5.0" y="155.0" width="330" height="120" rx="8" fill="#EAF4EE" stroke="#2E8B57" stroke-width="3"/>
+<text x="170.0" y="199.29999999999998" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">⑥ 記録し、次を決める</text>
+<text x="170.0" y="224.99999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">BENCH / TIMING / ROADMAP</text>
+<text x="170.0" y="248.39999999999998" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">コミット、push</text>
+<line x1="665" y1="95" x2="749.1777420412036" y2="148.16488971023384" stroke="#808080" stroke-width="4"/>
+<polygon points="760,155 744.1640353501862,152.71478149625753 751.1317545213541,141.68255947524162" fill="#808080" stroke="none" stroke-width="0"/>
+<line x1="830" y1="275" x2="830.0" y2="372.2" stroke="#808080" stroke-width="4"/>
+<polygon points="830,385 823.4758327510468,370.39057695500304 836.5241672489532,370.39057695500304" fill="#808080" stroke="none" stroke-width="0"/>
+<line x1="760" y1="505" x2="676.0774564541584" y2="553.5867357370662" stroke="#808080" stroke-width="4"/>
+<polygon points="665,560 674.3745342920482,547.0339633346496 680.9122231456598,558.3263349908879" fill="#808080" stroke="none" stroke-width="0"/>
+<line x1="335" y1="560" x2="251.0774564541584" y2="511.4132642629338" stroke="#808080" stroke-width="4"/>
+<polygon points="240,505 255.91222314565988,506.6736650091122 249.37453429204825,517.9660366653504" fill="#808080" stroke="none" stroke-width="0"/>
+<line x1="170" y1="385" x2="170.0" y2="287.8" stroke="#808080" stroke-width="4"/>
+<polygon points="170,275 176.52416724895312,289.60942304499696 163.47583275104688,289.60942304499696" fill="#808080" stroke="none" stroke-width="0"/>
+<line x1="240" y1="155" x2="324.17774204120354" y2="101.83511028976616" stroke="#808080" stroke-width="4"/>
+<polygon points="335,95 326.13175452135414,108.3174405247584 319.16403535018617,97.28521850374247" fill="#808080" stroke="none" stroke-width="0"/>
+<circle cx="500" cy="335" r="82" fill="#FFFFFF" stroke="#283272" stroke-width="3"/>
+<text x="500" y="330" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#283272">テーマ</text>
+<text x="500" y="362" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="normal" fill="#283272">ごとに回す</text>
+<rect x="1030" y="30" width="40" height="30" rx="6" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="1085" y="54" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="21" text-anchor="start" font-weight="normal" fill="#222222">Claude Code</text>
+<rect x="1030" y="78" width="40" height="30" rx="6" fill="#FFF3D6" stroke="#F2A900" stroke-width="3"/>
+<text x="1085" y="102" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="21" text-anchor="start" font-weight="normal" fill="#222222">私</text>
+<rect x="1030" y="126" width="40" height="30" rx="6" fill="#EAF4EE" stroke="#2E8B57" stroke-width="3"/>
+<text x="1085" y="150" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="21" text-anchor="start" font-weight="normal" fill="#222222">両者</text>
+<text x="1030" y="240.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">回すたびに残るもの</text>
+<text x="1030" y="269.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">・仕様書の決定事項</text>
+<text x="1030" y="298.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">・試験と変異の数</text>
+<text x="1030" y="327.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">・実機の数字</text>
+<text x="1030" y="356.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">  (WNS、CPI)</text>
+<text x="1030" y="385.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">・教訓のメモ</text>
+<text x="1030" y="470.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">私が決めること</text>
+<text x="1030" y="499.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">・次のテーマ</text>
+<text x="1030" y="528.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">・提案のどれを採るか</text>
+<text x="1030" y="557.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">・実機の結果を渡す</text>
+</svg>

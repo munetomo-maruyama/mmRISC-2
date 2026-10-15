@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="13.0cm" height="9.6cm" viewBox="0 0 650 480">
+<rect x="0" y="0" width="650" height="480" fill="#FFFFFF"/>
+<text x="10" y="30" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="bold" fill="#283272">I$ プリフェッチを入れたときの CPI の変化</text>
+<text x="290" y="90" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">シミュレーション</text>
+<text x="290" y="114" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="end" font-weight="normal" fill="#808080">(メモリが即答)</text>
+<rect x="394.5652173913043" y="72" width="45.43478260869566" height="36" rx="3" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<text x="384.5652173913043" y="98" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="bold" fill="#5B6BB5">-1.1 %</text>
+<text x="290" y="166" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="bold" fill="#222222">実機 tftp</text>
+<rect x="440" y="148" width="165.21739130434784" height="36" rx="3" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="615.2173913043479" y="174" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="bold" fill="#C0392B">+4.0 %</text>
+<text x="290" y="242" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="bold" fill="#222222">実機 sdread</text>
+<rect x="440" y="224" width="107.39130434782611" height="36" rx="3" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="557.3913043478261" y="250" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="bold" fill="#C0392B">+2.6 %</text>
+<text x="290" y="318" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="bold" fill="#222222">実機 forkexec</text>
+<rect x="440" y="300" width="86.73913043478262" height="36" rx="3" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="536.7391304347826" y="326" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="bold" fill="#C0392B">+2.1 %</text>
+<text x="290" y="394" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">シミュレーション</text>
+<text x="290" y="418" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="end" font-weight="normal" fill="#808080">(遅れのモデル)</text>
+<rect x="440" y="376" width="49.56521739130435" height="36" rx="3" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="499.5652173913044" y="402" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="bold" fill="#283272">+1.2 %</text>
+<line x1="440" y1="50" x2="440" y2="440" stroke="#808080" stroke-width="2"/>
+<text x="440" y="470" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="middle" font-weight="normal" fill="#808080">← 速くなる   遅くなる →</text>
+</svg>

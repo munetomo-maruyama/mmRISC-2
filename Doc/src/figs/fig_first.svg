@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="26.4cm" height="9.0cm" viewBox="0 0 1320 450">
+<rect x="0" y="0" width="1320" height="450" fill="#FFFFFF"/>
+<rect x="8" y="8" width="640" height="434" rx="12" fill="#FAFBFE" stroke="#283272" stroke-width="2"/>
+<text x="24" y="44" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="start" font-weight="bold" fill="#283272">(a) 09-15〜16 シミュレーション(SIM_CPU)</text>
+<rect x="30" y="80" width="170" height="110" rx="8" fill="#FFF3D6" stroke="#F2A900" stroke-width="2"/>
+<text x="115.0" y="131.65" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#222222">CPU_BFM</text>
+<text x="115.0" y="156.35" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">CPU の代役</text>
+<rect x="250" y="80" width="150" height="110" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="325.0" y="120.60000000000001" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">BUS_ARB</text>
+<text x="325.0" y="145.3" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">AXI4 /</text>
+<text x="325.0" y="167.4" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">AXI-Lite</text>
+<rect x="450" y="60" width="180" height="70" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="540.0" y="102.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#283272">AXI4 メモリ</text>
+<rect x="450" y="145" width="180" height="70" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="540.0" y="187.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#283272">AXI-Lite メモリ</text>
+<line x1="200" y1="135" x2="240.4" y2="135.0" stroke="#283272" stroke-width="3"/>
+<polygon points="250,135 239.0429327162523,139.89312543671485 239.0429327162523,130.10687456328515" fill="#283272" stroke="none" stroke-width="0"/>
+<line x1="400" y1="110" x2="440.8048676618769" y2="97.75853970143692" stroke="#283272" stroke-width="3"/>
+<polygon points="450,95 440.9110621947406,102.83525427616279 438.0990036986388,93.46172595582338" fill="#283272" stroke="none" stroke-width="0"/>
+<line x1="400" y1="160" x2="441.0866237675015" y2="176.43464950700061" stroke="#283272" stroke-width="3"/>
+<polygon points="450,180 438.0093572611518,180.473800284199 441.6438795920058,171.38749445706404" fill="#283272" stroke="none" stroke-width="0"/>
+<text x="30" y="260.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">● 長いバースト、8 / 16 / 32 / 64 ビットの全レーン</text>
+<text x="30" y="290.4" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">● アドレスは 40 ビット(LiteX では上位を 0 判定)</text>
+<text x="30" y="320.8" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">● 波形は GTKWave の .gtkw まで Claude Code が用意</text>
+<rect x="670" y="8" width="642" height="434" rx="12" fill="#FAFBFE" stroke="#283272" stroke-width="2"/>
+<text x="686" y="44" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="21" text-anchor="start" font-weight="bold" fill="#283272">(b) 09-16〜17 デバッガを FPGA で(09-20 に D$ 経由も)</text>
+<rect x="690" y="70" width="150" height="95" rx="8" fill="#EAF4EE" stroke="#2E8B57" stroke-width="2"/>
+<text x="765.0" y="113.45" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#283272">OpenOCD</text>
+<text x="765.0" y="137.45000000000002" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">telnet / gdb</text>
+<rect x="870" y="70" width="150" height="95" rx="8" fill="#EAF4EE" stroke="#2E8B57" stroke-width="2"/>
+<text x="945.0" y="113.1" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="bold" fill="#283272">JTAG / cJTAG</text>
+<text x="945.0" y="136.75" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">アダプタ</text>
+<rect x="1050" y="70" width="240" height="95" rx="8" fill="#E6E8F3" stroke="20" stroke-width="2"/>
+<text x="1170.0" y="111.75" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#283272">DTM → DM</text>
+<text x="1170.0" y="135.7" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">Debug Spec 1.0</text>
+<rect x="1050" y="190" width="240" height="80" rx="8" fill="#E6E8F3" stroke="20" stroke-width="2"/>
+<text x="1170.0" y="237.7" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">SBA / D$</text>
+<rect x="1050" y="290" width="240" height="70" rx="8" fill="#E6E8F3" stroke="20" stroke-width="2"/>
+<text x="1170.0" y="332.7" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">RAM</text>
+<line x1="840" y1="117" x2="860.4" y2="117.0" stroke="#2E8B57" stroke-width="3"/>
+<polygon points="870,117 859.0429327162523,121.89312543671484 859.0429327162523,112.10687456328516" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<line x1="1020" y1="117" x2="1040.4" y2="117.0" stroke="#2E8B57" stroke-width="3"/>
+<polygon points="1050,117 1039.0429327162524,121.89312543671484 1039.0429327162524,112.10687456328516" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<line x1="1170" y1="165" x2="1170.0" y2="180.4" stroke="#283272" stroke-width="3"/>
+<polygon points="1170,190 1165.1068745632851,179.0429327162523 1174.8931254367149,179.0429327162523" fill="#283272" stroke="none" stroke-width="0"/>
+<line x1="1170" y1="270" x2="1170.0" y2="280.4" stroke="#283272" stroke-width="3"/>
+<polygon points="1170,290 1165.1068745632851,279.0429327162523 1174.8931254367149,279.0429327162523" fill="#283272" stroke="none" stroke-width="0"/>
+<text x="690" y="220.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">● CPU 本体より先に作った</text>
+<text x="690" y="250.4" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">● OpenOCD から mdw / mww で</text>
+<text x="690" y="280.8" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">   メモリが読み書きできた</text>
+<text x="690" y="311.2" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">● cJTAG の再接続も確認</text>
+</svg>

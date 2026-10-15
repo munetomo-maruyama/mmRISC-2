@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="26.4cm" height="14.4cm" viewBox="0 0 1320 720">
+<rect x="0" y="0" width="1320" height="720" fill="#FFFFFF"/>
+<line x1="90" y1="560.0" x2="1300" y2="560.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="566.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">0.5</text>
+<line x1="90" y1="475.0" x2="1300" y2="475.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="481.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">1.0</text>
+<line x1="90" y1="390.0" x2="1300" y2="390.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="396.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">1.5</text>
+<line x1="90" y1="305.0" x2="1300" y2="305.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="311.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">2.0</text>
+<line x1="90" y1="220.0" x2="1300" y2="220.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="226.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">2.5</text>
+<line x1="90" y1="135.0" x2="1300" y2="135.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="141.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">3.0</text>
+<line x1="90" y1="50.0" x2="1300" y2="50.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="56.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">3.5</text>
+<line x1="90" y1="50" x2="90" y2="560" stroke="#808080" stroke-width="2"/>
+<line x1="90" y1="560" x2="1300" y2="560" stroke="#808080" stroke-width="2"/>
+<text x="90" y="36" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="bold" fill="#222222">/MHz</text>
+<polyline points="140.0,375.72 241.8181818181818,361.61 343.6363636363636,322.85 445.45454545454544,269.13000000000005 547.2727272727273,251.78999999999996 649.090909090909,251.28000000000003 750.9090909090909,244.14 852.7272727272727,232.07000000000005 954.5454545454545,231.21999999999997 1056.3636363636365,225.26999999999998 1158.181818181818,220.33999999999997 1260.0,189.06" fill="none" stroke="#283272" stroke-width="4"/>
+<circle cx="140.0" cy="375.72" r="7" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="241.8181818181818" cy="361.61" r="7" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="343.6363636363636" cy="322.85" r="7" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="445.45454545454544" cy="269.13000000000005" r="7" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="547.2727272727273" cy="251.78999999999996" r="7" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="649.090909090909" cy="251.28000000000003" r="7" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="750.9090909090909" cy="244.14" r="7" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="852.7272727272727" cy="232.07000000000005" r="7" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="954.5454545454545" cy="231.21999999999997" r="7" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1056.3636363636365" cy="225.26999999999998" r="7" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1158.181818181818" cy="220.33999999999997" r="7" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1260.0" cy="189.06" r="7" fill="#283272" stroke="none" stroke-width="0"/>
+<polyline points="954.5454545454545,183.62 1056.3636363636365,176.82 1158.181818181818,171.38 1260.0,130.75" fill="none" stroke="#F2A900" stroke-width="4"/>
+<circle cx="954.5454545454545" cy="183.62" r="7" fill="#F2A900" stroke="none" stroke-width="0"/>
+<circle cx="1056.3636363636365" cy="176.82" r="7" fill="#F2A900" stroke="none" stroke-width="0"/>
+<circle cx="1158.181818181818" cy="171.38" r="7" fill="#F2A900" stroke="none" stroke-width="0"/>
+<circle cx="1260.0" cy="130.75" r="7" fill="#F2A900" stroke="none" stroke-width="0"/>
+<polyline points="140.0,505.09000000000003 241.8181818181818,500.67 343.6363636363636,470.92 445.45454545454544,424.51 547.2727272727273,423.65999999999997 649.090909090909,407.0 750.9090909090909,400.54 852.7272727272727,398.84000000000003 954.5454545454545,396.79999999999995 1056.3636363636365,393.06 1158.181818181818,390.67999999999995 1260.0,382.86" fill="none" stroke="#2E8B57" stroke-width="4"/>
+<circle cx="140.0" cy="505.09000000000003" r="7" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<circle cx="241.8181818181818" cy="500.67" r="7" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<circle cx="343.6363636363636" cy="470.92" r="7" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<circle cx="445.45454545454544" cy="424.51" r="7" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<circle cx="547.2727272727273" cy="423.65999999999997" r="7" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<circle cx="649.090909090909" cy="407.0" r="7" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<circle cx="750.9090909090909" cy="400.54" r="7" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<circle cx="852.7272727272727" cy="398.84000000000003" r="7" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<circle cx="954.5454545454545" cy="396.79999999999995" r="7" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<circle cx="1056.3636363636365" cy="393.06" r="7" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<circle cx="1158.181818181818" cy="390.67999999999995" r="7" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<circle cx="1260.0" cy="382.86" r="7" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<text x="140.0" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">初版</text>
+<text x="140.0" y="614" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-01</text>
+<text x="241.8181818181818" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">分岐予測</text>
+<text x="241.8181818181818" y="614" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-02</text>
+<text x="343.6363636363636" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">D$ 2cyc</text>
+<text x="343.6363636363636" y="614" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-02</text>
+<text x="445.45454545454544" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">EX 早出し</text>
+<text x="445.45454545454544" y="614" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-02</text>
+<text x="547.2727272727273" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">乗算 1cyc</text>
+<text x="547.2727272727273" y="614" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-03</text>
+<text x="649.090909090909" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">除算早期</text>
+<text x="649.090909090909" y="614" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-03</text>
+<text x="750.9090909090909" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">gshare</text>
+<text x="750.9090909090909" y="614" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-03</text>
+<text x="852.7272727272727" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">late 分岐</text>
+<text x="852.7272727272727" y="614" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-03</text>
+<text x="954.5454545454545" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">Zba/Zbb</text>
+<text x="954.5454545454545" y="614" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-04</text>
+<text x="1056.3636363636365" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">Sstc</text>
+<text x="1056.3636363636365" y="614" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-04</text>
+<text x="1158.181818181818" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">L2</text>
+<text x="1158.181818181818" y="614" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-07</text>
+<text x="1260.0" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">最大最適化</text>
+<text x="1260.0" y="614" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-09</text>
+<text x="152.0" y="407.72" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="bold" fill="#283272">1.584</text>
+<text x="152.0" y="535.09" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="bold" fill="#2E8B57">0.823</text>
+<text x="1248.0" y="116.75" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="end" font-weight="bold" fill="#B07800">3.025(+91 %)</text>
+<text x="1248.0" y="221.06" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="bold" fill="#283272">2.682</text>
+<text x="1248.0" y="368.86" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="end" font-weight="bold" fill="#2E8B57">1.542(+87 %)</text>
+<line x1="120" y1="640" x2="170" y2="640" stroke="#283272" stroke-width="5"/>
+<circle cx="145" cy="640" r="7" fill="#283272" stroke="none" stroke-width="0"/>
+<text x="182" y="647" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">CoreMark/MHz(rv64gc)</text>
+<line x1="520" y1="640" x2="570" y2="640" stroke="#F2A900" stroke-width="5"/>
+<circle cx="545" cy="640" r="7" fill="#F2A900" stroke="none" stroke-width="0"/>
+<text x="582" y="647" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">CoreMark/MHz(Zba/Zbb)</text>
+<line x1="920" y1="640" x2="970" y2="640" stroke="#2E8B57" stroke-width="5"/>
+<circle cx="945" cy="640" r="7" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<text x="982" y="647" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">DMIPS/MHz</text>
+<text x="1300" y="690" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="end" font-weight="normal" fill="#808080">実機(Linux 上、50 MHz)。最大最適化以外は -O2。BENCH.md 8・17 章</text>
+</svg>

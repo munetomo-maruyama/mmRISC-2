@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="26.4cm" height="14.4cm" viewBox="0 0 1320 720">
+<rect x="0" y="0" width="1320" height="720" fill="#FFFFFF"/>
+<rect x="10.0" y="20" width="410" height="300" rx="14" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="215.0" y="140" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="62" text-anchor="middle" font-weight="bold" fill="#283272">12 日</text>
+<text x="215.0" y="210" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#222222">着手から自作 CPU で Linux 起動</text>
+<text x="215.0" y="255" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="normal" fill="#808080">2026-09-13 → 09-25</text>
+<rect x="455.0" y="20" width="410" height="300" rx="14" fill="#FFF3D6" stroke="#F2A900" stroke-width="3"/>
+<text x="660.0" y="140" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="62" text-anchor="middle" font-weight="bold" fill="#283272">30 日</text>
+<text x="660.0" y="210" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#222222">Rev.01 まで(189 コミット)</text>
+<text x="660.0" y="255" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="normal" fill="#808080">→ 2026-10-12</text>
+<rect x="900.0" y="20" width="410" height="300" rx="14" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="1105.0" y="140" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="62" text-anchor="middle" font-weight="bold" fill="#283272">22,084 行</text>
+<text x="1105.0" y="210" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#222222">RTL(SystemVerilog 46 ファイル)</text>
+<text x="1105.0" y="255" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="normal" fill="#808080">仕様・検証・文書も Claude Code</text>
+<rect x="10.0" y="360" width="410" height="300" rx="14" fill="#FFF3D6" stroke="#F2A900" stroke-width="3"/>
+<text x="215.0" y="480" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="62" text-anchor="middle" font-weight="bold" fill="#283272">Linux 7.2</text>
+<text x="215.0" y="550" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#222222">SD カードの ext4 から BusyBox まで</text>
+<text x="215.0" y="595" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="normal" fill="#808080">Ethernet、perf も動作</text>
+<rect x="455.0" y="360" width="410" height="300" rx="14" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="660.0" y="480" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="62" text-anchor="middle" font-weight="bold" fill="#283272">3.025 /MHz</text>
+<text x="660.0" y="550" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#222222">CoreMark(最大最適化、Zba/Zbb)</text>
+<text x="660.0" y="595" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="normal" fill="#808080">-O2: 2.785、DMIPS 1.542</text>
+<rect x="900.0" y="360" width="410" height="300" rx="14" fill="#FFF3D6" stroke="#F2A900" stroke-width="3"/>
+<text x="1105.0" y="480" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="62" text-anchor="middle" font-weight="bold" fill="#283272">550 種</text>
+<text x="1105.0" y="550" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#222222">バグ注入をすべて検出</text>
+<text x="1105.0" y="595" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="normal" fill="#808080">テストが壊れた RTL を見つけるか</text>
+</svg>

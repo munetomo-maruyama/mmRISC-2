@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="26.4cm" height="14.4cm" viewBox="0 0 1320 720">
+<rect x="0" y="0" width="1320" height="720" fill="#FFFFFF"/>
+<text x="90" y="36" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="21" text-anchor="start" font-weight="bold" fill="#283272">50 MHz を満たすまで(09-22〜24)</text>
+<line x1="90" y1="600.0" x2="560" y2="600.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="606.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">-30</text>
+<line x1="90" y1="510.0" x2="560" y2="510.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="516.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">-25</text>
+<line x1="90" y1="420.0" x2="560" y2="420.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="426.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">-20</text>
+<line x1="90" y1="330.0" x2="560" y2="330.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="336.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">-15</text>
+<line x1="90" y1="240.0" x2="560" y2="240.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="246.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">-10</text>
+<line x1="90" y1="150.0" x2="560" y2="150.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="156.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">-5</text>
+<line x1="90" y1="60.0" x2="560" y2="60.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="80" y="66.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">0</text>
+<line x1="90" y1="60" x2="560" y2="60" stroke="#808080" stroke-width="2"/>
+<line x1="90" y1="60" x2="90" y2="600" stroke="#808080" stroke-width="2"/>
+<rect x="98.0" y="60" width="36.22222222222222" height="367.956" rx="2" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="116.11111111111111" y="451.956" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="bold" fill="#C0392B">-20.4</text>
+<text transform="translate(122.11111111111111,612) rotate(-50)" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="end" fill="#222222">初回</text>
+<rect x="150.22222222222223" y="60" width="36.22222222222222" height="302.148" rx="2" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="168.33333333333334" y="386.148" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="bold" fill="#C0392B">-16.8</text>
+<text transform="translate(174.33333333333334,612) rotate(-50)" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="end" fill="#222222">段階1</text>
+<rect x="202.44444444444446" y="60" width="36.22222222222222" height="506.53799999999995" rx="2" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="220.55555555555557" y="590.538" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="bold" fill="#C0392B">-28.1</text>
+<text transform="translate(226.55555555555557,612) rotate(-50)" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="end" fill="#222222">段階2</text>
+<rect x="254.66666666666666" y="60" width="36.22222222222222" height="252.882" rx="2" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="272.77777777777777" y="336.882" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="bold" fill="#C0392B">-14.0</text>
+<text transform="translate(278.77777777777777,612) rotate(-50)" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="end" fill="#222222">やり直し</text>
+<rect x="306.8888888888889" y="60" width="36.22222222222222" height="180.324" rx="2" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="325.0" y="264.324" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="bold" fill="#C0392B">-10.0</text>
+<text transform="translate(331.0,612) rotate(-50)" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="end" fill="#222222">案1</text>
+<rect x="359.1111111111111" y="60" width="36.22222222222222" height="130.59" rx="2" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="377.2222222222222" y="214.59" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="bold" fill="#C0392B">-7.3</text>
+<text transform="translate(383.2222222222222,612) rotate(-50)" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="end" fill="#222222">A+C</text>
+<rect x="411.3333333333333" y="60" width="36.22222222222222" height="4.086" rx="2" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="429.4444444444444" y="90" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="bold" fill="#C0392B">-0.23</text>
+<text transform="translate(435.4444444444444,612) rotate(-50)" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="end" fill="#222222">MR 段</text>
+<rect x="463.55555555555554" y="60" width="36.22222222222222" height="16.632" rx="2" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="481.66666666666663" y="90" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="bold" fill="#C0392B">-0.92</text>
+<text transform="translate(487.66666666666663,612) rotate(-50)" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="end" fill="#222222">隠れ経路</text>
+<rect x="515.7777777777778" y="60" width="36.22222222222222" height="3" rx="2" fill="#2E8B57" stroke="#2E8B57" stroke-width="1"/>
+<text x="533.8888888888889" y="90" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="bold" fill="#2E8B57">0.00</text>
+<text transform="translate(539.8888888888889,612) rotate(-50)" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="end" fill="#222222">MET</text>
+<text x="30" y="330.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#808080">ns</text>
+<text x="320" y="690" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#283272">ステージ MR を足して(7→8 段)解決</text>
+<text x="680" y="36" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="21" text-anchor="start" font-weight="bold" fill="#283272">機能・性能を足しながら(09-25〜10-12)</text>
+<line x1="680" y1="550.9090909090909" x2="1300" y2="550.9090909090909" stroke="#E3E3E3" stroke-width="1"/>
+<text x="670" y="556.9090909090909" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">0.0</text>
+<line x1="680" y1="452.72727272727275" x2="1300" y2="452.72727272727275" stroke="#E3E3E3" stroke-width="1"/>
+<text x="670" y="458.72727272727275" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">0.2</text>
+<line x1="680" y1="354.54545454545456" x2="1300" y2="354.54545454545456" stroke="#E3E3E3" stroke-width="1"/>
+<text x="670" y="360.54545454545456" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">0.4</text>
+<line x1="680" y1="256.36363636363643" x2="1300" y2="256.36363636363643" stroke="#E3E3E3" stroke-width="1"/>
+<text x="670" y="262.36363636363643" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">0.6</text>
+<line x1="680" y1="158.1818181818182" x2="1300" y2="158.1818181818182" stroke="#E3E3E3" stroke-width="1"/>
+<text x="670" y="164.1818181818182" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">0.8</text>
+<line x1="680" y1="60.0" x2="1300" y2="60.0" stroke="#E3E3E3" stroke-width="1"/>
+<text x="670" y="66.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="end" font-weight="normal" fill="#808080">1.0</text>
+<line x1="680" y1="550.9090909090909" x2="1300" y2="550.9090909090909" stroke="#C0392B" stroke-width="2" stroke-dasharray="6,4"/>
+<line x1="680" y1="60" x2="680" y2="600" stroke="#808080" stroke-width="2"/>
+<polyline points="700.0,544.5272727272727 720.0,486.6 740.0,567.6 760.0,531.2727272727273 780.0,450.2727272727273 800.0,549.9272727272727 820.0,548.9454545454546 840.0,381.0545454545455 860.0,471.3818181818182 880.0,293.1818181818182 900.0,504.76363636363635 920.0,216.60000000000002 940.0,403.1454545454545 960.0,491.5090909090909 980.0,309.8727272727273 1000.0,363.8727272727273 1020.0,329.0181818181818 1040.0,472.8545454545455 1060.0,410.5090909090909 1080.0,495.43636363636364 1100.0,527.3454545454546 1120.0,198.9272727272728 1140.0,346.20000000000005 1160.0,432.6 1180.0,536.6727272727272 1200.0,481.20000000000005 1220.0,111.05454545454546 1240.0,382.03636363636366 1260.0,357.9818181818182 1280.0,224.9454545454546" fill="none" stroke="#283272" stroke-width="3"/>
+<circle cx="700.0" cy="544.5272727272727" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="720.0" cy="486.6" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="740.0" cy="567.6" r="6" fill="#C0392B" stroke="none" stroke-width="0"/>
+<circle cx="760.0" cy="531.2727272727273" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="780.0" cy="450.2727272727273" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="800.0" cy="549.9272727272727" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="820.0" cy="548.9454545454546" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="840.0" cy="381.0545454545455" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="860.0" cy="471.3818181818182" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="880.0" cy="293.1818181818182" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="900.0" cy="504.76363636363635" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="920.0" cy="216.60000000000002" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="940.0" cy="403.1454545454545" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="960.0" cy="491.5090909090909" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="980.0" cy="309.8727272727273" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1000.0" cy="363.8727272727273" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1020.0" cy="329.0181818181818" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1040.0" cy="472.8545454545455" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1060.0" cy="410.5090909090909" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1080.0" cy="495.43636363636364" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1100.0" cy="527.3454545454546" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1120.0" cy="198.9272727272728" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1140.0" cy="346.20000000000005" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1160.0" cy="432.6" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1180.0" cy="536.6727272727272" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1200.0" cy="481.20000000000005" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1220.0" cy="111.05454545454546" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1240.0" cy="382.03636363636366" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1260.0" cy="357.9818181818182" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<circle cx="1280.0" cy="224.9454545454546" r="6" fill="#283272" stroke="none" stroke-width="0"/>
+<text x="700.0" y="626" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">09-25</text>
+<text x="800.0" y="626" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-02</text>
+<text x="920.0" y="626" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-03</text>
+<text x="1040.0" y="626" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-07</text>
+<text x="1120.0" y="626" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-10</text>
+<text x="1220.0" y="626" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-11</text>
+<text x="1280.0" y="626" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="middle" font-weight="normal" fill="#808080">10-12</text>
+<text x="752.0" y="597.6" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="start" font-weight="bold" fill="#C0392B">JTAG を足して −0.034</text>
+<text x="920.0" y="202.60000000000002" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="middle" font-weight="bold" fill="#283272">PMP の経路</text>
+<text x="1220.0" y="97.05454545454546" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="middle" font-weight="bold" fill="#283272">T4</text>
+<text x="1280.0" y="210.9454545454546" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="middle" font-weight="bold" fill="#283272">+0.664</text>
+<text x="990" y="660" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#283272">0 を割るたびに経路を読んで直す(T1〜T7)</text>
+<text x="990" y="690" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="middle" font-weight="normal" fill="#808080">post-route WNS、50 MHz(20 ns)、TIMING.md 1〜44 章</text>
+</svg>
