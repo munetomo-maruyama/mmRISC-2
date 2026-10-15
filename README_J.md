@@ -86,7 +86,7 @@ Ethernet・SD カードの同時照合)は Rev.01 でも PASS(`LitexSystem/docs/
 | [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md) | 次の設計テーマ |
 | [`LitexSystem/software/boot/README.md`](LitexSystem/software/boot/README_J.md) | SD カードの作り方、Ethernet、TFTP ネットブート、負荷試験、配布しているバイナリ |
 | [`LitexSystem/software/bench/README.md`](LitexSystem/software/bench/README_J.md) | 実機のベンチマークと `perf` |
-| [`Doc/20261015_WhitePaper_mmRISC-2.pdf`](Doc/20261015_WhitePaper_mmRISC-2.pdf) | ホワイトペーパー(日本語、A4): Claude Code による設計の進め方、仕様、経緯、手戻りと検証、AI による自動設計の評価。原稿は `Doc/src/` |
+| [`Doc/20261015_WhitePaper_mmRISC-2_J.pdf`](Doc/20261015_WhitePaper_mmRISC-2_J.pdf) | ホワイトペーパー(A4): Claude Code による設計の進め方、仕様、経緯、手戻りと検証、AI による自動設計の評価。英語版は [`Doc/20261015_WhitePaper_mmRISC-2.pdf`](Doc/20261015_WhitePaper_mmRISC-2.pdf)。原稿は `Doc/src/` |
 | [`SIM/SIM_CORE/README.md`](SIM/SIM_CORE/README_J.md) | コアの検証環境(自作試験 34 本、riscv-tests、バグ注入) |
 
 ## ディレクトリ構成

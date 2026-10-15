@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="26.4cm" height="14.4cm" viewBox="0 0 1320 720">
+<rect x="0" y="0" width="1320" height="720" fill="#FFFFFF"/>
+<rect x="10.0" y="20" width="410" height="300" rx="14" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="215.0" y="140" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="62" text-anchor="middle" font-weight="bold" fill="#283272">12 days</text>
+<text x="215.0" y="210" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="21.6" text-anchor="middle" font-weight="bold" fill="#222222">Start to Linux on the home-made CPU</text>
+<text x="215.0" y="255" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="normal" fill="#808080">2026-09-13 → 09-25</text>
+<rect x="455.0" y="20" width="410" height="300" rx="14" fill="#FFF3D6" stroke="#F2A900" stroke-width="3"/>
+<text x="660.0" y="140" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="62" text-anchor="middle" font-weight="bold" fill="#283272">30 days</text>
+<text x="660.0" y="210" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#222222">To Rev.01 (189 commits)</text>
+<text x="660.0" y="255" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="normal" fill="#808080">→ 2026-10-12</text>
+<rect x="900.0" y="20" width="410" height="300" rx="14" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="1105.0" y="140" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="52.7" text-anchor="middle" font-weight="bold" fill="#283272">22,084 lines</text>
+<text x="1105.0" y="210" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22.8" text-anchor="middle" font-weight="bold" fill="#222222">RTL (SystemVerilog, 46 files)</text>
+<text x="1105.0" y="255" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17.0" text-anchor="middle" font-weight="normal" fill="#808080">Spec, verification, docs: Claude Code too</text>
+<rect x="10.0" y="360" width="410" height="300" rx="14" fill="#FFF3D6" stroke="#F2A900" stroke-width="3"/>
+<text x="215.0" y="480" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="62" text-anchor="middle" font-weight="bold" fill="#283272">Linux 7.2</text>
+<text x="215.0" y="550" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="21.6" text-anchor="middle" font-weight="bold" fill="#222222">From the SD card&#x27;s ext4 to BusyBox</text>
+<text x="215.0" y="595" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="normal" fill="#808080">Ethernet and perf work too</text>
+<rect x="455.0" y="360" width="410" height="300" rx="14" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="660.0" y="480" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="62" text-anchor="middle" font-weight="bold" fill="#283272">3.025 /MHz</text>
+<text x="660.0" y="550" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="21.6" text-anchor="middle" font-weight="bold" fill="#222222">CoreMark (fastest options, Zba/Zbb)</text>
+<text x="660.0" y="595" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="normal" fill="#808080">-O2: 2.785, DMIPS 1.542</text>
+<rect x="900.0" y="360" width="410" height="300" rx="14" fill="#FFF3D6" stroke="#F2A900" stroke-width="3"/>
+<text x="1105.0" y="480" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="62" text-anchor="middle" font-weight="bold" fill="#283272">550</text>
+<text x="1105.0" y="550" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#222222">Bug injections, all detected</text>
+<text x="1105.0" y="595" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19.0" text-anchor="middle" font-weight="normal" fill="#808080">Do the tests find broken RTL?</text>
+</svg>

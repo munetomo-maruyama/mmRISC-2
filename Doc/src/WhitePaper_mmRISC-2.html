@@ -1,28 +1,28 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>mmRISC-2 White Paper</title>
 <!--
-  WhitePaper_mmRISC-2.html : the source of Doc/20261015_WhitePaper_mmRISC-2.pdf
+  WhitePaper_mmRISC-2.html : the source of Doc/20261015_WhitePaper_mmRISC-2.pdf (English)
   ./make_pdf.sh prints it to PDF with headless Chrome (A4 portrait).
-  The figures in figs/ are the SVGs of the talk at RISC-V Day Tokyo 2026 Autumn.
+  The figures are figs/*_en.svg, made from the Japanese ones by figs_en.py.
 -->
 <style>
   @page {
     size: A4;
     margin: 18mm 18mm 18mm 18mm;
-    @top-right { content: "mmRISC-2 White Paper"; font: 7.5pt 'Noto Sans CJK JP', sans-serif; color: #9A9A9A; }
-    @bottom-center { content: counter(page) " / " counter(pages); font: 7.5pt 'Noto Sans CJK JP', sans-serif; color: #9A9A9A; }
+    @top-right { content: "mmRISC-2 White Paper"; font: 7.5pt 'Noto Sans', sans-serif; color: #9A9A9A; }
+    @bottom-center { content: counter(page) " / " counter(pages); font: 7.5pt 'Noto Sans', sans-serif; color: #9A9A9A; }
   }
   @page :first {
     @top-right { content: none; }
     @bottom-center { content: none; }
   }
   :root { --navy: #283272; --yellow: #F2A900; --lnavy: #E6E8F3; --lyel: #FFF3D6; --text: #222222; --gray: #6A6A6A; }
-  html { font-family: 'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif; color: var(--text); }
-  body { margin: 0; font-size: 9.4pt; line-height: 1.75; text-align: justify; }
-  h1, h2, h3 { color: var(--navy); line-height: 1.35; break-after: avoid; }
+  html { font-family: 'Noto Sans', 'Noto Sans CJK JP', sans-serif; color: var(--text); }
+  body { margin: 0; font-size: 9.4pt; line-height: 1.6; text-align: justify; hyphens: auto; }
+  h1, h2, h3 { color: var(--navy); line-height: 1.3; break-after: avoid; }
   h2 { font-size: 14pt; margin: 9mm 0 3mm; padding-bottom: 1.2mm; border-bottom: 0.6mm solid var(--navy); position: relative; }
   h2::after { content: ""; position: absolute; left: 0; bottom: -0.6mm; width: 22mm; border-bottom: 0.6mm solid var(--yellow); }
   h3 { font-size: 11pt; margin: 5mm 0 1.5mm; }
@@ -34,29 +34,27 @@
   figure { margin: 3mm 0 4mm; break-inside: avoid; text-align: center; }
   figure img { width: 100%; }
   figcaption { font-size: 8.2pt; color: var(--gray); margin-top: 1mm; }
-  table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 8.4pt; line-height: 1.5; break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 8.4pt; line-height: 1.45; break-inside: avoid; text-align: left; }
   th { background: var(--navy); color: #fff; font-weight: bold; text-align: left; padding: 1.2mm 1.8mm; }
   td { border-bottom: 0.25mm solid #C8CBDA; padding: 1.1mm 1.8mm; vertical-align: top; }
   tr:nth-child(even) td { background: #F5F6FA; }
   .caption-t { font-size: 8.2pt; color: var(--gray); margin: 3mm 0 0; }
   .box { border: 0.35mm solid var(--navy); background: var(--lnavy); border-radius: 1.5mm; padding: 2.5mm 4mm; margin: 3mm 0 4mm; break-inside: avoid; }
   .box.y { border-color: var(--yellow); background: var(--lyel); }
-  .box.g { border-color: #2E8B57; background: #EAF4EE; }
-  .quote { border-left: 1.2mm solid #B8BCD0; background: #F6F7FB; padding: 2mm 4mm; margin: 1.5mm 0 3mm; font-size: 9pt; }
+  .quote { border-left: 1.2mm solid #B8BCD0; background: #F6F7FB; padding: 2mm 4mm; margin: 1.5mm 0 3mm; font-size: 9pt; font-style: italic; }
   .qhead { font-weight: bold; color: var(--navy); margin: 3mm 0 0; break-after: avoid; }
   .qpair { break-inside: avoid; }
   .term { background: #1E1E1E; color: #E8E8E8; font-family: 'DejaVu Sans Mono', monospace; font-size: 7.6pt; line-height: 1.45;
-          padding: 3mm 4mm; border-radius: 1.5mm; white-space: pre; margin: 2mm 0 3mm; break-inside: avoid; }
+          padding: 3mm 4mm; border-radius: 1.5mm; white-space: pre; margin: 2mm 0 3mm; break-inside: avoid; text-align: left; }
   .two { display: flex; gap: 5mm; break-inside: avoid; }
   .two > div { flex: 1; }
-  .small { font-size: 8.2pt; line-height: 1.6; }
+  .small { font-size: 8.2pt; line-height: 1.5; }
   .muted { color: var(--gray); }
-  /* cover */
   .cover { height: 258mm; display: flex; flex-direction: column; break-after: page; }
   .cover .logo { text-align: right; }
   .cover .logo img { width: 52mm; }
   .cover .kind { margin-top: 26mm; font-size: 12pt; letter-spacing: 0.3em; color: var(--yellow); font-weight: bold; }
-  .cover h1 { font-size: 23pt; margin: 3mm 0 2mm; }
+  .cover h1 { font-size: 24pt; margin: 3mm 0 2mm; }
   .cover .sub { font-size: 12.5pt; color: var(--navy); margin-bottom: 6mm; }
   .cover .rule { border-top: 0.8mm solid var(--navy); width: 100%; position: relative; margin-bottom: 6mm; }
   .cover .rule::after { content: ""; position: absolute; left: 0; top: -0.8mm; width: 40mm; border-top: 0.8mm solid var(--yellow); }
@@ -77,268 +75,268 @@
 <section class="cover">
   <div class="logo"><img src="figs/logo_mmrisc.png" alt="mmRISC"></div>
   <div class="kind">WHITE PAPER</div>
-  <h1>mmRISC-2<br>Claude Code による<br>64-bit RISC-V CPU の完全自動設計</h1>
-  <div class="sub">仕様・RTL・検証から、Arty A7-100T 上の Linux 起動まで</div>
+  <h1>mmRISC-2<br>A 64-bit RISC-V CPU<br>Designed Entirely by Claude Code</h1>
+  <div class="sub">From the specification, RTL and verification to Linux on an Arty A7-100T</div>
   <div class="rule"></div>
   <div class="meta">
-    圓山 宗智<br>
-    2026 年 10 月 15 日(対象: mmRISC-2 Rev.01)<br>
+    Munetomo Maruyama<br>
+    October 15, 2026 (covers mmRISC-2 Rev.01)<br>
     <span class="muted">https://github.com/munetomo-maruyama/mmRISC-2</span>
   </div>
   <div class="abstract box">
-    <p style="margin-bottom:1.5mm"><strong>要旨</strong></p>
-    <p>本書は、Anthropic の AI コーディングエージェント <strong>Claude Code</strong> に 64-bit RISC-V CPU(RV64GC)を設計させ、FPGA ボード Digilent Arty A7-100T の上で Linux を起動させた <strong>mmRISC-2</strong> プロジェクトの記録である。仕様書、RTL、テストベンチと検証、スクリプト、日英の文書はすべて Claude Code が書き、筆者は目標の設定、提案からの選択、Vivado と実機の操作を受け持った。</p>
-    <p>着手から <strong>12 日</strong>で自作 CPU 上の Linux が SD カードから BusyBox まで起動し、<strong>30 日</strong>で Rev.01(L2 キャッシュ、パイプライン化した FPU、Zba / Zbb / Zbs / Zbc / Zicond / Zicboz、CoreMark 3.025 /MHz、120 分の負荷試験 PASS)に至った。本書では、進め方、仕様、開発の経緯、手戻りと検証の改善、AI による自動設計の利点と課題、そして人の役割をまとめる。</p>
+    <p style="margin-bottom:1.5mm"><strong>Abstract</strong></p>
+    <p>This paper describes <strong>mmRISC-2</strong>, a project in which Anthropic's AI coding agent <strong>Claude Code</strong> designed a 64-bit RISC-V CPU (RV64GC) that boots Linux on a Digilent Arty A7-100T FPGA board. Claude Code wrote the specifications, the RTL, the testbenches and the verification, the scripts and the documents in two languages. The author set the goals, chose among the proposals, and ran Vivado and the board.</p>
+    <p>Linux booted on the home-made CPU from the SD card to the BusyBox shell <strong>12 days</strong> after the start, and <strong>30 days</strong> after the start the project reached Rev.01: an L2 cache, a pipelined FPU, Zba / Zbb / Zbs / Zbc / Zicond / Zicboz, 3.025 CoreMark/MHz, and a 120-minute stress test passed. The paper covers how the work was done, the specification, the history, the rework and how verification improved, an evaluation of AI-driven design, and the role left to the human.</p>
   </div>
 </section>
 
 <!-- ======================================================================= toc / numbers -->
-<h2 style="margin-top:0">目次</h2>
+<h2 style="margin-top:0">Contents</h2>
 <div class="toc">
-  <div>1. はじめに</div>
-  <div>2. 進め方</div>
-  <div>3. 仕様(Rev.01)</div>
-  <div>4. 開発の経緯</div>
-  <div>5. 手戻りと検証</div>
-  <div>6. Claude Code による自動設計の評価</div>
-  <div>7. まとめと今後</div>
-  <div>付録 A. 筆者紹介</div>
-  <div>付録 B. 参考資料</div>
+  <div>1. Introduction</div>
+  <div>2. How the work was done</div>
+  <div>3. Specification (Rev.01)</div>
+  <div>4. History of the development</div>
+  <div>5. Rework and verification</div>
+  <div>6. Evaluation of design by Claude Code</div>
+  <div>7. Summary and next steps</div>
+  <div>Appendix A. About the author</div>
+  <div>Appendix B. References</div>
 </div>
 
-<h3>数字で見る mmRISC-2 Rev.01</h3>
+<h3>mmRISC-2 Rev.01 in numbers</h3>
 <div class="nums">
-  <div><b>12 日</b><span>着手から自作 CPU で Linux 起動<br>(2026-09-13 → 09-25)</span></div>
-  <div><b>30 日</b><span>Rev.01 まで、189 コミット<br>(→ 2026-10-12)</span></div>
-  <div><b>22,084 行</b><span>RTL(SystemVerilog、46 ファイル)<br>仕様・検証・文書も Claude Code</span></div>
-  <div><b>Linux 7.2</b><span>SD カードの ext4 から BusyBox まで<br>Ethernet、perf も動作</span></div>
-  <div><b>3.025 /MHz</b><span>CoreMark(最大最適化、Zba/Zbb)<br>-O2 で 2.785、DMIPS 1.542</span></div>
-  <div><b>550 種</b><span>バグ注入をすべて検出<br>(テストが壊れた RTL を見つけるか)</span></div>
+  <div><b>12 days</b><span>From the start to Linux on the home-made CPU<br>(2026-09-13 → 09-25)</span></div>
+  <div><b>30 days</b><span>To Rev.01, 189 commits<br>(→ 2026-10-12)</span></div>
+  <div><b>22,084 lines</b><span>RTL (SystemVerilog, 46 files)<br>spec, verification, docs: Claude Code too</span></div>
+  <div><b>Linux 7.2</b><span>From the SD card's ext4 to BusyBox<br>Ethernet and perf work too</span></div>
+  <div><b>3.025 /MHz</b><span>CoreMark (fastest options, Zba/Zbb)<br>2.785 with -O2, DMIPS 1.542</span></div>
+  <div><b>550</b><span>Bug injections, all detected<br>(do the tests find broken RTL?)</span></div>
 </div>
 
 <!-- ======================================================================= 1 -->
-<h2>1. はじめに</h2>
-<h3>1.1 目的</h3>
+<h2>1. Introduction</h2>
+<h3>1.1 Goal</h3>
 <ul>
-  <li>64-bit RISC-V CPU(<strong>RV64GC</strong>)を自作し、FPGA ボード <strong>Arty A7-100T</strong> で <strong>Linux</strong> を動かす。</li>
-  <li>自作するのは <strong>CPU コアのハードウェアだけ</strong>とする。周辺回路と SoC は LiteX、ソフトウェアは OpenSBI・Linux・BusyBox を既存のまま使う。</li>
-  <li><strong>設計は Claude Code に任せる</strong>。仕様書・RTL・テストベンチ・スクリプト・文書を書くのは Claude Code で、筆者は目標を決め、提案から選び、Vivado と実機を受け持つ。</li>
+  <li>Build a 64-bit RISC-V CPU (<strong>RV64GC</strong>) and run <strong>Linux</strong> on it on the FPGA board <strong>Arty A7-100T</strong>.</li>
+  <li>Make <strong>only the hardware of the CPU core</strong>. The peripherals and the SoC come from LiteX; OpenSBI, Linux and BusyBox are used as they are.</li>
+  <li><strong>Leave the design to Claude Code</strong>. Claude Code writes the specifications, the RTL, the testbenches, the scripts and the documents; the author sets the goals, chooses among the proposals, and handles Vivado and the board.</li>
 </ul>
-<div class="box y"><strong>問い</strong>: AI はどこまで CPU を設計できるか。人は何をすればよいか。</div>
-<p>「CPU だけを作り、ほかは既存のものを流用する」という制約を最初に置いたことが、短期間で Linux まで到達できた大きな理由の一つである。</p>
+<div class="box y"><strong>The question</strong>: how far can an AI design a CPU, and what should the human do?</div>
+<p>Setting the constraint "make only the CPU, reuse everything else" at the very beginning was one of the main reasons the project reached Linux so quickly.</p>
 
 <!-- ======================================================================= 2 -->
-<h2>2. 進め方</h2>
-<h3>2.1 最初のプロンプトと土台の選択</h3>
-<p>プロジェクトは、次の相談から始まった(原文のまま)。</p>
-<div class="qpair"><p class="qhead">① 最初の相談(2026-09-13 未明)</p>
-<div class="quote">「64bit RISC-V CPUコアをVerilog HDLで独自に設計し64bit linuxをFPGAボードで動作させたい。設計するのはCPUコアのハードのみとし周辺機能やLinux本体は既存のものをそのまま流用して開発したい。litexを使うのがよいか、vidado-risc-vを使うのがよいか、他によい土台になるものはあるか？なお、使用するfpgaボードはDEGILENT arty-a7とする。」</div></div>
-<div class="qpair"><p class="qhead">② 09-13 04:40 作業の指示</p>
-<div class="quote">「まずは、Litex標準ベースで、Degilent ARTY-A7ボードで64bit RISC-Vシステムを構築しLinuxを動かしたい。作業を順に進めてほしい。」</div></div>
-<div class="qpair"><p class="qhead">③ 同じ日の 13:07 に標準の Rocket で Linux が起動 → 14:31 CPU の差し替えへ</p>
-<div class="quote">「CPUコアの挿げ替えに進みたい。まず情報として、現在のシステムの置き換えるべき純粋なCPUコアの切り口はどこになるか？」</div></div>
-<p>まず土台を比べさせ、<strong>標準構成で Linux を動かして基準を作ってから</strong>、CPU だけを差し替える順番になった。この時点では、まだ CPU の RTL は 1 行も無い。土台の比較に対する Claude Code の回答を表 1 にまとめる。</p>
-<p class="caption-t">表 1 土台の比較(Claude Code の回答の要約)</p>
+<h2>2. How the work was done</h2>
+<h3>2.1 The first prompts and the choice of a base</h3>
+<p>The project started with the following request (translated from Japanese).</p>
+<div class="qpair"><p class="qhead">① The first request (early morning, 2026-09-13)</p>
+<div class="quote">"I want to design my own 64-bit RISC-V CPU core in Verilog HDL and run 64-bit Linux on an FPGA board. I will design only the hardware of the CPU core and reuse the existing peripherals and Linux as they are. Should I use LiteX, or vivado-risc-v, or is there another good base? The FPGA board is the Digilent Arty A7."</div></div>
+<div class="qpair"><p class="qhead">② 09-13 04:40, the instruction to start</p>
+<div class="quote">"First, build a 64-bit RISC-V system on the Digilent Arty A7 board based on standard LiteX, and run Linux on it. Please go step by step."</div></div>
+<div class="qpair"><p class="qhead">③ 13:07 the same day, Linux booted on the standard Rocket → 14:31, on to replacing the CPU</p>
+<div class="quote">"I want to move on to swapping the CPU core. First, for information: where is the boundary of the pure CPU core to be replaced in the current system?"</div></div>
+<p>The bases were compared first, and <strong>Linux was run on the standard configuration to make a reference</strong> before only the CPU was replaced. At that point there was not yet a single line of CPU RTL. Table 1 summarizes Claude Code's comparison of the bases.</p>
+<p class="caption-t">Table 1 Comparison of the bases (a summary of Claude Code's answer)</p>
 <table>
-  <tr><th style="width:15%">土台</th><th style="width:32%">CPU の差し替えやすさ</th><th style="width:21%">Arty A7 の対応</th><th style="width:22%">Linux 起動の実績</th><th style="width:10%">判断</th></tr>
-  <tr><td><strong>LiteX</strong></td><td>◎ CPU を差し替える仕組みがあり、既存の CPU が手本になる</td><td>◎ 公式に対応(DDR3、Ethernet、SD)</td><td>◎ OpenSBI・デバイスツリーまで揃う</td><td><strong>採用</strong></td></tr>
-  <tr><td>vivado-risc-v</td><td>△ Rocket Chip が前提</td><td>◯ SoC の自由度が低い</td><td>◯ Rocket + Linux</td><td>不採用</td></tr>
-  <tr><td>CVA6 SoC</td><td>△ SoC の統合が汎用でない</td><td>△ 整備が薄い</td><td>◯ 64-bit Linux</td><td>不採用</td></tr>
-  <tr><td>Chipyard</td><td>△ Chisel / Scala が中心</td><td>―</td><td>◯</td><td>不採用</td></tr>
+  <tr><th style="width:15%">Base</th><th style="width:32%">Ease of replacing the CPU</th><th style="width:21%">Arty A7 support</th><th style="width:21%">Linux boot record</th><th style="width:11%">Decision</th></tr>
+  <tr><td><strong>LiteX</strong></td><td>◎ Has a mechanism for swapping CPUs; existing CPUs serve as examples</td><td>◎ Official (DDR3, Ethernet, SD)</td><td>◎ OpenSBI and device tree included</td><td><strong>Chosen</strong></td></tr>
+  <tr><td>vivado-risc-v</td><td>△ Built around Rocket Chip</td><td>◯ Less freedom in the SoC</td><td>◯ Rocket + Linux</td><td>No</td></tr>
+  <tr><td>CVA6 SoC</td><td>△ SoC integration is not general</td><td>△ Little support</td><td>◯ 64-bit Linux</td><td>No</td></tr>
+  <tr><td>Chipyard</td><td>△ Chisel / Scala centered</td><td>―</td><td>◯</td><td>No</td></tr>
 </table>
-<p>もう 1 つの壁は Vivado だった。Vivado は x86 専用で、Apple Silicon の Mac 上の Ubuntu には入らない。Parallels の Windows 11(arm)で Vivado 2025.1 が動いたため、作業フォルダを共有し、合成と書き込みだけを筆者が回す形にした。</p>
+<p>The other obstacle was Vivado. Vivado runs only on x86 and cannot be installed on Ubuntu on an Apple Silicon Mac. Vivado 2025.1 did run on Windows 11 for Arm under Parallels, so the work folder was shared and only synthesis and programming were left to the author.</p>
 
-<h3>2.2 分担</h3>
-<p class="caption-t">表 2 筆者と Claude Code の分担</p>
+<h3>2.2 Division of work</h3>
+<p class="caption-t">Table 2 What the author and Claude Code did</p>
 <table>
-  <tr><th style="width:50%">筆者</th><th>Claude Code</th></tr>
-  <tr><td>目標・制約・優先順位を決める</td><td>仕様書を書き、設計判断を記録する(78 件)</td></tr>
-  <tr><td>案を出させて、どれを採るか決める</td><td>RTL をすべて書く(SystemVerilog 22,084 行)</td></tr>
-  <tr><td>仕様書の PDF を用意する(Debug Spec、特権仕様ほか)</td><td>テストベンチ・参照モデル・バグ注入を作って回す</td></tr>
-  <tr><td>Vivado で合成し、ボードに書き込む</td><td>LiteX への組み込み、OpenSBI、デバイスツリー、Linux まわりのビルド</td></tr>
-  <tr><td>SD カードを作り、実機を動かし、ログと数字を渡す</td><td>タイミングレポートと実機の数字を読み、原因と次の手を出す</td></tr>
-  <tr><td>結果を見て、おかしいところを指摘する</td><td>文書(日英)を書き、GitHub へ自律的にコミット・push する</td></tr>
+  <tr><th style="width:50%">The author</th><th>Claude Code</th></tr>
+  <tr><td>Set the goals, constraints and priorities</td><td>Wrote the specifications and recorded the design decisions (78)</td></tr>
+  <tr><td>Had options proposed and chose among them</td><td>Wrote all of the RTL (22,084 lines of SystemVerilog)</td></tr>
+  <tr><td>Provided the specification PDFs (Debug Spec, privileged spec and others)</td><td>Built and ran the testbenches, reference models and bug injection</td></tr>
+  <tr><td>Synthesized with Vivado and programmed the board</td><td>Integrated the CPU into LiteX; built OpenSBI, the device tree and the Linux side</td></tr>
+  <tr><td>Made the SD card, ran the board and passed back logs and numbers</td><td>Read the timing reports and board numbers, found causes and proposed next steps</td></tr>
+  <tr><td>Looked at the results and pointed out what was wrong</td><td>Wrote the documents (EN / JA), and committed and pushed to GitHub on its own</td></tr>
 </table>
-<p>RTL・テストベンチ・文書は Claude Code が書いた。筆者の入力は、約 350 回の日本語の指示と実機の結果である。</p>
+<p>Claude Code wrote the RTL, the testbenches and the documents. The author's input was about 350 instructions in Japanese, plus the results from the board.</p>
 
-<h3>2.3 開発環境</h3>
-<figure><img src="figs/fig_env_wp.svg" alt=""><figcaption>図 1 開発環境とツール、使ったモデルの変遷</figcaption></figure>
-<p>Ubuntu(arm64)の上で Claude Code がシミュレーション、ソフトウェアのビルド、文書とリポジトリの管理を回し、Vivado だけを Windows 側で筆者が回す。Vivado のレポートは共有フォルダ経由で Claude Code が読む。モデルは、LiteX と Rocket で環境を作った最初の 2 日が Claude Sonnet 5、自作 CPU に入った 09-15 から Opus 5、09-23 から Opus 5.5 である。</p>
+<h3>2.3 Development environment</h3>
+<figure><img src="figs/fig_env_wp_en.svg" alt=""><figcaption>Figure 1 Development environment, tools and the models used</figcaption></figure>
+<p>On Ubuntu (arm64), Claude Code ran the simulations, the software builds, and the documents and repository; only Vivado was run by the author on the Windows side. Claude Code read the Vivado reports through the shared folder. The model was Claude Sonnet 5 for the first two days (setting up LiteX with Rocket), Opus 5 from 09-15 when the work on the home-made CPU began, and Opus 5.5 from 09-23.</p>
 
-<h3>2.4 設計のサイクル</h3>
-<figure><img src="figs/fig_cycle.svg" alt=""><figcaption>図 2 Claude Code による設計の進め方(テーマごとに回すサイクル)</figcaption></figure>
-<p>1 つのテーマ(例: L2 を足す、ストアのミスを待たない)ごとに、仕様 → RTL → 自作テストと参照モデル → バグ注入でテストの検出力を確かめる → 筆者が実機で確かめる → 記録して次のテーマを決める、というサイクルを回した。実機の結果は、次のサイクルの入力になる。</p>
+<h3>2.4 The design cycle</h3>
+<figure><img src="figs/fig_cycle_en.svg" alt=""><figcaption>Figure 2 How Claude Code designed: a cycle run for each theme</figcaption></figure>
+<p>For each theme (for example, adding the L2, or not waiting for store misses) the same cycle was run: specification → RTL → own tests and reference models → bug injection to check how much the tests catch → check on the board by the author → record the results and decide the next theme. The board's results become the input of the next cycle.</p>
 
-<h3>2.5 記録の運用と規模</h3>
+<h3>2.5 Records and scale</h3>
 <div class="two">
 <div>
 <ul>
-  <li><strong>仕様書を先に書き、実装に合わせて直す</strong>(CPU_CORE_SPEC の決定事項 78 件、理由つき)。</li>
-  <li><strong>実機の記録を章ごとに残す</strong>(BRINGUP 18 回、TIMING 44 章、BENCH 25 章)。</li>
-  <li><strong>ROADMAP でテーマを管理</strong>し、済んだら印を付ける。</li>
-  <li><strong>文書は日英 2 か国語</strong>(XXXX.md / XXXX_J.md)。</li>
-  <li><strong>教訓は Claude Code のメモに残す</strong>(例: 共有フォルダでは make の時刻判定が効かない、バグ注入のログは全行を見る)。</li>
-  <li>会話が縮約されても、文書とメモから続きができる。</li>
+  <li><strong>Write the specification first and keep it in step with the implementation</strong> (78 design decisions in CPU_CORE_SPEC, each with its reasons).</li>
+  <li><strong>Record the board's results chapter by chapter</strong> (BRINGUP 18 rounds, TIMING 44 sections, BENCH 25 sections).</li>
+  <li><strong>Manage themes in a ROADMAP</strong> and mark them when done.</li>
+  <li><strong>Documents in two languages</strong> (XXXX.md / XXXX_J.md).</li>
+  <li><strong>Keep lessons in Claude Code's memory notes</strong> (e.g. make's timestamp check does not work on the shared folder; read every line of a bug-injection log).</li>
+  <li>Even when the conversation is compacted, work continues from the documents and the notes.</li>
 </ul>
 </div>
 <div>
 <table style="margin-top:0">
-  <tr><th>規模</th><th>数</th></tr>
-  <tr><td>期間</td><td>2026-09-13〜10-12(30 日)</td></tr>
-  <tr><td>コミット</td><td>189(git は 09-19 から)</td></tr>
-  <tr><td>筆者の指示</td><td>約 350 回</td></tr>
-  <tr><td>RTL</td><td>46 ファイル、22,084 行</td></tr>
-  <tr><td>検証</td><td>テスト・スクリプト 28,926 行</td></tr>
-  <tr><td>文書</td><td>英 9,777 行 + 日 9,505 行</td></tr>
-  <tr><td>設計判断</td><td>78 件</td></tr>
-  <tr><td>バグ注入</td><td>550 種、すべて検出</td></tr>
-  <tr><td>API 呼び出し</td><td>約 6,400 回</td></tr>
-  <tr><td>入力トークン</td><td>約 29 億(98 % はキャッシュ)</td></tr>
-  <tr><td>出力トークン</td><td>約 760 万(思考などを含む)</td></tr>
-  <tr><td>契約プラン</td><td>Claude Pro</td></tr>
+  <tr><th>Item</th><th>Value</th></tr>
+  <tr><td>Period</td><td>2026-09-13 to 10-12 (30 days)</td></tr>
+  <tr><td>Commits</td><td>189 (git from 09-19)</td></tr>
+  <tr><td>Author's instructions</td><td>about 350</td></tr>
+  <tr><td>RTL</td><td>46 files, 22,084 lines</td></tr>
+  <tr><td>Verification</td><td>tests and scripts, 28,926 lines</td></tr>
+  <tr><td>Documents</td><td>EN 9,777 + JA 9,505 lines</td></tr>
+  <tr><td>Design decisions</td><td>78</td></tr>
+  <tr><td>Bug injections</td><td>550, all detected</td></tr>
+  <tr><td>API calls</td><td>about 6,400</td></tr>
+  <tr><td>Input tokens</td><td>about 2.9 billion (98 % cache)</td></tr>
+  <tr><td>Output tokens</td><td>about 7.6 million (incl. thinking)</td></tr>
+  <tr><td>Plan</td><td>Claude Pro</td></tr>
 </table>
 </div>
 </div>
-<p class="small muted">トークン量は Claude Code の会話記録から集計した概算である。最初の相談のセッションと会話の要約の分は含まない。入力の大半は、呼び出しのたびに会話の履歴をキャッシュから読み直す分である。</p>
+<p class="small muted">The token counts are estimates summed from Claude Code's conversation logs. They do not include the session of the first request or the compaction of conversations. Most of the input is the conversation history read again from the cache at every call.</p>
 
 <!-- ======================================================================= 3 -->
-<h2>3. 仕様(Rev.01)</h2>
-<h3>3.1 CPU コア</h3>
-<figure><img src="figs/fig_core.svg" alt=""><figcaption>図 3 CPU コアのブロック図</figcaption></figure>
-<p class="caption-t">表 3 CPU の主な仕様</p>
+<h2>3. Specification (Rev.01)</h2>
+<h3>3.1 CPU core</h3>
+<figure><img src="figs/fig_core_en.svg" alt=""><figcaption>Figure 3 Block diagram of the CPU</figcaption></figure>
+<p class="caption-t">Table 3 Main features of the CPU</p>
 <table>
-  <tr><th style="width:18%">項目</th><th>仕様</th></tr>
-  <tr><td>ISA</td><td>RV64IMAFDC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz、Zicsr、Zifencei、Zicntr、Zihpm、M / S / U</td></tr>
-  <tr><td>パイプライン</td><td>8 段 in-order(IF1 IF2 FQ ID EX MR MA WB)、EX・MR・MA からのフォワーディング</td></tr>
-  <tr><td>分岐予測</td><td>BTB 256、gshare(PHT 8192)、リターンアドレススタック 8、ロードの値による分岐は MR で解決</td></tr>
-  <tr><td>乗除算</td><td>乗算 1〜2 サイクル、除算は早期終了、キャリーなし乗算 5 サイクル</td></tr>
-  <tr><td>浮動小数点</td><td>F / D、9 段のパイプラインで毎サイクル 1 演算(FMA)、除算・平方根は反復</td></tr>
-  <tr><td>MMU・保護</td><td>Sv39、ITLB / DTLB 各 8 エントリ、ハードウェアのページウォーカ、PMP 8</td></tr>
-  <tr><td>キャッシュ</td><td>L1 I$ / D$ 各 16 KB(4 ウェイ、64 B)、D$ はノンブロッキング・ライトバック、L2 256 KB</td></tr>
-  <tr><td>割り込み・特権</td><td>CLINT、PLIC(M / S)、Sstc、特権仕様 1.12</td></tr>
-  <tr><td>デバッグ</td><td>JTAG / cJTAG(Debug Spec 1.0)、トリガ 4 本(Sdtrig)、認証</td></tr>
-  <tr><td>性能カウンタ</td><td>4 本、26 イベント、Sscofpmf、Smcntrpmf(Linux の perf で使える)</td></tr>
-  <tr><td>FPGA</td><td>Arty A7-100T、50 MHz、WNS +0.664 ns、LUT 74 %、スライス 86 %、BRAM 108.5 / 135</td></tr>
+  <tr><th style="width:18%">Item</th><th>Specification</th></tr>
+  <tr><td>ISA</td><td>RV64IMAFDC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz, Zicsr, Zifencei, Zicntr, Zihpm, M / S / U</td></tr>
+  <tr><td>Pipeline</td><td>8-stage in-order (IF1 IF2 FQ ID EX MR MA WB), forwarding from EX, MR and MA</td></tr>
+  <tr><td>Branch prediction</td><td>BTB 256, gshare (PHT 8192), return address stack 8; branches on a load's value resolved in MR</td></tr>
+  <tr><td>Multiply / divide</td><td>Multiply in 1 to 2 cycles, divide with early exit, carry-less multiply in 5 cycles</td></tr>
+  <tr><td>Floating point</td><td>F / D, a 9-stage pipeline issuing one operation (FMA) a cycle; divide and square root iterate</td></tr>
+  <tr><td>MMU and protection</td><td>Sv39, ITLB / DTLB of 8 entries each, hardware page table walker, PMP 8</td></tr>
+  <tr><td>Caches</td><td>L1 I$ / D$ 16 KB each (4 ways, 64 B); the D$ is non-blocking and write-back; L2 256 KB</td></tr>
+  <tr><td>Interrupts, privilege</td><td>CLINT, PLIC (M / S), Sstc, privileged spec 1.12</td></tr>
+  <tr><td>Debug</td><td>JTAG / cJTAG (Debug Spec 1.0), 4 triggers (Sdtrig), authentication</td></tr>
+  <tr><td>Performance counters</td><td>4 counters, 26 events, Sscofpmf, Smcntrpmf (usable from Linux's perf)</td></tr>
+  <tr><td>FPGA</td><td>Arty A7-100T, 50 MHz, WNS +0.664 ns, LUT 74 %, slices 86 %, BRAM 108.5 / 135</td></tr>
 </table>
-<p>ロード・ストアは EX から D$ へ早出しし、ヒットは 2 サイクルで毎サイクル 1 アクセスを流す。SoC の DMA も D$ を通すので、Linux が前提とするキャッシュの一貫性をハードウェアで保つ。外部とのインタフェースは、メモリの AXI4、周辺の AXI-Lite、DMA 入力、JTAG / cJTAG である。Linux に必要な機能に加えて、性能のための拡張(Zba / Zbb / Zbc、Zicboz)と、計測のための PMU を後から足した。</p>
+<p>Loads and stores are issued to the D$ from EX; a hit takes 2 cycles and one access flows every cycle. The SoC's DMA also goes through the D$, so the cache coherence Linux expects is kept in hardware. The external interfaces are AXI4 for memory, AXI-Lite for peripherals, a DMA input and JTAG / cJTAG. On top of what Linux needs, extensions for speed (Zba / Zbb / Zbc, Zicboz) and a PMU for measurement were added later.</p>
 
-<h3>3.2 Linux システム</h3>
-<figure><img src="figs/fig_soc.svg" alt=""><figcaption>図 4 Linux システムの構成</figcaption></figure>
-<p>LiteX が生成する SoC の CPU を mmRISC-2 に差し替えた。最初は Rocket 構成とメモリマップを 1 バイト単位で合わせ、デバイスツリーは CPU のノードだけを書き換えた。その後、LiteX の L2 を外して CPU 内の L2 を使い、DMA を D$ 経由にし、Ethernet を足した。ソフトウェアは LiteX BIOS → OpenSBI v1.9 → Linux 7.2 → BusyBox の順に起動する。</p>
+<h3>3.2 Linux system</h3>
+<figure><img src="figs/fig_soc_en.svg" alt=""><figcaption>Figure 4 The Linux system</figcaption></figure>
+<p>The CPU of the SoC generated by LiteX was replaced with mmRISC-2. At first the memory map matched the Rocket configuration byte for byte, and only the CPU node of the device tree was rewritten. Later LiteX's L2 was removed in favour of the CPU's own L2, the DMA was routed through the D$, and Ethernet was added. The software boots in the order LiteX BIOS → OpenSBI v1.9 → Linux 7.2 → BusyBox.</p>
 
 <!-- ======================================================================= 4 -->
-<h2>4. 開発の経緯</h2>
-<h3>4.1 最初に手をつけたこと(09-15〜09-20)</h3>
-<figure><img src="figs/fig_first.svg" alt=""><figcaption>図 5 CPU 本体より先に確かめた、バスとメモリ、デバッガの経路</figcaption></figure>
-<p>CPU 本体の前に、<strong>バスとメモリ、デバッガの経路</strong>を確かめた。CPU が動かないときに、どこまでが正しいかを切り分けられるからである。デバッガは、公式の Debug Spec の PDF を渡して CPU より先に実装させ、09-17 に FPGA 上で OpenOCD からメモリの読み書きと cJTAG の再接続を確かめた。このデバッガは、後に実機の Linux カーネルにハードウェアブレークポイントを置くのにも使った。その後は「テストベンチから先に作る」を基本とし、キャッシュは参照モデルとランダムの試験を作ってから RTL を書いた。</p>
+<h2>4. History of the development</h2>
+<h3>4.1 What came first (09-15 to 09-20)</h3>
+<figure><img src="figs/fig_first_en.svg" alt=""><figcaption>Figure 5 The bus, memory and debugger paths, checked before the CPU</figcaption></figure>
+<p>Before the CPU itself, <strong>the paths of the bus, the memory and the debugger</strong> were checked, so that when the CPU did not work it would be clear how much was already right. The debugger was implemented before the CPU from the official Debug Spec PDF given to Claude Code; on 09-17 OpenOCD read and wrote memory on the FPGA through it, and cJTAG reconnection was checked as well. The same debugger later put hardware breakpoints on the Linux kernel running on the board. From then on the rule was "write the testbench first": for the caches, the reference model and the random tests came before the RTL.</p>
 
-<h3>4.2 日程の実績</h3>
-<figure><img src="figs/fig_timeline_wp.svg" alt=""><figcaption>図 6 開発日程の実績と主な出来事</figcaption></figure>
-<p>09-20〜21 の 2 日で CPU コア(パイプラインの骨格から LiteX への組み込みまで)を作り、09-22〜24 の 3 日をタイミングに使った。09-24 に実機で BIOS、09-25 に Linux が起動した。10 月に入ってからは性能と計測、10-10〜12 はメモリ待ちとタイミングの残りに取り組んだ。</p>
+<h3>4.2 Schedule</h3>
+<figure><img src="figs/fig_timeline_wp_en.svg" alt=""><figcaption>Figure 6 The actual schedule and the main events</figcaption></figure>
+<p>The CPU core, from the pipeline skeleton to the integration into LiteX, took the two days of 09-20 and 21, and timing took the three days from 09-22 to 24. The BIOS came up on the board on 09-24 and Linux on 09-25. In October the work turned to performance and measurement, and from 10-10 to 12 to the memory waits and the remaining timing paths.</p>
 
-<h3>4.3 主な判断と仕様変更</h3>
-<p class="caption-t">表 4 主な判断と仕様変更</p>
+<h3>4.3 Main decisions and changes</h3>
+<p class="caption-t">Table 4 Main decisions and changes of the specification</p>
 <table>
-  <tr><th style="width:9%">時期</th><th style="width:44%">判断</th><th>理由・結果</th></tr>
-  <tr><td>09-13</td><td>LiteX を土台に、まず標準の Rocket で Linux</td><td>CPU だけ差し替えればよい基準ができた(当日に起動)</td></tr>
-  <tr><td>09-16</td><td>バスはメモリ AXI4 / 周辺 AXI-Lite、アドレス 40 ビット</td><td>ほかの SoC でも使えるように。LiteX では上位を 0 と判定</td></tr>
-  <tr><td>09-18</td><td>L1 は Rocket 相当(16 KB + 16 KB)、パラメータ化</td><td>掃引 19 構成で検証</td></tr>
-  <tr><td>09-23</td><td>50 MHz のために<strong>ステージ MR を追加</strong>(7 → 8 段)</td><td>WNS −20.4 ns → 0.000 ns(09-24)</td></tr>
-  <tr><td>09-24</td><td>SoC の DMA を <strong>D$ 経由</strong>に</td><td>Linux の SD ドライバが前提とする一貫性をハードで保つ</td></tr>
-  <tr><td>10-02</td><td>ロード・ストアを <strong>EX から早出し</strong></td><td>CoreMark 1.895 → 2.211 /MHz</td></tr>
-  <tr><td>10-06</td><td>LiteX の L2 を外し、<strong>CPU 内に L2 256 KB</strong></td><td>カーネルの負荷が 1.2〜1.7 倍に</td></tr>
-  <tr><td>10-09</td><td>FPU を<strong>パイプライン化</strong></td><td>毎サイクル 1 演算、資源はむしろ減った</td></tr>
-  <tr><td>10-11</td><td>I$ のプリフェッチを作ったが<strong>切る</strong></td><td>実機で 0〜4 % 遅くなった(5.2 節)</td></tr>
-  <tr><td>10-12</td><td>バスの 2 本目の読み出しは作らず<strong>先に測る</strong></td><td>効果は 0.26 % と分かり、1 サイクル早い許可(FAST_READ)へ</td></tr>
+  <tr><th style="width:9%">Date</th><th style="width:44%">Decision</th><th>Reason / result</th></tr>
+  <tr><td>09-13</td><td>LiteX as the base; Linux on the standard Rocket first</td><td>A reference where only the CPU has to be swapped (booted the same day)</td></tr>
+  <tr><td>09-16</td><td>AXI4 for memory, AXI-Lite for peripherals, 40-bit addresses</td><td>Usable in other SoCs; LiteX checks that the top bits are 0</td></tr>
+  <tr><td>09-18</td><td>L1 like Rocket's (16 KB + 16 KB), parameterized</td><td>Verified over a sweep of 19 configurations</td></tr>
+  <tr><td>09-23</td><td><strong>Stage MR added</strong> for 50 MHz (7 → 8 stages)</td><td>WNS −20.4 ns → 0.000 ns (09-24)</td></tr>
+  <tr><td>09-24</td><td>The SoC's DMA <strong>through the D$</strong></td><td>Hardware keeps the coherence the Linux SD driver relies on</td></tr>
+  <tr><td>10-02</td><td>Loads and stores <strong>issued from EX</strong></td><td>CoreMark 1.895 → 2.211 /MHz</td></tr>
+  <tr><td>10-06</td><td>LiteX's L2 removed; <strong>an L2 of 256 KB inside the CPU</strong></td><td>Kernel-heavy loads 1.2 to 1.7 times faster</td></tr>
+  <tr><td>10-09</td><td>FPU <strong>pipelined</strong></td><td>One operation a cycle, and fewer resources</td></tr>
+  <tr><td>10-11</td><td>I$ prefetch built but <strong>switched off</strong></td><td>0 to 4 % slower on the board (section 5.2)</td></tr>
+  <tr><td>10-12</td><td>No second read on the bus; <strong>measure first</strong></td><td>It would gain 0.26 %; a grant one cycle earlier (FAST_READ) instead</td></tr>
 </table>
-<p>判断は筆者が最終的に選んだが、案と根拠の多くは Claude Code が出した。後半は「作る前に測る」が定着した。</p>
+<p>The author made the final choices, but Claude Code proposed most of the options and their reasoning. In the later part, "measure before building" became the rule.</p>
 
-<h3>4.4 性能の推移</h3>
-<figure><img src="figs/fig_perf.svg" alt=""><figcaption>図 7 CoreMark と Dhrystone の推移(実機、Linux 上、50 MHz)</figcaption></figure>
-<p>初版(10-01)の 1.584 CoreMark/MHz から、D$ のヒットを 2 サイクルに、ロード・ストアを EX から早出し、乗算を 1 サイクルに、gshare、ロードの値による分岐を MR で解決、Zba / Zbb、L2、最後にコンパイラのオプション、と積み上げて、CoreMark は +91 %、Dhrystone は +87 % になった。</p>
-<figure><img src="figs/fig_workload.svg" alt=""><figcaption>図 8 Linux の実負荷の CPI(PMU で計測、小さいほど速い)</figcaption></figure>
-<p>CoreMark はキャッシュに収まるため、Linux の実際の負荷を 8 つ選び、PMU で数えた(workload.sh)。カーネルが主の負荷ではキャッシュ待ちがサイクルの 50〜70 % を占めていたので、L2 を入れて 1.2〜1.7 倍にした。その後、ストアのミスを待たない、汚れた追い出しより先に読み込む、cbo.zero、バスの改善で、さらに 7〜11 % 下げた。関数ごとの内訳(perf)を見て、Zbc による CRC の高速化も確かめた。</p>
+<h3>4.4 Performance</h3>
+<figure><img src="figs/fig_perf_en.svg" alt=""><figcaption>Figure 7 CoreMark and Dhrystone (on the board, under Linux, 50 MHz)</figcaption></figure>
+<p>From 1.584 CoreMark/MHz in the first version (10-01), the steps were: D$ hits in 2 cycles, loads and stores issued from EX, 1-cycle multiply, gshare, branches on a load's value resolved in MR, Zba / Zbb, the L2 and finally the compiler options. CoreMark rose by 91 % and Dhrystone by 87 %.</p>
+<figure><img src="figs/fig_workload_en.svg" alt=""><figcaption>Figure 8 CPI of real Linux loads, counted by the PMU (lower is faster)</figcaption></figure>
+<p>CoreMark fits in the caches, so eight real Linux loads were chosen and counted with the PMU (workload.sh). Kernel-heavy loads spent 50 to 70 % of their cycles waiting for the caches; the L2 made them 1.2 to 1.7 times faster. Not waiting for store misses, fetching before writing back a dirty victim, cbo.zero and the bus improvements then cut another 7 to 11 %. The breakdown by function (perf) also confirmed the faster CRC with Zbc.</p>
 
-<h3>4.5 FPGA のタイミング(WNS)の推移</h3>
-<figure><img src="figs/fig_wns.svg" alt=""><figcaption>図 9 WNS の推移(配置配線後、50 MHz)</figcaption></figure>
-<p>最初の合成は −20.4 ns(約 25 MHz 相当)だった。原因を配線の混雑ではなく論理の段数と見て、経路を読んで切っていった。途中の段階 2 は逆に悪化してやり直し、最後はステージ MR を足して 09-24 に 50 MHz を満たした。その後も機能を足すたびに WNS は 0 付近に戻り、そのたびに最悪経路を読んで直した(T1〜T7)。Rev.01 では +0.664 ns である。</p>
+<h3>4.5 Timing (WNS)</h3>
+<figure><img src="figs/fig_wns_en.svg" alt=""><figcaption>Figure 9 WNS over time (after place and route, 50 MHz)</figcaption></figure>
+<p>The first synthesis gave −20.4 ns (about 25 MHz). Judging the cause to be logic depth rather than routing congestion, the paths were read and cut one by one. Step 2 made things worse and was redone, and adding stage MR finally met 50 MHz on 09-24. After that, every new feature brought WNS back near 0, and each time the worst path was read and fixed (T1 to T7). Rev.01 closes at +0.664 ns.</p>
 
 <!-- ======================================================================= 5 -->
-<h2>5. 手戻りと検証</h2>
-<p>AI が間違えた例と、それを何が捕まえたかを 3 つ挙げる。</p>
-<h3>5.1 手戻り①: 起動時のバナーが「__」で止まった(09-24)</h3>
+<h2>5. Rework and verification</h2>
+<p>Three cases where the AI went wrong, and what caught each of them.</p>
+<h3>5.1 Rework 1: the boot banner stopped at "__" (09-24)</h3>
 <div class="two">
 <div style="flex:0 0 58mm">
 <div class="term"><span style="font-size:13pt;color:#9A9A9A">␣␣␣␣␣␣␣␣</span><span style="font-size:13pt;color:#fff;font-weight:bold">__</span><span style="font-size:13pt;color:#F2A900">▌</span>
-<span style="color:#B8B8B8">␣ = 空白、</span><span style="color:#F2A900">▌</span><span style="color:#B8B8B8"> = ここで止まる</span></div>
+<span style="color:#B8B8B8">␣ = space, </span><span style="color:#F2A900">▌</span><span style="color:#B8B8B8"> = stopped here</span></div>
 </div>
 <div>
-<p>最初の実機で、LiteX BIOS のバナーの途中で止まった。送れたのは UART の送信 FIFO の 16 バイト(改行 <code>\n\r</code> の 2 + 太字の制御コード <code>ESC[1m</code> の 4 + 見える 10 文字)である。CPU は動いていて、止まっていたのは<strong>割り込み</strong>だった。</p>
+<p>On the first board run, the LiteX BIOS banner stopped part way. What got out were the 16 bytes of the UART's transmit FIFO: 2 for the newline <code>\n\r</code>, 4 for the bold escape <code>ESC[1m</code> and 10 visible characters. The CPU was running; what had stopped was the <strong>interrupts</strong>.</p>
 </div>
 </div>
 <ul>
-  <li><strong>原因</strong>: キャッシュ無しのアクセスで<strong>アドレスを 8 バイトに丸めていた</strong>。PLIC の +4 番地への書き込みが「下半分・ストローブ無し」になって消え、割り込みが来ない。UART の送信は 16 バイトの FIFO を超えると割り込み待ちになる。</li>
-  <li><strong>なぜ見逃したか</strong>: シミュレーションのメモリモデルはバイト単位でアドレスを受け、SoC のテストは外部割り込みを 0 に固めていた。<strong>本物の BIOS を割り込み込みで走らせたことがなかった</strong>。</li>
-  <li><strong>何で捕まえたか</strong>: 本物の bios.bin と UART のモデルを載せた <strong>SIM_BIOS</strong> を作り、直す前の RTL が同じところで止まることを再現してから直した。SIM_BIOS はその後、Linux の起動まで回す回帰試験になった。</li>
+  <li><strong>Cause</strong>: uncached accesses <strong>rounded the address to 8 bytes</strong>. A write to the PLIC register at +4 became "the lower half with no strobes" and was lost, so no interrupt came. Beyond the 16-byte FIFO, the UART transmits from its interrupt.</li>
+  <li><strong>Why it was missed</strong>: the simulation's memory model took byte addresses, and the SoC tests tied the external interrupt to 0. <strong>The real BIOS had never been run with interrupts.</strong></li>
+  <li><strong>What caught it</strong>: <strong>SIM_BIOS</strong>, which runs the real bios.bin with a model of the UART. The RTL before the fix was shown to stop at the same place, and then it was fixed. SIM_BIOS later became the regression test that boots Linux.</li>
 </ul>
-<p>翌日には、satp を書いた後に命令を取り直さない不具合(MMU を S モードで有効にする手順)も見つかった。どちらも「実機で初めて通る道」だった。</p>
+<p>The next day a bug where instructions were not fetched again after a write of satp (the sequence that enables the MMU in S mode) was also found. Both were "paths first taken on the board".</p>
 
-<h3>5.2 手戻り②: 実機では遅くなったプリフェッチ(10-11)</h3>
+<h3>5.2 Rework 2: a prefetch that was slower on the board (10-11)</h3>
 <div class="two">
 <div>
 <ul>
-  <li>I$ の次ラインのプリフェッチを入れると、Linux の起動のシミュレーションで CPI が −1.1 %、プリフェッチの 48 % がミスを救った。</li>
-  <li>しかし<strong>実機では 0〜4 % 遅くなった</strong>。使われないプリフェッチのバーストの後ろで、本当のミスが待っていた。</li>
-  <li><strong>原因</strong>: シミュレーションのメモリは即答し、実機の DDR3 は数十サイクルかかる。</li>
-  <li><strong>対策</strong>: シミュレーションに<strong>メモリの遅れのモデル</strong>(読み 20、書き 10 サイクル)を入れると、シミュレーションでも +1.2 % と実機と同じ判定になった。</li>
+  <li>With a next-line prefetch for the I$, the simulated Linux boot showed CPI −1.1 %, and 48 % of the prefetches saved a miss.</li>
+  <li>But <strong>on the board it was 0 to 4 % slower</strong>: real misses waited behind the bursts of prefetches that were never used.</li>
+  <li><strong>Cause</strong>: the simulation's memory answered at once, while the board's DDR3 takes tens of cycles.</li>
+  <li><strong>Fix</strong>: with a <strong>memory latency model</strong> (20 cycles for reads, 10 for writes), the simulation also showed +1.2 %, the same verdict as the board.</li>
 </ul>
 </div>
-<div style="flex:0 0 72mm"><figure style="margin-top:0"><img src="figs/fig_prefetch.svg" alt=""><figcaption>図 10 プリフェッチを入れたときの CPI の変化</figcaption></figure></div>
+<div style="flex:0 0 72mm"><figure style="margin-top:0"><img src="figs/fig_prefetch_en.svg" alt=""><figcaption>Figure 10 CPI change with the prefetch</figcaption></figure></div>
 </div>
-<p>プリフェッチは切り、以後は<strong>作る前に測る</strong>ようにした。例えば、バスに 2 本目の読み出しを受けさせる改造は、効果が 0.26 % しかないと先に分かったので作らなかった。AI はシミュレーションの前提(メモリが即答)を疑わずに「速くなった」と報告した。<strong>実機の数字が、前提の誤りを教えた</strong>。</p>
+<p>The prefetch was switched off, and from then on the rule was <strong>to measure before building</strong>. For example, letting the bus take a second read was found in advance to gain only 0.26 %, and was not built. The AI did not question the simulation's assumption (memory answers at once) and reported "faster". <strong>The board's numbers exposed the wrong assumption.</strong></p>
 
-<h3>5.3 手戻り③: AI の報告の誤りと、環境の罠</h3>
+<h3>5.3 Rework 3: a wrong report by the AI, and traps of the environment</h3>
 <div class="two">
 <div class="box" style="margin-top:0">
-<p><strong>報告の誤り(10-12)</strong></p>
+<p><strong>A wrong report (10-12)</strong></p>
 <ul class="small">
-  <li>Zicboz を入れたとき、キャッシュのバグ注入を「59 / 59 検出」と報告してコミットした。</li>
-  <li>実際は 56 / 59。名前の変更で 3 つの変異が当たらなくなっていた。</li>
-  <li>ログの最後の 3 行だけを見て要約していた。次の変更の検証で自分で気づき、訂正した。</li>
-  <li>→ 規則をメモに残した: 「NOT DETECTED / NOT APPLIED を全行出して、数を突き合わせる」。</li>
+  <li>When adding Zicboz, Claude Code reported and committed "59 / 59 detected" for the bug injection of the caches.</li>
+  <li>The real count was 56 / 59: a renaming had moved the targets of three mutations.</li>
+  <li>It had summarized only the last three lines of the log. It noticed this itself while verifying the next change, and corrected it.</li>
+  <li>→ A rule was added to its notes: "list every NOT DETECTED / NOT APPLIED line and check the count".</li>
 </ul>
 </div>
 <div class="box y" style="margin-top:0">
-<p><strong>環境の罠(09-21、10-05)</strong></p>
+<p><strong>Traps of the environment (09-21, 10-05)</strong></p>
 <ul class="small">
-  <li>SD カードに書いたファイルが、差し直すと消えていた。原因は macOS が、VM に渡す前にマウントしていた古い FAT を、カードが戻ったときに書き戻していたこと。Claude Code が FAT のタイムスタンプから順番を割り出した。→ 「第 1 パーティションは Mac から書く」を手順とメモに。</li>
-  <li>共有フォルダはファイルの時刻が 1 秒単位のため、直した RTL を make が「変更なし」と見なし、古いシミュレータで試験していた。→ ソースのハッシュで判定する形に直した。</li>
+  <li>Files written to the SD card were gone after reinserting it. macOS had mounted the card before it was handed to the VM, and wrote back its stale FAT when the card returned. Claude Code worked out the order from the FAT timestamps. → "Write the first partition from the Mac" went into the procedure and the notes.</li>
+  <li>The shared folder keeps file times to one second, so make took freshly edited RTL as "unchanged" and tests ran on an old simulator. → Rebuilds are now decided by a hash of the sources.</li>
 </ul>
 </div>
 </div>
-<p>AI の誤りは「もっともらしい要約」に出る。生のログを見る規則で防げる。環境の罠は人の手元にあり、AI は記録から原因を推理できる。</p>
+<p>The AI's mistakes show up as plausible summaries, and a rule of reading the raw logs prevents them. The traps of the environment lie on the human's side, and the AI can infer their causes from the records.</p>
 
-<h3>5.4 検証方法の進化</h3>
-<figure><img src="figs/fig_verif.svg" alt=""><figcaption>図 11 検証方法の進化(黄色は実機で問題が出てから足した方法)</figcaption></figure>
-<p>実機で止まるたびに、それを再現できるシミュレーションを先に作ってから直した。実機が、検証の穴を教えてくれる。</p>
+<h3>5.4 How verification evolved</h3>
+<figure><img src="figs/fig_verif_en.svg" alt=""><figcaption>Figure 11 How verification evolved (yellow: added after a problem on the board)</figcaption></figure>
+<p>Each time the board stopped, a simulation that reproduced the problem was built first, and only then was the problem fixed. The board shows where the holes in verification are.</p>
 
-<h3>5.5 最終の検証結果(Rev.01)</h3>
-<p class="caption-t">表 5 最終の検証結果</p>
+<h3>5.5 Final verification (Rev.01)</h3>
+<p class="caption-t">Table 5 Final verification results</p>
 <table>
-  <tr><th style="width:17%">環境</th><th>内容</th><th style="width:22%">結果</th></tr>
-  <tr><td>SIM_CORE</td><td>自作試験 34 本(命令、トラップ、MMU、PMP、デバッグ、PMU ほか)、背圧あり</td><td>全 PASS</td></tr>
-  <tr><td>riscv-tests</td><td>公式(rv64ui/um/ua/uc/uf/ud/uzba/uzbb/uzbs/uzbc/uzicond/mi/si)</td><td>p 178 / v 154 PASS</td></tr>
-  <tr><td>SIM_SYS</td><td>コア + 本物の L1 / L2 + DMA、自作 27 本 + riscv-tests</td><td>全 PASS</td></tr>
-  <tr><td>SIM_CACHE</td><td>CPU と DMA を同時にランダム、21 節、掃引 19 構成</td><td>64,914 チェック PASS</td></tr>
-  <tr><td>SIM_L2 / MMU / FPU</td><td>L2 約 150 万、PMP 20 万、FPU(SoftFloat と比較)約 130 万</td><td>PASS</td></tr>
-  <tr><td>SIM_BIOS</td><td>本物の LiteX BIOS、SD カードモデルから Linux 起動、perf</td><td>プロンプトまで</td></tr>
-  <tr><td>SIM_OCD</td><td>OpenOCD との協調シミュレーション(ブレーク、ウォッチ)</td><td>PASS</td></tr>
-  <tr><td>バグ注入</td><td>CORE 339、CACHE 59、SYS 23、L2 31、MMU 21、FPU 62、DBG 15</td><td><strong>550 種すべて検出</strong></td></tr>
-  <tr><td>実機</td><td>Linux 起動、Ethernet、120 分の負荷試験(メモリ・ネット・SD を同時に照合)</td><td>PASS</td></tr>
+  <tr><th style="width:17%">Environment</th><th>What it does</th><th style="width:22%">Result</th></tr>
+  <tr><td>SIM_CORE</td><td>34 own tests (instructions, traps, MMU, PMP, debug, PMU and more), with back pressure</td><td>All PASS</td></tr>
+  <tr><td>riscv-tests</td><td>Official (rv64ui/um/ua/uc/uf/ud/uzba/uzbb/uzbs/uzbc/uzicond/mi/si)</td><td>p 178 / v 154 PASS</td></tr>
+  <tr><td>SIM_SYS</td><td>Core + real L1 / L2 + DMA, 27 own tests + riscv-tests</td><td>All PASS</td></tr>
+  <tr><td>SIM_CACHE</td><td>CPU and DMA at random at the same time, 21 sections, sweep of 19 configurations</td><td>64,914 checks PASS</td></tr>
+  <tr><td>SIM_L2 / MMU / FPU</td><td>L2 about 1.5 million, PMP 200,000, FPU (against SoftFloat) about 1.3 million</td><td>PASS</td></tr>
+  <tr><td>SIM_BIOS</td><td>The real LiteX BIOS, Linux boot from an SD card model, perf</td><td>To the prompt</td></tr>
+  <tr><td>SIM_OCD</td><td>Co-simulation with OpenOCD (breakpoints, watchpoints)</td><td>PASS</td></tr>
+  <tr><td>Bug injection</td><td>CORE 339, CACHE 59, SYS 23, L2 31, MMU 21, FPU 62, DBG 15</td><td><strong>All 550 detected</strong></td></tr>
+  <tr><td>Board</td><td>Linux boot, Ethernet, 120-minute stress test (memory, network and SD checked at once)</td><td>PASS</td></tr>
 </table>
-<p class="small muted">riscv-tests の失敗 4 本は、実装していない機能(ハードウェアのミスアラインアクセス、Zacas)を求めるものである。</p>
+<p class="small muted">The 4 failing riscv-tests require features not implemented (misaligned accesses in hardware, Zacas).</p>
 
-<h3>5.6 実機の動作</h3>
+<h3>5.6 On the board</h3>
 <div class="two">
 <div>
 <div class="term">        __   _ __      _  __
@@ -360,126 +358,126 @@ Platform Name : mmRISC-2 on Digilent Arty A7-100T
 udhcpc: lease of 192.168.0.9 obtained
 # </div>
 <ul class="small">
-  <li>カーネルの起動から 3.4 秒で init、DHCP、TFTP</li>
-  <li>perf(関数名つき)、gdb で実行中のカーネルにハードウェアブレーク</li>
-  <li>120 分の負荷試験 PASS(Rev.01: mem 81、net 41、sd 517、NG 0)</li>
+  <li>init 3.4 s after the kernel starts; DHCP, TFTP</li>
+  <li>perf with function names; gdb hardware breakpoints in the running kernel</li>
+  <li>120-minute stress test PASS (Rev.01: mem 81, net 41, sd 517, NG 0)</li>
 </ul>
 </div>
-<div style="flex:0 0 66mm"><figure style="margin-top:2mm"><img src="figs/fpga_board.jpg" alt=""><figcaption>図 12 Arty A7-100T と JTAG デバッガ(上の緑の基板)</figcaption></figure></div>
+<div style="flex:0 0 66mm"><figure style="margin-top:2mm"><img src="figs/fpga_board.jpg" alt=""><figcaption>Figure 12 The Arty A7-100T and the JTAG debugger (the green board on top)</figcaption></figure></div>
 </div>
 
 <!-- ======================================================================= 6 -->
-<h2>6. Claude Code による自動設計の評価</h2>
-<h3>6.1 利点と課題</h3>
+<h2>6. Evaluation of design by Claude Code</h2>
+<h3>6.1 Strengths and weaknesses</h3>
 <table>
-  <tr><th style="width:50%">利点(Pros)</th><th>課題(Cons)</th></tr>
-  <tr><td><strong>速い</strong>: 12 日で自作 CPU に Linux、30 日で性能 +91 %</td><td><strong>実機は人が要る</strong>: Vivado、ボード、SD カード、観察</td></tr>
-  <tr><td>仕様・RTL・検証・文書を<strong>一貫して書き、保ち続ける</strong>(日英)</td><td><strong>前提が違っても、もっともらしく進む</strong>(即答するメモリで「速くなった」)</td></tr>
-  <tr><td><strong>検証が厚い</strong>: 参照モデル、ランダム、掃引、バグ注入 550 種を自分で作って回す</td><td><strong>報告を誤ることがある</strong>(56 / 59 を 59 / 59 と報告)</td></tr>
-  <tr><td><strong>実機の数字を読む</strong>: タイミングレポートや PMU から原因と次の手を出す</td><td><strong>環境の罠に弱い</strong>(共有フォルダの時刻、Mac のマウント)</td></tr>
-  <tr><td>公開の仕様書(PDF)を読んで実装する</td><td>長い会話は縮約される: 文書とメモに残すことが前提</td></tr>
-  <tr><td>夜中でも回し続け、記録を残す</td><td>何を作るか、どこで止めるかは人が決める</td></tr>
-  <tr><td><strong>GitHub へ自律的にコミット・push</strong> → 確実に履歴が残る</td><td></td></tr>
+  <tr><th style="width:50%">Strengths (pros)</th><th>Weaknesses (cons)</th></tr>
+  <tr><td><strong>Fast</strong>: Linux on a home-made CPU in 12 days, +91 % performance in 30 days</td><td><strong>The board needs a human</strong>: Vivado, the board, the SD card, observation</td></tr>
+  <tr><td><strong>Writes and maintains</strong> specification, RTL, verification and documents <strong>consistently</strong> (EN / JA)</td><td><strong>Carries on plausibly from a wrong assumption</strong> ("faster" with an instantly answering memory)</td></tr>
+  <tr><td><strong>Thorough verification</strong>: builds and runs reference models, random tests, sweeps and 550 bug injections itself</td><td><strong>Can report wrongly</strong> (56 / 59 reported as 59 / 59)</td></tr>
+  <tr><td><strong>Reads the board's numbers</strong>: finds causes and next steps from timing reports and the PMU</td><td><strong>Weak against traps of the environment</strong> (shared-folder timestamps, macOS mounts)</td></tr>
+  <tr><td>Reads public specifications (PDF) and implements them</td><td>Long conversations get compacted: keeping documents and notes is a must</td></tr>
+  <tr><td>Keeps working through the night and leaves records</td><td>What to build and where to stop is decided by the human</td></tr>
+  <tr><td><strong>Commits and pushes to GitHub on its own</strong> → the history is always kept</td><td></td></tr>
 </table>
-<p>課題の多くは、人が実機で確かめ、AI に生の数字を渡すことで補える。</p>
+<p>Most of the weaknesses are covered by the human checking on the board and giving the AI the raw numbers.</p>
 
-<h3>6.2 人がやること・うまく使うコツ</h3>
+<h3>6.2 What the human does, and how to work well</h3>
 <ul>
-  <li><strong>目標と制約をはっきり言う</strong>: 「CPU だけ自作、周辺と Linux は既存」。</li>
-  <li><strong>迷ったら案を出させ、比べさせてから選ぶ</strong>: 土台、バスの幅、キャッシュの構成。</li>
-  <li><strong>作る前に測らせる</strong>: メモリ待ちの内訳を数えてから、手を付ける順番を決めた。</li>
-  <li><strong>シミュレーションと実機の両方で確かめる</strong>: 食い違いは検証の穴として埋める。</li>
-  <li><strong>数字で報告させ、生のログを見る</strong>。</li>
-  <li><strong>決めたことと教訓を文書とメモに残させる</strong>: 次のセッションが続きから始められる。</li>
-  <li><strong>テーマ単位で区切り、きりのよいところでコミット</strong>する。</li>
-  <li><strong>一次資料を渡す</strong>: RISC-V の仕様書 PDF、実機のログ、レポート。</li>
+  <li><strong>State the goal and the constraints clearly</strong>: "only the CPU is home-made; peripherals and Linux are reused".</li>
+  <li><strong>When in doubt, have options proposed and compared, then choose</strong>: the base, the bus width, the cache configuration.</li>
+  <li><strong>Have it measure before building</strong>: the memory waits were counted before deciding what to work on first.</li>
+  <li><strong>Check both in simulation and on the board</strong>: fill every disagreement as a hole in verification.</li>
+  <li><strong>Have it report in numbers, and look at the raw logs</strong>.</li>
+  <li><strong>Have decisions and lessons kept in documents and notes</strong>: the next session continues from them.</li>
+  <li><strong>Divide the work into themes and commit at clean points</strong>.</li>
+  <li><strong>Give it primary sources</strong>: the RISC-V specification PDFs, the board's logs and reports.</li>
 </ul>
 <div class="box y">
-<p><strong>リアルな開発チームの技術マネージャのように振る舞う</strong></p>
-<p style="margin:0">詳細の内容まではチェックできなくても、担当者(Claude Code)がどのように考え、どのように確認と検証を進めようとしているのかをインタビューして、設計品質を確かめていく。それと同じことをする。RTL の 1 行 1 行は読めなくても、どう考え、どう確かめたかを聞けば、品質は見える。</p>
+<p><strong>Act like the technical manager of a real development team</strong></p>
+<p style="margin:0">Without checking every detail, interview the engineer in charge (Claude Code) about how it thinks and how it intends to check and verify its work, and confirm the quality of the design that way. Even without reading the RTL line by line, the quality becomes visible by asking how it was thought out and how it was checked.</p>
 </div>
 
 <!-- ======================================================================= 7 -->
-<h2>7. まとめと今後</h2>
-<h3>7.1 まとめ</h3>
+<h2>7. Summary and next steps</h2>
+<h3>7.1 Summary</h3>
 <ul>
-  <li>Claude Code で RV64GC の CPU を設計し、<strong>12 日で Arty A7-100T の Linux を起動</strong>した。</li>
-  <li>30 日で <strong>Rev.01</strong>: L2、FPU パイプライン、Zbc / Zicboz、CoreMark 3.0 /MHz、WNS +0.664 ns、120 分の負荷試験 PASS。</li>
-  <li>人の役割は、<strong>目標と判断、実機、そして AI の報告を確かめること</strong>である。</li>
+  <li>Claude Code designed an RV64GC CPU, and <strong>Linux booted on it on the Arty A7-100T in 12 days</strong>.</li>
+  <li><strong>Rev.01</strong> in 30 days: L2, pipelined FPU, Zbc / Zicboz, 3.0 CoreMark/MHz, WNS +0.664 ns, 120-minute stress test passed.</li>
+  <li>The human's role is <strong>the goals and decisions, the board, and checking what the AI reports</strong>.</li>
 </ul>
 
-<h3>7.2 次のテーマ(ROADMAP)</h3>
-<p>Rev.01 のタグは main に置き、開発は dev ブランチで続ける。実機の負荷を関数ごとに測った結果から、次の順で進める。</p>
+<h3>7.2 Next themes (ROADMAP)</h3>
+<p>The tag Rev.01 stays on main, and development continues on the dev branch. From the board's loads measured function by function, the next themes are:</p>
 <ul>
-  <li><strong>2 段目の TLB</strong>: ユーザモードの負荷では、ページテーブルの探索がサイクルの 10〜13 % を占める。</li>
-  <li><strong>ライン全体を書くときは読まない</strong>(write-validate): カーネルのユーザ空間へのコピーで、コピー先のラインの読み込みを省く。</li>
-  <li><strong>キャッシュ無しのストアを待たない</strong>(posted store): ドライバの書き込み(例: Ethernet の送信)。</li>
+  <li><strong>A second-level TLB</strong>: page table walks take 10 to 13 % of the cycles of user-mode loads.</li>
+  <li><strong>No read when a whole line is written</strong> (write-validate): skip reading the destination lines in the kernel's copies to user space.</li>
+  <li><strong>Not waiting for uncached stores</strong> (posted stores): the drivers' writes, such as Ethernet transmission.</li>
 </ul>
 
-<h3>7.3 次の構想: mmRISC-3(仮称)</h3>
-<p>同じ Arty A7-100T で、<strong>RV64GC の dual-issue / out-of-order</strong> コアに Linux を載せられるかを机上で検討している(まだ設計はしない)。</p>
+<h3>7.3 Next concept: mmRISC-3 (tentative)</h3>
+<p>A paper study (no design yet) of whether a <strong>dual-issue, out-of-order RV64GC</strong> core can run Linux on the same Arty A7-100T.</p>
 <div class="two">
 <div class="box" style="margin-top:0">
-<p><strong>見通し</strong></p>
+<p><strong>Outlook</strong></p>
 <ul class="small">
-  <li><strong>資源の再配分の設計になる</strong>: スライスはすでに 86 %。L2 を縮め、LUT から BRAM・LUTRAM・DSP へ移す。</li>
-  <li>目安: FPGA 向け OoO の NaxRiscv RV64 は、コアで約 18k LUT(FPU・Zb 系なし)。</li>
-  <li><strong>50 MHz に据え置き</strong>、段数を減らして資源を節約する。</li>
-  <li>最大の分かれ目は <strong>FPU の扱い</strong>(専用リネーム / 整数と統合 / 縮小)。</li>
+  <li><strong>A design of reallocating resources</strong>: slices are already at 86 %. Shrink the L2 and move logic from LUTs to BRAM, LUTRAM and DSPs.</li>
+  <li>For scale: NaxRiscv RV64, an out-of-order core for FPGAs, is about 18k LUTs for the core (without FPU and Zb extensions).</li>
+  <li><strong>Stay at 50 MHz</strong> and save resources with fewer stages.</li>
+  <li>The biggest fork is <strong>the FPU</strong> (its own renaming / shared with the integer side / reduced).</li>
 </ul>
 </div>
 <div class="box y" style="margin-top:0">
-<p><strong>mmRISC-2 から分かっていること</strong></p>
+<p><strong>What mmRISC-2 has shown</strong></p>
 <ul class="small">
-  <li>ミスしたロードの値は 1〜2 命令後に使われる → <strong>複数のミスを同時に出せる D$・L2 が前提</strong>(いまのバスは読み出しを 1 本ずつ)。</li>
-  <li>Linux の急所は<strong>副作用を投機させない</strong>こと: MMIO のロード、CSR、AMO、例外、デバッグ、トリガはコミット時に。</li>
-  <li>期待: CoreMark は約 1.6 倍が天井、カーネルの負荷は 1.2〜1.4 倍。</li>
+  <li>A missed load's value is used 1 or 2 instructions later → <strong>a D$ and L2 that handle several misses at once are a prerequisite</strong> (today the bus takes one read at a time).</li>
+  <li>The crux for Linux is <strong>not speculating side effects</strong>: MMIO loads, CSRs, AMOs, exceptions, debug and triggers at commit.</li>
+  <li>Expectation: about 1.6 times at best on CoreMark, 1.2 to 1.4 times on kernel loads.</li>
 </ul>
 </div>
 </div>
-<p>進め方は、資源の内訳を測る → NaxRiscv RV64 を Arty で実測 → 1-wide OoO で Linux を起動 → 2-wide に → 投機ロードとミスの多重化 → FPU と予測器、の順とする。検証は、これまでの参照モデル・バグ注入・SIM_BIOS を引き継ぎ、コミット時に Spike と突き合わせる仕組みを最初から入れる。収まらなければ、デュアルイシューの in-order か、1-wide OoO で止める。</p>
+<p>The plan: measure the breakdown of resources → measure NaxRiscv RV64 on the Arty → boot Linux on a 1-wide out-of-order core → go 2-wide → speculative loads and multiple outstanding misses → FPU and predictor. Verification keeps the reference models, bug injection and SIM_BIOS of mmRISC-2, and adds lock-step comparison with Spike at commit from the start. If it does not fit, the fallback is a dual-issue in-order core, or stopping at 1-wide out-of-order.</p>
 
 <!-- ======================================================================= appendix -->
-<h2>付録 A. 筆者紹介</h2>
-<p><strong>圓山 宗智</strong>(京都市左京区出身)</p>
-<p>1986 年、日立製作所に入社し、SH マイコンの開発に従事。以降、ルネサステクノロジ、ベンチャー企業、大手半導体メーカにて、画像処理用 SoC や各種マイコンおよび関連半導体デバイスの開発を統括。現在もマイコン製品設計に取り組んでいる。1978 年からマイコン・FPGA・GPU と戯れ、2000 年からマイコンを絡めた雑誌記事(約 100 本)と書籍を執筆している。</p>
+<h2>Appendix A. About the author</h2>
+<p><strong>Munetomo Maruyama</strong> (from Sakyo-ku, Kyoto)</p>
+<p>Joined Hitachi, Ltd. in 1986 and worked on the development of SH microcontrollers. Since then, at Renesas Technology, a venture company and a major semiconductor maker, he has led the development of SoCs for image processing, various microcontrollers and related semiconductor devices, and he still designs microcontroller products today. He has been playing with microcomputers, FPGAs and GPUs since 1978, and has written magazine articles (about 100) and books on microcontrollers since 2000.</p>
 <div class="two small">
 <div>
-<p><strong>主な雑誌記事</strong></p>
+<p><strong>Selected magazine articles (in Japanese)</strong></p>
 <ol>
-  <li>ARM ベース・システム LSI 開発の事例研究、Design Wave Magazine 2006 年 5 月号、CQ 出版社</li>
-  <li>ARM 汎用プロセッサで使える汎用 JTAG デバッガを自作する、Design Wave Magazine 2008 年 6 月号、CQ 出版社</li>
-  <li>並列処理プロセッサ xCORE 徹底研究、インターフェース 2014 年 11 月号〜2015 年 6 月号(連載)、CQ 出版社</li>
-  <li>C で直叩き！超並列コンピュータ GPU 全速力、トランジスタ技術 2019 年 9 月号(特集)、CQ 出版社</li>
-  <li>世界最初のマイクロプロセッサ 4004 を自作してみた、I/O 2025 年 11 月号、工学社</li>
+  <li>A case study of developing an ARM-based system LSI, Design Wave Magazine, May 2006, CQ Publishing</li>
+  <li>Building a general-purpose JTAG debugger for ARM processors, Design Wave Magazine, June 2008, CQ Publishing</li>
+  <li>A thorough study of the parallel processor xCORE, Interface, Nov. 2014 to June 2015 (series), CQ Publishing</li>
+  <li>Driving the massively parallel GPU at full speed directly from C, Transistor Gijutsu, Sept. 2019 (feature), CQ Publishing</li>
+  <li>I built the world's first microprocessor, the 4004, I/O, Nov. 2025, Kohgakusha</li>
 </ol>
 </div>
 <div>
-<p><strong>書籍</strong></p>
+<p><strong>Books (in Japanese)</strong></p>
 <ol>
-  <li>今すぐ使える H8 マイコン基板(初版 2010 年、増補版 2011 年)、CQ 出版社</li>
-  <li>2 枚入り小型 ARM マイコン基板(2011 年)、CQ 出版社</li>
-  <li>ARM PSoC で作る My スペシャル・マイコン 基板付き(2013 年)、CQ 出版社</li>
-  <li>ARM PSoC で作る My スペシャル・マイコン 開発編(2013 年)、CQ 出版社</li>
-  <li>SH マイコン活用記事全集(2014 年)、CQ 出版社</li>
-  <li>FPGA 電子工作スーパキット(2016 年)、CQ 出版社</li>
-  <li>MAX10 実験キットで学ぶ FPGA＆コンピュータ(2016 年)、CQ 出版社</li>
-  <li>完全版 FPGA 電子工作オールインワン・キット(2016 年)、CQ 出版社</li>
+  <li>H8 Microcontroller Board Ready to Use (2010; expanded edition 2011), CQ Publishing</li>
+  <li>Two Small ARM Microcontroller Boards (2011), CQ Publishing</li>
+  <li>My Special Microcontroller with ARM PSoC, with a board (2013), CQ Publishing</li>
+  <li>My Special Microcontroller with ARM PSoC, development (2013), CQ Publishing</li>
+  <li>Collected Articles on Using SH Microcontrollers (2014), CQ Publishing</li>
+  <li>FPGA Electronics Super Kit (2016), CQ Publishing</li>
+  <li>Learning FPGAs and Computers with the MAX10 Experiment Kit (2016), CQ Publishing</li>
+  <li>The Complete FPGA Electronics All-in-One Kit (2016), CQ Publishing</li>
 </ol>
 </div>
 </div>
 
-<h2>付録 B. 参考資料</h2>
+<h2>Appendix B. References</h2>
 <ul class="small">
-  <li>mmRISC-2(本プロジェクト、Apache-2.0): https://github.com/munetomo-maruyama/mmRISC-2 — 仕様書(CPU_CORE_SPEC、CPU_CACHE_SPEC、CPU_L2_SPEC、CPU_DBG_SPEC)、実機の記録(BRINGUP、TIMING、BENCH)、ROADMAP</li>
+  <li>mmRISC-2 (this project, Apache-2.0): https://github.com/munetomo-maruyama/mmRISC-2 — specifications (CPU_CORE_SPEC, CPU_CACHE_SPEC, CPU_L2_SPEC, CPU_DBG_SPEC), records from the board (BRINGUP, TIMING, BENCH), ROADMAP</li>
   <li>Claude Code: https://claude.com/claude-code</li>
-  <li>LiteX(SoC ビルダ)と LiteDRAM・LiteEth・LiteSDCard: https://github.com/enjoy-digital/litex 、https://github.com/litex-hub</li>
-  <li>The RISC-V Instruction Set Manual, Volume I / II(20260120)、The RISC-V Debug Specification 1.0: https://github.com/riscv</li>
-  <li>OpenSBI: https://github.com/riscv-software-src/opensbi 、riscv-tests: https://github.com/riscv-software-src/riscv-tests</li>
+  <li>LiteX (SoC builder) and LiteDRAM, LiteEth, LiteSDCard: https://github.com/enjoy-digital/litex, https://github.com/litex-hub</li>
+  <li>The RISC-V Instruction Set Manual, Volume I / II (20260120), The RISC-V Debug Specification 1.0: https://github.com/riscv</li>
+  <li>OpenSBI: https://github.com/riscv-software-src/opensbi, riscv-tests: https://github.com/riscv-software-src/riscv-tests</li>
   <li>Arty A7 Reference Manual: https://digilent.com/reference/programmable-logic/arty-a7/start</li>
   <li>NaxRiscv: https://github.com/SpinalHDL/NaxRiscv</li>
 </ul>
-<p class="small muted" style="margin-top:6mm">本書の数値は 2026-10-12 時点の mmRISC-2 Rev.01 のものである。本書の文章と図も、筆者の指示のもとで Claude Code が作成した。</p>
+<p class="small muted" style="margin-top:6mm">The figures in this paper are those of mmRISC-2 Rev.01 as of 2026-10-12. The text and figures of this paper were also written by Claude Code under the author's direction. A Japanese version is in Doc/20261015_WhitePaper_mmRISC-2_J.pdf.</p>
 
 </body>
 </html>

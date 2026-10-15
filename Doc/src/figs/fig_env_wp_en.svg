@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="26.4cm" height="14.4cm" viewBox="0 0 1320 720">
+<rect x="0" y="0" width="1320" height="720" fill="#FFFFFF"/>
+<rect x="10" y="10" width="860" height="560" rx="14" fill="#FAFAFA" stroke="#808080" stroke-width="2"/>
+<text x="30" y="48" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="start" font-weight="bold" fill="#222222">MacBook(Apple Silicon M2) + Parallels Desktop</text>
+<rect x="30" y="75" width="470" height="400" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="48" y="111" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="start" font-weight="bold" fill="#283272">Ubuntu 24.04(arm64)</text>
+<text x="50" y="160.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">● Claude Code (CLI / desktop)</text>
+<text x="50" y="191.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">● Verilator 5 / Icarus Verilog 12 / GTKWave</text>
+<text x="50" y="222.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">● RISC-V GCC 13.2(elf / linux-gnu)</text>
+<text x="50" y="253.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">● LiteX (SoC generator), OpenSBI,</text>
+<text x="50" y="284.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">   Linux, BusyBox and perf builds</text>
+<text x="50" y="315.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">● OpenOCD / gdb (JTAG, cJTAG)</text>
+<text x="50" y="346.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">● TFTP server (to the board)</text>
+<rect x="530" y="75" width="320" height="250" rx="8" fill="#FFF3D6" stroke="#F2A900" stroke-width="2"/>
+<text x="548" y="111" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="start" font-weight="bold" fill="#222222">Windows 11(arm64)</text>
+<text x="550" y="160.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">● Vivado 2025.1</text>
+<text x="550" y="190.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">   synthesis, place &amp; route</text>
+<text x="550" y="220.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">   bitstream</text>
+<text x="550" y="250.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">   programming (USB)</text>
+<line x1="508.0" y1="230.0" x2="522.0" y2="230.0" stroke="#808080" stroke-width="3"/>
+<polygon points="530,230 520.8691105968769,234.0776045305957 520.8691105968769,225.9223954694043" fill="#808080" stroke="none" stroke-width="0"/>
+<polygon points="500,230 509.1308894031231,225.9223954694043 509.1308894031231,234.0776045305957" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="30" y="490" width="820" height="60" rx="8" fill="#FFFFFF" stroke="#808080" stroke-width="2" stroke-dasharray="8,6"/>
+<text x="440" y="528" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="normal" fill="#222222">Shared folder (the repository, the reports in build/gateware)</text>
+<text x="690" y="380" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#808080">Vivado is x86 only, but it</text>
+<text x="690" y="405" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#808080">ran on Windows 11 for Arm</text>
+<rect x="900" y="330" width="400" height="240" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="1100.0" y="409.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#283272">Arty A7-100T</text>
+<text x="1100.0" y="436.4" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="normal" fill="#222222">XC7A100T, DDR3 256 MB</text>
+<text x="1100.0" y="461.09999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="normal" fill="#222222">microSD(PMOD JD)</text>
+<text x="1100.0" y="485.8" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="normal" fill="#222222">Ethernet 10/100, USB-UART</text>
+<text x="1100.0" y="510.49999999999994" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="normal" fill="#222222">JTAG / cJTAG(PMOD JA)</text>
+<line x1="878.0" y1="450.0" x2="892.0" y2="450.0" stroke="#283272" stroke-width="3"/>
+<polygon points="900,450 890.8691105968769,454.0776045305957 890.8691105968769,445.9223954694043" fill="#283272" stroke="none" stroke-width="0"/>
+<polygon points="870,450 879.1308894031231,445.9223954694043 879.1308894031231,454.0776045305957" fill="#283272" stroke="none" stroke-width="0"/>
+<text x="885" y="600" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#808080">USB (programming, UART), Ethernet, JTAG</text>
+<rect x="900" y="10" width="400" height="290" rx="8" fill="#F4F4F4" stroke="#222222" stroke-width="2"/>
+<text x="918" y="46" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="start" font-weight="bold" fill="#222222">GitHub</text>
+<text x="920" y="95.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">● mmRISC-2 (public, Apache-2.0)</text>
+<text x="920" y="122.55" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">   Claude Code commits</text>
+<text x="920" y="150.1" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">   and pushes by itself</text>
+<text x="920" y="177.64999999999998" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">● Tag Rev.01 on main,</text>
+<text x="920" y="205.2" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">   development on dev</text>
+<text x="920" y="232.75" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">● Kernel source in a release</text>
+<line x1="878.0" y1="150.0" x2="892.0" y2="150.0" stroke="#808080" stroke-width="3"/>
+<polygon points="900,150 890.8691105968769,154.0776045305957 890.8691105968769,145.9223954694043" fill="#808080" stroke="none" stroke-width="0"/>
+<polygon points="870,150 879.1308894031231,145.9223954694043 879.1308894031231,154.0776045305957" fill="#808080" stroke="none" stroke-width="0"/>
+<text x="10" y="670" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="start" font-weight="bold" fill="#283272">Model</text>
+<rect x="110" y="640" width="75.33333333333333" height="46" rx="6" fill="#9AA3D0" stroke="#9AA3D0" stroke-width="1"/>
+<text x="147.66666666666666" y="714" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#9AA3D0">Sonnet 5 09-13 to 14</text>
+<rect x="189.33333333333331" y="640" width="313.3333333333333" height="46" rx="6" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<text x="346.0" y="671" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#FFFFFF">Opus 5  09-15 to 22</text>
+<rect x="506.66666666666663" y="640" width="789.3333333333334" height="46" rx="6" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="901.3333333333333" y="671" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#FFFFFF">Opus 5.5  from 09-23</text>
+</svg>

@@ -89,7 +89,7 @@ Every document has a Japanese version next to it (`XXXX.md` is English, `XXXX_J.
 | [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP.md) | Next design themes |
 | [`LitexSystem/software/boot/README.md`](LitexSystem/software/boot/README.md) | Making the SD card, Ethernet, TFTP netboot, stress test, distributed binaries |
 | [`LitexSystem/software/bench/README.md`](LitexSystem/software/bench/README.md) | Benchmarks on the board and `perf` |
-| [`Doc/20261015_WhitePaper_mmRISC-2.pdf`](Doc/20261015_WhitePaper_mmRISC-2.pdf) | White paper (in Japanese, A4): how Claude Code designed mmRISC-2, the specification, the history, the rework and verification, and an evaluation of AI-driven design. Source in `Doc/src/` |
+| [`Doc/20261015_WhitePaper_mmRISC-2.pdf`](Doc/20261015_WhitePaper_mmRISC-2.pdf) | White paper (A4): how Claude Code designed mmRISC-2, the specification, the history, the rework and verification, and an evaluation of AI-driven design. Japanese version: [`Doc/20261015_WhitePaper_mmRISC-2_J.pdf`](Doc/20261015_WhitePaper_mmRISC-2_J.pdf). Source in `Doc/src/` |
 | [`SIM/SIM_CORE/README.md`](SIM/SIM_CORE/README.md) | Verification environment of the core (34 home-made tests, riscv-tests, bug injection) |
 
 ## Directory layout

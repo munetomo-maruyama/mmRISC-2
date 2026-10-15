@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="13.0cm" height="9.6cm" viewBox="0 0 650 480">
+<rect x="0" y="0" width="650" height="480" fill="#FFFFFF"/>
+<text x="10" y="30" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="bold" fill="#283272">CPI change with the I$ prefetch</text>
+<text x="290" y="90" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">Simulation</text>
+<text x="290" y="114" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="end" font-weight="normal" fill="#808080">(memory answers at once)</text>
+<rect x="403.9655172413793" y="72" width="36.0344827586207" height="36" rx="3" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<text x="393.9655172413793" y="98" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="bold" fill="#5B6BB5">-1.1 %</text>
+<text x="290" y="166" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="bold" fill="#222222">Board tftp</text>
+<rect x="440" y="148" width="131.0344827586207" height="36" rx="3" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="581.0344827586207" y="174" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="bold" fill="#C0392B">+4.0 %</text>
+<text x="290" y="242" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="bold" fill="#222222">Board sdread</text>
+<rect x="440" y="224" width="85.17241379310346" height="36" rx="3" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="535.1724137931035" y="250" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="bold" fill="#C0392B">+2.6 %</text>
+<text x="290" y="318" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="bold" fill="#222222">Board forkexec</text>
+<rect x="440" y="300" width="68.79310344827587" height="36" rx="3" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<text x="518.7931034482758" y="326" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="bold" fill="#C0392B">+2.1 %</text>
+<text x="290" y="394" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">Simulation</text>
+<text x="290" y="418" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="end" font-weight="normal" fill="#808080">(latency model)</text>
+<rect x="440" y="376" width="39.310344827586206" height="36" rx="3" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="489.3103448275862" y="402" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="bold" fill="#283272">+1.2 %</text>
+<line x1="440" y1="50" x2="440" y2="440" stroke="#808080" stroke-width="2"/>
+<text x="440" y="470" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="middle" font-weight="normal" fill="#808080">← faster   slower →</text>
+</svg>

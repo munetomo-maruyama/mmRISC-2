@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="26.4cm" height="14.6cm" viewBox="0 0 1320 730">
+<rect x="0" y="0" width="1320" height="730" fill="#FFFFFF"/>
+<rect x="8" y="8" width="1304" height="714" rx="12" fill="#FFFFFF" stroke="#283272" stroke-width="3"/>
+<text x="24" y="42" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="start" font-weight="bold" fill="#283272">CPU_TOP(mmRISC-2)</text>
+<rect x="24" y="58" width="880" height="420" rx="10" fill="#FAFBFE" stroke="#283272" stroke-width="2"/>
+<text x="40" y="90" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="start" font-weight="bold" fill="#283272">CPU_CORE: 8-stage in-order, single issue</text>
+<rect x="44" y="108" width="94" height="52" rx="6" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="91.0" y="143" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#FFFFFF">IF1</text>
+<line x1="138" y1="134" x2="144.6" y2="134.0" stroke="#808080" stroke-width="2"/>
+<polygon points="151,134 143.69528847750152,137.26208362447656 143.69528847750152,130.73791637552344" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="151" y="108" width="94" height="52" rx="6" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="198.0" y="143" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#FFFFFF">IF2</text>
+<line x1="245" y1="134" x2="251.6" y2="134.0" stroke="#808080" stroke-width="2"/>
+<polygon points="258,134 250.69528847750152,137.26208362447656 250.69528847750152,130.73791637552344" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="258" y="108" width="94" height="52" rx="6" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="305.0" y="143" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#FFFFFF">FQ</text>
+<line x1="352" y1="134" x2="358.6" y2="134.0" stroke="#808080" stroke-width="2"/>
+<polygon points="365,134 357.69528847750155,137.26208362447656 357.69528847750155,130.73791637552344" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="365" y="108" width="94" height="52" rx="6" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="412.0" y="143" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#FFFFFF">ID</text>
+<line x1="459" y1="134" x2="465.6" y2="134.0" stroke="#808080" stroke-width="2"/>
+<polygon points="472,134 464.69528847750155,137.26208362447656 464.69528847750155,130.73791637552344" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="472" y="108" width="94" height="52" rx="6" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="519.0" y="143" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#FFFFFF">EX</text>
+<line x1="566" y1="134" x2="572.6" y2="134.0" stroke="#808080" stroke-width="2"/>
+<polygon points="579,134 571.6952884775015,137.26208362447656 571.6952884775015,130.73791637552344" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="579" y="108" width="94" height="52" rx="6" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="626.0" y="143" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#FFFFFF">MR</text>
+<line x1="673" y1="134" x2="679.6" y2="134.0" stroke="#808080" stroke-width="2"/>
+<polygon points="686,134 678.6952884775015,137.26208362447656 678.6952884775015,130.73791637552344" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="686" y="108" width="94" height="52" rx="6" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="733.0" y="143" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#FFFFFF">MA</text>
+<line x1="780" y1="134" x2="786.6" y2="134.0" stroke="#808080" stroke-width="2"/>
+<polygon points="793,134 785.6952884775015,137.26208362447656 785.6952884775015,130.73791637552344" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="793" y="108" width="94" height="52" rx="6" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="840.0" y="143" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#FFFFFF">WB</text>
+<rect x="44" y="180" width="308" height="120" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="198.0" y="224.29999999999998" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">Instruction fetch</text>
+<text x="198.0" y="249.99999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">BTB 256, gshare 8K</text>
+<text x="198.0" y="273.4" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">RAS, RVC expansion</text>
+<rect x="365" y="180" width="94" height="120" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="412.0" y="224.55" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18.1" text-anchor="middle" font-weight="bold" fill="#283272">Decode</text>
+<text x="412.0" y="248.20000000000002" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">RF</text>
+<text x="412.0" y="270.3" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">FRF</text>
+<rect x="472" y="180" width="94" height="120" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="519.0" y="224.55" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="bold" fill="#283272">ALU</text>
+<text x="519.0" y="248.20000000000002" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">branch</text>
+<text x="519.0" y="270.3" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">address</text>
+<rect x="579" y="180" width="94" height="120" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="626.0" y="224.55" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="bold" fill="#283272">TLB</text>
+<text x="626.0" y="248.20000000000002" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">PMP</text>
+<text x="626.0" y="270.3" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">check</text>
+<rect x="686" y="180" width="201" height="120" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="786.5" y="224.9" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#283272">Load / store</text>
+<text x="786.5" y="248.9" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">issued from EX</text>
+<text x="786.5" y="271.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">to the D$, 2 cycles</text>
+<rect x="44" y="318" width="200" height="140" rx="8" fill="#FFF3D6" stroke="#F2A900" stroke-width="2"/>
+<text x="144.0" y="362.55" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#222222">MDU</text>
+<text x="144.0" y="387.25" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">mul 1 to 2 cyc</text>
+<text x="144.0" y="409.34999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">div early exit</text>
+<text x="144.0" y="431.45" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">clmul 5 cyc</text>
+<rect x="258" y="318" width="200" height="140" rx="8" fill="#FFF3D6" stroke="#F2A900" stroke-width="2"/>
+<text x="358.0" y="362.55" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#222222">FPU_PIPE</text>
+<text x="358.0" y="387.25" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">F / D, 9 stages</text>
+<text x="358.0" y="409.34999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">FMA every cycle</text>
+<text x="358.0" y="431.45" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">div, sqrt iterate</text>
+<rect x="472" y="318" width="200" height="140" rx="8" fill="#FFF3D6" stroke="#F2A900" stroke-width="2"/>
+<text x="572.0" y="362.55" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#222222">CSR</text>
+<text x="572.0" y="387.25" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">M / S / U, Sstc</text>
+<text x="572.0" y="409.34999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">PMU 26 events</text>
+<text x="572.0" y="431.45" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">Sdtrig 4 triggers</text>
+<rect x="686" y="318" width="200" height="140" rx="8" fill="#FFF3D6" stroke="#F2A900" stroke-width="2"/>
+<text x="786.0" y="362.55" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#222222">MMU</text>
+<text x="786.0" y="387.25" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">Sv39, TLB 8+8</text>
+<text x="786.0" y="409.34999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">page table walker</text>
+<text x="786.0" y="431.45" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">PMP 8</text>
+<rect x="930" y="58" width="366" height="300" rx="10" fill="#FAFBFE" stroke="#283272" stroke-width="2"/>
+<text x="946" y="90" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="start" font-weight="bold" fill="#283272">CPU_CACHE(L1)</text>
+<rect x="946" y="102" width="334" height="56" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="1113.0" y="136.65" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="bold" fill="#283272">I$ 16 KB  4 ways, 64 B lines</text>
+<rect x="946" y="168" width="334" height="84" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="1113.0" y="196.2" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#283272">D$ 16 KB</text>
+<text x="1113.0" y="219.2" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="middle" font-weight="normal" fill="#222222">non-blocking (MSHR 2), write-back</text>
+<text x="1113.0" y="239.99999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="middle" font-weight="normal" fill="#222222">AMO, LR/SC, cbo.zero</text>
+<rect x="946" y="262" width="334" height="80" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="1113.0" y="298.6" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#283272">BUS_ARB</text>
+<text x="1113.0" y="321.6" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="middle" font-weight="normal" fill="#222222">arbitrates reads (FAST_READ)</text>
+<line x1="904" y1="130" x2="938.0" y2="130.0" stroke="#283272" stroke-width="3"/>
+<polygon points="946,130 936.8691105968769,134.0776045305957 936.8691105968769,125.9223954694043" fill="#283272" stroke="none" stroke-width="0"/>
+<line x1="912.0" y1="210.0" x2="938.0" y2="210.0" stroke="#283272" stroke-width="3"/>
+<polygon points="946,210 936.8691105968769,214.0776045305957 936.8691105968769,205.9223954694043" fill="#283272" stroke="none" stroke-width="0"/>
+<polygon points="904,210 913.1308894031231,205.9223954694043 913.1308894031231,214.0776045305957" fill="#283272" stroke="none" stroke-width="0"/>
+<rect x="1060" y="375" width="236" height="103" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="1178.0" y="412.79999999999995" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="middle" font-weight="bold" fill="#283272">CPU_L2</text>
+<text x="1178.0" y="438.19999999999993" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">256 KB, 4 ways</text>
+<text x="1178.0" y="460.2999999999999" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">write-back</text>
+<line x1="1178.0" y1="350.0" x2="1178.0" y2="367.0" stroke="#283272" stroke-width="3"/>
+<polygon points="1178,375 1173.9223954694044,365.8691105968769 1182.0776045305956,365.8691105968769" fill="#283272" stroke="none" stroke-width="0"/>
+<polygon points="1178,342 1182.0776045305956,351.1308894031231 1173.9223954694044,351.1308894031231" fill="#283272" stroke="none" stroke-width="0"/>
+<rect x="24" y="500" width="400" height="110" rx="8" fill="#EAF4EE" stroke="#2E8B57" stroke-width="2"/>
+<text x="224.0" y="540.6" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">CPU_DBG</text>
+<text x="224.0" y="565.3000000000001" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">JTAG / cJTAG DTM, DM, auth.</text>
+<text x="224.0" y="587.4000000000001" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">Debug Spec 1.0</text>
+<rect x="444" y="500" width="220" height="110" rx="8" fill="#EAF4EE" stroke="#2E8B57" stroke-width="2"/>
+<text x="554.0" y="540.6" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">CPU_MMIO</text>
+<text x="554.0" y="565.3000000000001" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">CLINT</text>
+<text x="554.0" y="587.4000000000001" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">PLIC(M / S)</text>
+<rect x="684" y="500" width="220" height="110" rx="8" fill="#EAF4EE" stroke="#2E8B57" stroke-width="2"/>
+<text x="794.0" y="540.6" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">CPU_DMA</text>
+<text x="794.0" y="565.3000000000001" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">the SoC&#x27;s DMA</text>
+<text x="794.0" y="587.4000000000001" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">via the D$ (coherent)</text>
+<polyline points="904,545 917,545 917,235" fill="none" stroke="#2E8B57" stroke-width="3"/>
+<line x1="917" y1="235" x2="938.0" y2="235.0" stroke="#2E8B57" stroke-width="3"/>
+<polygon points="946,235 936.8691105968769,239.0776045305957 936.8691105968769,230.9223954694043" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<text x="224" y="665" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#222222">JTAG / cJTAG</text>
+<text x="224" y="691" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">PMOD JA</text>
+<text x="794" y="665" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#222222">DMA in</text>
+<text x="794" y="691" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">SD / Ethernet</text>
+<text x="990" y="665" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#222222">AXI-Lite (periph.)</text>
+<text x="990" y="691" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">to LiteX CSRs</text>
+<text x="1178" y="665" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#222222">AXI4 (memory)</text>
+<text x="1178" y="691" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">to LiteDRAM</text>
+<line x1="224.0" y1="632.0" x2="224.0" y2="618.0" stroke="#2E8B57" stroke-width="3"/>
+<polygon points="224,610 228.0776045305957,619.1308894031231 219.9223954694043,619.1308894031231" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<polygon points="224,640 219.9223954694043,630.8691105968769 228.0776045305957,630.8691105968769" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<line x1="794" y1="640" x2="794.0" y2="618.0" stroke="#2E8B57" stroke-width="3"/>
+<polygon points="794,610 798.0776045305957,619.1308894031231 789.9223954694043,619.1308894031231" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<line x1="990" y1="342" x2="990.0" y2="632.0" stroke="#283272" stroke-width="3"/>
+<polygon points="990,640 985.9223954694043,630.8691105968769 994.0776045305957,630.8691105968769" fill="#283272" stroke="none" stroke-width="0"/>
+<line x1="1178.0" y1="486.0" x2="1178.0" y2="632.0" stroke="#283272" stroke-width="3"/>
+<polygon points="1178,640 1173.9223954694044,630.8691105968769 1182.0776045305956,630.8691105968769" fill="#283272" stroke="none" stroke-width="0"/>
+<polygon points="1178,478 1182.0776045305956,487.1308894031231 1173.9223954694044,487.1308894031231" fill="#283272" stroke="none" stroke-width="0"/>
+<text x="1004" y="420" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="start" font-weight="normal" fill="#808080">un-</text>
+<text x="1004" y="440" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="15" text-anchor="start" font-weight="normal" fill="#808080">cached</text>
+</svg>

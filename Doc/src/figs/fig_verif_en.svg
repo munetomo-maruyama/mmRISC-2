@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="26.4cm" height="14.4cm" viewBox="0 0 1320 720">
+<rect x="0" y="0" width="1320" height="720" fill="#FFFFFF"/>
+<rect x="20" y="30" width="300" height="152" rx="10" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="34" y="62" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="bold" fill="#808080">09-15</text>
+<text x="34" y="102" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="start" font-weight="bold" fill="#283272">BFM + AXI memory</text>
+<text x="34" y="138" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="normal" fill="#222222">checked in waveforms</text>
+<line x1="320" y1="106" x2="339.6718738455292" y2="128.03249870699267" stroke="#808080" stroke-width="3"/>
+<polygon points="345,134 335.8770448811171,129.9046746284515 341.96032245829275,124.47317679168756" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="345" y="58" width="300" height="152" rx="10" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="359" y="90" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="bold" fill="#808080">09-18</text>
+<text x="359" y="130" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18.7" text-anchor="start" font-weight="bold" fill="#283272">Reference model + random</text>
+<text x="359" y="166" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="normal" fill="#222222">caches, sweep of 19 configs</text>
+<line x1="645" y1="134" x2="664.6718738455291" y2="156.03249870699267" stroke="#808080" stroke-width="3"/>
+<polygon points="670,162 660.8770448811172,157.9046746284515 666.9603224582927,152.47317679168756" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="670" y="86" width="300" height="152" rx="10" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="684" y="118" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="bold" fill="#808080">09-18</text>
+<text x="684" y="158" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="start" font-weight="bold" fill="#283272">Bug injection</text>
+<text x="684" y="194" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="normal" fill="#222222">how much the tests catch</text>
+<line x1="970" y1="162" x2="989.6718738455291" y2="184.03249870699267" stroke="#808080" stroke-width="3"/>
+<polygon points="995,190 985.8770448811172,185.9046746284515 991.9603224582927,180.47317679168756" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="995" y="114" width="300" height="152" rx="10" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="1009" y="146" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="bold" fill="#808080">09-20</text>
+<text x="1009" y="186" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="start" font-weight="bold" fill="#283272">Own tests + riscv-tests</text>
+<text x="1009" y="222" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="normal" fill="#222222">core, with back pressure</text>
+<rect x="20" y="330" width="300" height="152" rx="10" fill="#FFF3D6" stroke="#F2A900" stroke-width="3"/>
+<text x="34" y="362" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="bold" fill="#808080">09-24</text>
+<text x="34" y="402" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19.8" text-anchor="start" font-weight="bold" fill="#283272">The real BIOS and Linux</text>
+<text x="34" y="438" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="normal" fill="#222222">in simulation (SIM_BIOS)</text>
+<line x1="320" y1="406" x2="339.6718738455292" y2="428.03249870699267" stroke="#808080" stroke-width="3"/>
+<polygon points="345,434 335.8770448811171,429.90467462845146 341.96032245829275,424.4731767916876" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="345" y="358" width="300" height="152" rx="10" fill="#FFF3D6" stroke="#F2A900" stroke-width="3"/>
+<text x="359" y="390" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="bold" fill="#808080">09-26</text>
+<text x="359" y="430" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="start" font-weight="bold" fill="#283272">CPU and DMA together</text>
+<text x="359" y="466" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="normal" fill="#222222">random (from a board WARNING)</text>
+<line x1="645" y1="434" x2="664.6718738455291" y2="456.03249870699267" stroke="#808080" stroke-width="3"/>
+<polygon points="670,462 660.8770448811172,457.90467462845146 666.9603224582927,452.4731767916876" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="670" y="386" width="300" height="152" rx="10" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
+<text x="684" y="418" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="bold" fill="#808080">10-05</text>
+<text x="684" y="458" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18.0" text-anchor="start" font-weight="bold" fill="#283272">Board measured by PMU, perf</text>
+<text x="684" y="494" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="normal" fill="#222222">workload.sh, by function</text>
+<line x1="970" y1="462" x2="989.6718738455291" y2="484.03249870699267" stroke="#808080" stroke-width="3"/>
+<polygon points="995,490 985.8770448811172,485.90467462845146 991.9603224582927,480.4731767916876" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="995" y="414" width="300" height="152" rx="10" fill="#FFF3D6" stroke="#F2A900" stroke-width="3"/>
+<text x="1009" y="446" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="bold" fill="#808080">10-12</text>
+<text x="1009" y="486" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19.8" text-anchor="start" font-weight="bold" fill="#283272">Memory latency model</text>
+<text x="1009" y="522" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="normal" fill="#222222">sim agrees with the board</text>
+<line x1="1145.0" y1="266" x2="179.58187395125952" y2="325.410346218384" stroke="#808080" stroke-width="3"/>
+<polygon points="170.0,326 180.63583204902707,320.44310548733483 181.23692578187712,330.210878646148" fill="#808080" stroke="none" stroke-width="0"/>
+<rect x="20" y="646" width="1280" height="60" rx="8" fill="#FFFFFF" stroke="#283272" stroke-width="2"/>
+<text x="660" y="685" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="21" text-anchor="middle" font-weight="bold" fill="#283272">Yellow: added after a problem on the board. The board shows the holes in verification</text>
+</svg>

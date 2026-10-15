@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="26.4cm" height="14.6cm" viewBox="0 0 1320 730">
+<rect x="0" y="0" width="1320" height="730" fill="#FFFFFF"/>
+<rect x="8" y="8" width="850" height="714" rx="12" fill="#FAFAFA" stroke="#808080" stroke-width="2"/>
+<text x="24" y="42" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="start" font-weight="bold" fill="#222222">Arty A7-100T</text>
+<rect x="24" y="58" width="818" height="530" rx="10" fill="#FFFFFF" stroke="#283272" stroke-width="2"/>
+<text x="40" y="90" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="start" font-weight="bold" fill="#283272">FPGA XC7A100T:LiteX SoC(50 MHz)</text>
+<rect x="44" y="108" width="300" height="210" rx="8" fill="#283272" stroke="#283272" stroke-width="2"/>
+<text x="194.0" y="187.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="26" text-anchor="middle" font-weight="bold" fill="#FFFFFF">mmRISC-2</text>
+<text x="194.0" y="214.1" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#FFFFFF">CPU_TOP</text>
+<text x="194.0" y="237.5" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#FFFFFF">L1 16+16 KB, L2 256 KB</text>
+<text x="194.0" y="260.90000000000003" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#FFFFFF">CLINT / PLIC / debug</text>
+<rect x="390" y="108" width="430" height="70" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="605.0" y="139.6" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#283272">LiteDRAM</text>
+<text x="605.0" y="162.6" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="middle" font-weight="normal" fill="#222222">DDR3 controller</text>
+<rect x="390" y="188" width="430" height="60" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="605.0" y="225.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#283272">LiteSDCard(DMA)</text>
+<rect x="390" y="258" width="430" height="60" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="605.0" y="295.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#283272">LiteEth(DMA)</text>
+<line x1="352.0" y1="143.0" x2="382.0" y2="143.0" stroke="#283272" stroke-width="3"/>
+<polygon points="390,143 380.8691105968769,147.0776045305957 380.8691105968769,138.9223954694043" fill="#283272" stroke="none" stroke-width="0"/>
+<polygon points="344,143 353.1308894031231,138.9223954694043 353.1308894031231,147.0776045305957" fill="#283272" stroke="none" stroke-width="0"/>
+<line x1="390" y1="218" x2="352.0" y2="218.0" stroke="#2E8B57" stroke-width="3"/>
+<polygon points="344,218 353.1308894031231,213.9223954694043 353.1308894031231,222.0776045305957" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<line x1="390" y1="288" x2="352.0" y2="288.0" stroke="#2E8B57" stroke-width="3"/>
+<polygon points="344,288 353.1308894031231,283.9223954694043 353.1308894031231,292.0776045305957" fill="#2E8B57" stroke="none" stroke-width="0"/>
+<rect x="44" y="340" width="180" height="80" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="134.0" y="376.65" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">BIOS ROM</text>
+<text x="134.0" y="401.34999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">+ SRAM</text>
+<rect x="240" y="340" width="180" height="80" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="330.0" y="387.7" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">UART</text>
+<rect x="436" y="340" width="180" height="80" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="526.0" y="387.7" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">Timer</text>
+<rect x="632" y="340" width="188" height="80" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="726.0" y="376.65" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">CSR bus</text>
+<text x="726.0" y="401.34999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">(from AXI-Lite)</text>
+<text x="432" y="455" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#2E8B57">DMA of SD and Ethernet goes through the CPU&#x27;s D$ (coherent in HW)</text>
+<text x="432" y="482" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#808080">LiteX&#x27;s L2 removed; the CPU has its own L2</text>
+<rect x="44" y="505" width="776" height="60" rx="8" fill="#EAF4EE" stroke="#2E8B57" stroke-width="2"/>
+<text x="432.0" y="542.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="middle" font-weight="bold" fill="#283272">JTAG / cJTAG(PMOD JA)→ OpenOCD / gdb</text>
+<rect x="60" y="620" width="180" height="60" rx="6" fill="#FFFFFF" stroke="#808080" stroke-width="2"/>
+<text x="150" y="658" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">DDR3 256 MB</text>
+<rect x="255" y="620" width="180" height="60" rx="6" fill="#FFFFFF" stroke="#808080" stroke-width="2"/>
+<text x="345" y="658" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">microSD(PMOD JD)</text>
+<rect x="450" y="620" width="180" height="60" rx="6" fill="#FFFFFF" stroke="#808080" stroke-width="2"/>
+<text x="540" y="658" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">Ethernet PHY</text>
+<rect x="645" y="620" width="180" height="60" rx="6" fill="#FFFFFF" stroke="#808080" stroke-width="2"/>
+<text x="735" y="658" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">USB-UART</text>
+<text x="890" y="42" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="start" font-weight="bold" fill="#222222">Software (used as it is)</text>
+<rect x="890" y="65" width="410" height="105" rx="8" fill="#FFF3D6" stroke="#F2A900" stroke-width="2"/>
+<text x="1095.0" y="114.15" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#222222">BusyBox 1.36 (shell)</text>
+<text x="1095.0" y="138.85000000000002" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">on the SD card&#x27;s ext4</text>
+<rect x="890" y="185" width="410" height="105" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="1095.0" y="234.14999999999998" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">Linux 7.2(litex-hub)</text>
+<text x="1095.0" y="258.84999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">uses perf, PMU, Zbb / Zbc / Zicboz</text>
+<rect x="890" y="305" width="410" height="105" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="1095.0" y="354.15" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">OpenSBI v1.9(fw_jump)</text>
+<text x="1095.0" y="378.84999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">device tree built in, one patch</text>
+<rect x="890" y="425" width="410" height="105" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
+<text x="1095.0" y="474.15" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">LiteX BIOS(ROM)</text>
+<text x="1095.0" y="498.84999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">boot.json on SD → Image, fw_jump.bin</text>
+<text x="1095" y="570" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="21" text-anchor="middle" font-weight="bold" fill="#283272">Only the RTL of CPU_TOP is home-made</text>
+<text x="1095" y="600" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="normal" fill="#808080">(peripherals from LiteX, software as it is)</text>
+<text x="1095" y="660" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#808080">For development: TFTP (netboot),</text>
+<text x="1095" y="685" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#808080">stress.sh (120 min), workload.sh</text>
+</svg>
