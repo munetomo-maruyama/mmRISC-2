@@ -42,7 +42,7 @@ module CPU_CORE
         parameter int          PQ_DEPTH     = 16,     // parcels in the fetch queue
         parameter int          PMP_ENTRIES  = 8,     // 0 removes PMP
         parameter int          ITLB_ENTRIES = 8,
-        parameter int          DTLB_ENTRIES = 8,
+        parameter int          DTLB_ENTRIES = 16,    // E3b (decision 80)
         parameter int          BTB_ENTRIES  = 256,
         // the cacheable region begins here (CPU_CACHE_SPEC.md 4.1): a load
         // below it may have a side effect and does not go early
@@ -861,9 +861,9 @@ module CPU_CORE
     //-----------------------------------------------------------------
     // PMU (CPU_CORE_SPEC.md decision 69): the events, one bit each, set in
     // the cycle they happen (assigned at the end of this file)
-    localparam int HPM_EVENTS = 27;
+    localparam int HPM_EVENTS = 30;
     logic [HPM_EVENTS-1:0]  hpm_ev;
-    logic                   ev_itlb_miss, ev_dtlb_miss;
+    logic                   ev_itlb_miss, ev_dtlb_miss, ev_iwalk, ev_dwalk;
 
     localparam int TRIGGERS = 4;
     logic [8*TRIGGERS-1:0]  trig_cfg;
@@ -1120,7 +1120,9 @@ module CPU_CORE
             .m_resp_data  (d_resp_data),
             .m_resp_error (d_resp_error),
             .ev_itlb_miss (ev_itlb_miss),
-            .ev_dtlb_miss (ev_dtlb_miss)
+            .ev_dtlb_miss (ev_dtlb_miss),
+            .ev_iwalk     (ev_iwalk),
+            .ev_dwalk     (ev_dwalk)
         );
 
     //=================================================================
@@ -2449,5 +2451,8 @@ module CPU_CORE
     assign hpm_ev[24] = stall_ma & ev_dc_vic_copy;             // MA waits while a dirty victim is copied out
     assign hpm_ev[25] = ev_ic_pf;                              // I$ prefetches
     assign hpm_ev[26] = ev_ic_pf_hit;                          // I$ misses served from the prefetch buffer
+    assign hpm_ev[27] = ev_dwalk;                              // the walker works for the DTLB
+    assign hpm_ev[28] = ev_iwalk;                              // the walker works for the ITLB
+    assign hpm_ev[29] = mr_tlb_wait;                           // MR waits for the DTLB (walk, or the port for it)
 
 endmodule : CPU_CORE

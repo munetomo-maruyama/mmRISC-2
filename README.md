@@ -35,7 +35,7 @@ and SD card checked at the same time) passes on Rev.01 (round 18 of `LitexSystem
 | Performance (board, under Linux) | **2.786 CoreMark/MHz** (built with Zba/Zbb; 2.498 for rv64gc), **1.496 DMIPS/MHz**. +76 % / +82 % from the 1.584 / 0.823 of the first home-made version. Both are `-O2` values; built with the options that make it fastest, **3.025 CoreMark/MHz** and 1.542 DMIPS/MHz (section 17 of `LitexSystem/docs/BENCH.md`). Floating point: FIR 65.6 MFLOPS, matrix multiply 41.2 MFLOPS (assembler, 50 MHz). The L2 cache makes kernel-heavy loads (TFTP, SD reads, `ls -lR`) 1.5 to 1.7 times faster, and the memory work since (store misses not waited for, `cbo.zero`, the bus and more) took another 7 to 11 % off their CPI (sections 18 to 25 of `BENCH.md`) |
 | ISA | RV64IMAFDC, Zicsr, Zifencei, Zicntr, Zihpm, **Zba, Zbb, Zbs, Zbc, Zicond**, Zihintpause, Zihintntl, **Zicboz**, M / S / U, Sv39, PMP 8 entries |
 | Privileged extensions | **Sstc** (S-mode timer), **Sscofpmf** (overflow interrupts of the performance counters), **Smcntrpmf**, **Sdtrig** (4 debug triggers), privileged spec 1.12 |
-| Performance counters | `hpmcounter3` to `6`, 26 events (cache, L2 and TLB misses, branch mispredictions, reasons for stalls, what the memory waits are made of, I$ prefetches). Usable with Linux's `perf stat` / `perf record`, and `perf report` by function |
+| Performance counters | `hpmcounter3` to `6`, 29 events (cache, L2 and TLB misses, branch mispredictions, reasons for stalls, what the memory waits are made of, I$ prefetches, the cycles of page table walks). Usable with Linux's `perf stat` / `perf record`, and `perf report` by function |
 | Debug | JTAG / cJTAG (Debug Spec 1.0). Halt / step / registers / memory, software and hardware breakpoints and watchpoints with OpenOCD / gdb (they can be put on a running Linux kernel too) |
 | FPGA | WNS +0.664 ns at 50 MHz, LUT 46,928 / 63,400 (74.0 %), slices 86.2 %, block RAM 108.5 / 135 tiles (L2 included) |
 
@@ -76,7 +76,7 @@ Every document has a Japanese version next to it (`XXXX.md` is English, `XXXX_J.
 
 | Document | Contents |
 |---|---|
-| [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md) | CPU core (instruction set, pipeline, MMU, CSRs, debug, decisions 1 to 78) |
+| [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md) | CPU core (instruction set, pipeline, MMU, CSRs, debug, decisions 1 to 80) |
 | [`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`](RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md) | L1 caches (parameters, interfaces, behavior, verification results) |
 | [`RTL/CPU/CPU_L2/CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md) | L2 cache (design, behavior, resources, verification, effect on the board) |
 | [`RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`](RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md) | Debug logic (JTAG/cJTAG DTM, DM, authentication) |
@@ -182,7 +182,7 @@ official tests, down to confirming that the tests find deliberately broken RTL (
 | `cd SIM/SIM_CORE && ./bug_inject.sh` | 339 bug injections (with and without back pressure) | All detected |
 | `cd SIM/SIM_SYS && make` | Core + real L1 / L2 caches + AXI + DMA port (27 home-made tests, 4 programs for DMA, PMU and others). `PARAMS=-GL2_SIZE=0` for no L2 | All PASS (with / without L2) |
 | `cd SIM/SIM_SYS && make riscv-tests` | riscv-tests through the real caches | 133 PASS, 4 known failures |
-| `cd SIM/SIM_SYS && ./bug_inject.sh` | 23 bug injections (including the cycle bounds of the floating point kernels, `bench/fploop`, and the memory wait events of M0) | All detected |
+| `cd SIM/SIM_SYS && ./bug_inject.sh` | 26 bug injections (including the cycle bounds of the floating point kernels, `bench/fploop`, the memory wait events of M0 and the walk events of E3a) | All detected |
 | `cd SIM/SIM_CACHE && make` | All tests of the L1 caches (CPU and DMA port random on the same lines at the same time, cancel included) | PASS 64,914 checks |
 | `cd SIM/SIM_CACHE && ./bug_inject.sh` | 59 bug injections | All detected |
 | `cd SIM/SIM_L2 && make` / `./sweep.sh` / `./bug_inject.sh` | L2 cache (256 KB, 4 ways) / 11 configurations of capacity, ways and replacement / 31 bug injections | PASS about 1.5 million checks / all PASS / all detected |

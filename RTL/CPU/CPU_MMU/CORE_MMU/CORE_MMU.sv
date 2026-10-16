@@ -38,7 +38,7 @@ module CORE_MMU
     #(
         parameter int PMP_ENTRIES  = 8,
         parameter int ITLB_ENTRIES = 8,
-        parameter int DTLB_ENTRIES = 8
+        parameter int DTLB_ENTRIES = 16
     )
     (
         input  logic        clk,
@@ -104,9 +104,12 @@ module CORE_MMU
         input  logic [63:0] m_resp_data,
         input  logic        m_resp_error,
 
-        // PMU: a walk starts (a miss of the TLB of that side)
+        // PMU: a walk starts (a miss of the TLB of that side), and every
+        // cycle the walker holds the port for that side
         output logic        ev_itlb_miss,
-        output logic        ev_dtlb_miss
+        output logic        ev_dtlb_miss,
+        output logic        ev_iwalk,
+        output logic        ev_dwalk
     );
 
     localparam logic [1:0] PRIV_M     = 2'b11;
@@ -273,6 +276,8 @@ module CORE_MMU
     // kill can still throw its result away)
     assign ev_dtlb_miss = ~grant & lsu_idle & ptw_need & ~kill &  d_need_walk;
     assign ev_itlb_miss = ~grant & lsu_idle & ptw_need & ~kill & ~d_need_walk;
+    assign ev_dwalk     = grant &  for_d;
+    assign ev_iwalk     = grant & ~for_d;
 
     assign i_fill = ptw_done & ~for_d & (ptw_fault == FAULT_NONE);
     assign d_fill = ptw_done &  for_d & (ptw_fault == FAULT_NONE);

@@ -71,6 +71,9 @@ MUTATIONS=(
 "23#CPU_CACHE/CPU_CACHE/CPU_CACHE.sv#s%assign ic_outst   = {1'b0, ic_fills} + 3'(ic_axi4_arvalid);%assign ic_outst   = {1'b0, ic_fills};%#PMU (M0): an I$ fill waiting for the bus is not outstanding (d04)"
 "24#CPU_CACHE/CPU_CACHE/CPU_CACHE.sv#s%assign ev_fills_2 = ({1'b0, dc_outst} + {1'b0, ic_outst}) >= 4'd2;%assign ev_fills_2 = (dc_outst >= 3'd2);%#PMU (M0): two fills outstanding only when both are the D$'s (d04)"
 "25#CPU_CACHE/DCACHE/DCACHE.sv#s%assign ev_vic_copy   = (c_state != C_IDLE);%assign ev_vic_copy   = 1'b0;%#PMU (M0): no wait for a dirty victim copied out (d04)"
+"26#CPU_MMU/CORE_MMU/CORE_MMU.sv#s%assign ev_dwalk     = grant \&  for_d;%assign ev_dwalk     = 1'b0;%#PMU (E3a): the walker's cycles for the DTLB are not counted (d04)"
+"27#CPU_MMU/CORE_MMU/CORE_MMU.sv#s%assign ev_iwalk     = grant \& ~for_d;%assign ev_iwalk     = 1'b0;%#PMU (E3a): the walker's cycles for the ITLB are not counted (d04)"
+"28#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign hpm_ev\[29\] = mr_tlb_wait;%assign hpm_ev[29] = 1'b0;%#PMU (E3a): MR waiting for the DTLB is not counted (d04)"
 )
 
 SEL=("$@")

@@ -144,10 +144,12 @@ run once first to check that it succeeds; one that fails shows as FAILED in the 
 Runs 1 to 4 count the 16 events four at a time, run 5 counts L2 reads and misses (`r12` / `r13`, added
 2026-10-06; 0 with a bitstream without the L2), runs 6 and 7 the memory waits of M0 (`r14` to `r18`, added
 2026-10-10, `../../docs/BENCH.md` 18; a second table: MA's waits in all, as stores, on misses, on the copy of
-a dirty victim, and one / two or more line fills outstanding), run 0 splits cycles and instructions into
-user and kernel (each event is divided by the cycles and instructions of the same run). About 14 minutes.
+a dirty victim, and one / two or more line fills outstanding), run 8 the page table walks (`r1b` / `r1c` the
+cycles the walker works for the DTLB / ITLB, `r1d` the cycles MR waits for the DTLB, added 2026-10-16 for
+E3a; a third table with the cycles per walk), run 0 splits cycles and instructions into user and kernel
+(each event is divided by the cycles and instructions of the same run). About 16 minutes.
 The log is `/tmp/workload.log`, the raw counts `/tmp/wl/*.csv`. Events 20 to 24 need a bitstream from
-2026-10-10 on; on an older one they count 0.
+2026-10-10 on, events 27 to 29 one from 2026-10-16 on; on an older one they count 0.
 
 ```bash
 make tftp

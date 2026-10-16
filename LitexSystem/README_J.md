@@ -20,7 +20,7 @@ Linux を起動するための一式。
 |---|---|
 | 性能 | **2.785 CoreMark/MHz**(Zba/Zbb で作ったもの。rv64gc なら 2.499)、**1.501 DMIPS/MHz**(`-O2`)。いちばん速くなるオプションで 3.025 / 1.542(`docs/BENCH.md` 17 章)。Linux の負荷の関数ごとの内訳: `docs/BENCH.md` 24・25 章 |
 | ISA(デバイスツリーの `riscv,isa`) | `rv64imafdc_zicboz_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zba_zbb_zbc_zbs_smcntrpmf_sscofpmf_sstc`、デバッグのトリガ 4 本(Sdtrig) |
-| 性能カウンタ | `hpmcounter3`〜`6`、イベント 26 種(20〜24 はメモリの待ち、25・26 は I$ の先読み。`software/bench/workload.sh`)。Linux の `perf stat` / `perf record`、関数ごとの `perf report` で使える(`software/bench/perf.sh`) |
+| 性能カウンタ | `hpmcounter3`〜`6`、イベント 29 種(20〜24 はメモリの待ち、25・26 は I$ の先読み、27〜29 はページテーブルの探索。`software/bench/workload.sh`)。Linux の `perf stat` / `perf record`、関数ごとの `perf report` で使える(`software/bench/perf.sh`) |
 | タイミング | 50 MHz で WNS +0.664 ns(MET、`docs/TIMING.md` 44 章) |
 | 資源 | LUT 46,928 / 63,400(74.0 %)、スライス 86.2 %、ブロック RAM 108.5 / 135 タイル(CPU の L2 を含む) |
 

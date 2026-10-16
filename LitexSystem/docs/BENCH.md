@@ -1175,3 +1175,38 @@ Against 23:
 - **What is left by function** (`profile`): the copy to user space (`fallback_scalar_usercopy_sum_enabled`)
   21.1 % of `sdread`, 6.6 % of `md5sum`, 3.6 % of `tftp`; `liteeth_start_xmit` 10.7 % of `tftp`; `memcpy` 4.2 % of
   `forkexec`. These are the next themes (W1 and W2 of `ROADMAP.md`).
+
+## 26. The page table walks, with the TLBs at other sizes (E3a, 2026-10-17, simulation)
+
+E3a of `ROADMAP.md`: three new events (decision 79 of `CPU_CORE_SPEC.md`: 27 / 28 the cycles the walker works
+for the DTLB / ITLB, 29 the cycles MR waits for the DTLB) and `make linux-tlb ITLB=.. DTLB=..` of SIM_BIOS,
+which boots Linux from the SD card model with the TLBs at other sizes and runs small versions of the user-mode
+loads of `workload.sh` under `perf stat` (`sim_tlb.sh`: `gunzip` of 256 KB of `Image`, `awk` over 20,000
+iterations, `md5sum` of 256 KB). Change of the cycles against the 8 entries of today:
+
+| Load | DTLB entries (ITLB 8) | Cycles | DTLB walks / 1000 instr. | MR waits for the DTLB |
+|---|---|---|---|---|
+| `gunzip` | 8 | 33.96 M | 7.62 | 8.5 % |
+| | 16 | **−9.8 %** | 0.34 | 0.7 % |
+| | 32 | −10.3 % | 0.11 | 0.3 % |
+| | 64 | −10.6 % | 0.06 | 0.2 % |
+| `awk` | 8 | 198.4 M | 15.49 | 14.4 % |
+| | 16 | **−14.2 %** | 3.18 | 4.2 % |
+| | 32 | **−17.7 %** | 0.16 | 0.9 % |
+| | 64 | −17.4 % | 0.04 | 0.7 % |
+| | 32, ITLB 32 too | **−20.0 %** | 0.15 | 0.3 % |
+
+- **The simulation sees the board's walks**: with 8 entries `gunzip` walks 7.6 times and `awk` 15.5 times per 1000
+  instructions, against 7.9 and 14.0 on the board (section 14).
+- **16 entries take 95 % of the walks of `gunzip` and 80 % of those of `awk`, 32 entries 98 to 99 %.** The cycles
+  saved are more than MR waited for the DTLB (8.5 % / 14.4 %): the reads of the walks also took lines of the D$
+  and of the L2. A walk took 11 cycles with 8 entries (its reads hit in the caches) and 20 to 25 with more (the
+  few walks left miss in them).
+- `awk` also gains from a larger ITLB (2.8 walks per 1000 instructions with 8 entries: −17.7 → −20.0 %).
+- `md5sum` (12 M cycles) is too short here: its instruction count moves between runs (7.6 to 8.2 M) and its walks
+  are few (2.1 per 1000 instructions with 8 entries).
+- These runs have no memory latency model (`+rlat` / `+blat`, section 22), so a walk that misses in the caches
+  costs less than on the board: the gains are a lower bound.
+- **For E3b**: a DTLB of 16 entries takes most of it for `gunzip`, `awk` wants 32 or a second level. The DTLB's
+  compare is on the worst path (TIMING 44), so a larger first level has to be checked in synthesis; a second
+  level of 64 entries keeps the compare as it is and costs a cycle or two on a miss of the first.

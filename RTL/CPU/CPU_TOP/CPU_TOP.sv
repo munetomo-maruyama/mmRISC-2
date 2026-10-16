@@ -98,7 +98,7 @@ module CPU_TOP
         // branch target buffer, TLBs, PMP
         parameter int          BTB_ENTRIES  = 256,
         parameter int          ITLB_ENTRIES = 8,
-        parameter int          DTLB_ENTRIES = 8,
+        parameter int          DTLB_ENTRIES = 16,    // E3b (CPU_CORE_SPEC.md decision 80)
         parameter int          PMP_ENTRIES  = 8,
         parameter int          PQ_DEPTH     = 16,
 

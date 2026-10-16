@@ -57,7 +57,11 @@ module tb_BIOS
         // L2 cache in bytes (-GL2_SIZE=0 : without it), as in the SoC
         parameter int          L2_SIZE    = 256 * 1024,
         // the I$'s next-line prefetch (-GIC_PREFETCH=1), off as in the SoC
-        parameter int          IC_PREFETCH = 0
+        parameter int          IC_PREFETCH = 0,
+        // the entries of the TLBs (E3a: what a larger TLB would save;
+        // make linux-tlb ITLB=.. DTLB=..), as in the SoC
+        parameter int          ITLB_ENTRIES = 8,
+        parameter int          DTLB_ENTRIES = 16
     );
 
     localparam int          SOC_ADDR_WIDTH = 40;
@@ -135,6 +139,8 @@ module tb_BIOS
             .CLINT_TICK_DIV  (100),
             .L2_SIZE         (L2_SIZE),
             .IC_PREFETCH     (IC_PREFETCH),
+            .ITLB_ENTRIES    (ITLB_ENTRIES),
+            .DTLB_ENTRIES    (DTLB_ENTRIES),
             .USE_BFM         (0)
         )
     u_cpu_top

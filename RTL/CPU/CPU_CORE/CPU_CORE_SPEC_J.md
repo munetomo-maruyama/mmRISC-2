@@ -3,7 +3,7 @@
 [English](CPU_CORE_SPEC.md)
 
 - 版: Rev-1 (2026-09-20) 初版(設計計画)
-- 最終更新: 2026-10-12(実装に合わせて随時更新。決定事項は 13 章、最新は決定 78)
+- 最終更新: 2026-10-12(実装に合わせて随時更新。決定事項は 13 章、最新は決定 80)
 - 対象: `RTL/CPU/CPU_CORE/`(パイプライン、CSR、MMU)、`RTL/CPU/CPU_TOP/`(組み込み)
 - 関連: `RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`(L1 キャッシュ)、
   `RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`(デバッグ論理)
@@ -386,7 +386,7 @@ MA の命令のもの(MR の命令の答えが、その前の MA の命令より
 | ブロック | 役割 |
 |---|---|
 | `MMU_PMP` | 物理メモリ保護。組み合わせ回路。命令用とデータ用に 1 基ずつ |
-| `MMU_TLB` | ITLB / DTLB。フルアソシアティブ、既定 8 エントリ(`ITLB_ENTRIES` / `DTLB_ENTRIES`) |
+| `MMU_TLB` | ITLB / DTLB。フルアソシアティブ、既定は ITLB 8、DTLB 16 エントリ(`ITLB_ENTRIES` / `DTLB_ENTRIES`、決定 80) |
 | `MMU_PTW` | ページテーブルウォーカ 1 基を ITLB/DTLB で共有。D$ 経由で読む |
 | `CORE_MMU` | 上記をまとめ、D$ ポートを LSU と PTW で調停する |
 
@@ -1656,3 +1656,5 @@ SIM_SYS(本物のキャッシュ)での内訳: 51014 命令中ロード 9784 (19
 | 76 | Zicboz(`cbo.zero`) | **rs1 を含む 64 バイトのブロック全体へのストアで、D$ がメモリを読まずに行う(コマンド `ZERO`、`CPU_CACHE_SPEC_J.md` 5.3)**。MISC-MEM の funct3 2、操作の欄 4、rd 0 からデコードする(それ以外の値、Zicbom の cbo.clean / flush / inval は不正命令)。rs1 にオフセットなしの 1 バイトのストアとして扱う: DTLB はストアとして検査し(W と D、ストアのページフォールト)、PMP は rs1 の 1 バイトの書き込みとして見る(ブロックの中の 64 バイトより小さい領域は見えない。OpenSBI と Linux の領域は 4 KB 以上)、トリガは rs1 のストア、アドレスはどれでもよい(不整列にならない)。`MEM_BASE` より下(周辺)は MR でストアのアクセスフォールト。M より下では `menvcfg.CBZE`(ビット 7)が許すときだけ、U ではさらに `senvcfg.CBZE` も要る。そうでなければ ID で不正命令。そのためにキャッシュの口のコマンドを 4 ビットから 5 ビットに広げた。OpenSBI はデバイスツリーに `zicboz` があると `menvcfg.CBZE` を立て、Linux はそれでページをゼロにする(`clear_page`、`riscv,cboz-block-size = <64>` が要る): fork、exec、無名ページのフォールトのたびに、ページはまず 1 ラインずつメモリから読まれ、それから上書きされていた。`t34_cbozero`(SIM_CORE / SIM_SYS)、`t14_mmu` 60〜65、`t29_sstc` 6 と 8、SIM_CACHE の 21 章。変異 M371〜M376(SIM_CORE)、M57〜M60(SIM_CACHE) |
 | 77 | Zbs と Zbc | **Zbs は EX の ALU に、Zbc は MDU に**。Zbs(bset / bclr / binv / bext と即値形)は、rs1 の、rs2 か即値(6 ビット)が名指す 1 ビットを立てる・消す・反転する・取り出す。その 4 つのために `alu_op` を 6 ビットにし、bext は ALU にある右シフトのビット 0。Zba / Zbb と合わせて B がそろう。Zbc(clmul / clmulh / clmulr)は MDU の 64 × 64 の繰り上がり無しの乗算で、1 サイクルに rs2 の 16 ビットずつ 128 ビットの累積に入れる(4 サイクル、5 サイクル目に答え。`mdu_op` のビット 3 が印)。1 サイクルでやると EX に 64 段の XOR の木になる。デバイスツリーに Zbc があると Linux は CRC をそれで計算する(`lib/crc/riscv`): ext4 がメタデータの検査に使う `crc32c` は `ls -lR` の 5 % だった(`LitexSystem/docs/BENCH_J.md` 24 章)。カーネルに Zbs の設定は無いので、Zbs は ISA をそろえるだけ。`t28_bitmanip`(Zbs と Zbc を Python のモデルと突き合わせる)、`tb_MDU`(clmul を定義と突き合わせる、5 サイクル)、riscv-tests の `rv64uzbs` / `rv64uzbc`。変異 M377〜M383 |
 | 78 | MR が待つ物理アドレスを毎サイクル取る(T7) | **MR が DTLB を待つ間(`mr_tlb_wait`)は、毎サイクル `d_tr_paddr` とフォールトを取り、DTLB が答えたら待ちをやめる**。答えたサイクルだけ取る形をやめた。答えまではフォールトは無く、アドレスは使わない。DTLB の比較が `mr_paddr` の有効化から外れる(`LitexSystem/docs/TIMING_J.md` 43 章の最悪の経路)。サイクルは変わらない。変異 M384 |
+| 79 | ページテーブルの探索のイベント(E3a) | **イベントを 3 本足す(27〜29、`HPM_EVENTS` 30)**: 27 ウォーカが DTLB の探索のために D$ の口を持っている(`CORE_MMU` の `grant & for_d`)、28 同じく ITLB のため、29 MR が DTLB を待っている(`mr_tlb_wait`: 探索と、その前に口が空くのを待つ分)。イベント 9 / 10(探索の回数)と合わせて、1 回の探索のコストと、時間のうちどれだけを探索に使っているかが分かり、2 段目の TLB の大きさを決める材料になる(`LitexSystem/docs/ROADMAP_J.md` の E3b)。デバイスツリーには生イベントの 31 番までがすでにあるので、`fw_jump.bin` は変わらない。`software/bench/workload.sh` は 8 回目でこれを数え、`SIM/SIM_BIOS` の `make linux-tlb ITLB=.. DTLB=..` は TLB の大きさを変えて小さなユーザモードの負荷を perf で測る。`t32_pmu`(29 が最後、30 は無い)、`d04_pmu` の 3b(SIM_SYS)、変異 M26〜M28(SIM_SYS) |
+| 80 | DTLB の大きさ(E3b の第 1 段) | **16 エントリ(`DTLB_ENTRIES`、以前は 8)。ITLB は 8 のまま**。8 エントリでは、実機のユーザモードの負荷は 1000 命令あたり 8〜14 回ページテーブルを探索していた。SIM_BIOS(`make linux-tlb`、`LitexSystem/docs/BENCH_J.md` 26 章)では、16 エントリで `gunzip` の探索の 95 %、`awk` の 80 % が消え、サイクルは −9.8 % / −14.2 %。32 エントリでは −10.3 % / −17.7 %。DTLB の比較は最悪の経路の上にあり(`TIMING_J.md` 44 章: MA からのフォワーディング → アドレスの加算 → DTLB の比較と選択 → `mr_paddr`)、16 エントリでヒットの OR と one-hot の選択が 1 段、32 エントリなら 2 段深くなるので、まず 16 を試す。2 段目(E3b の残り)は、16 エントリで実機に残る探索を見て決める。変わるのは引数だけ: TLB とその置き換え、`sfence.vma` はエントリ数によらず動く(SIM_CORE の全試験が 8 と 16 で通り、SIM_BIOS では 8〜64 で Linux が起動する)。FF 約 +800、LUT 約 +600 の見込み |

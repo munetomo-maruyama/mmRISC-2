@@ -33,7 +33,7 @@ Ethernet・SD カードの同時照合)は Rev.01 でも PASS(`LitexSystem/docs/
 | 性能(実機、Linux 上) | **2.786 CoreMark/MHz**(Zba/Zbb で作ったもの。rv64gc なら 2.498)、**1.496 DMIPS/MHz**。自作の始めの 1.584 / 0.823 から +76 % / +82 %。どちらも `-O2` での値で、速さを最大にするオプションで作ると **3.025 CoreMark/MHz**、1.542 DMIPS/MHz(`LitexSystem/docs/BENCH.md` 17 章)。浮動小数点は FIR 65.6 MFLOPS、行列積 41.2 MFLOPS(アセンブラ、50 MHz)。L2 キャッシュでカーネルが主の負荷(TFTP、SD の読み出し、`ls -lR`)が 1.5〜1.7 倍になり、その後のメモリまわりの作業(ストアのミスを待たない、`cbo.zero`、バスなど)でその CPI がさらに 7〜11 % 下がった(`BENCH.md` 18〜25 章) |
 | ISA | RV64IMAFDC、Zicsr、Zifencei、Zicntr、Zihpm、**Zba、Zbb、Zbs、Zbc、Zicond**、Zihintpause、Zihintntl、**Zicboz**、M / S / U、Sv39、PMP 8 エントリ |
 | 特権の拡張 | **Sstc**(S モードのタイマ)、**Sscofpmf**(性能カウンタのあふれ割り込み)、**Smcntrpmf**、**Sdtrig**(デバッグのトリガ 4 本)、特権仕様 1.12 |
-| 性能カウンタ | `hpmcounter3`〜`6`、イベント 26 種(キャッシュ・L2・TLB のミス、分岐予測ミス、停止の理由、メモリの待ちの内訳、I$ の先読み)。Linux の `perf stat` / `perf record`、関数ごとの `perf report` で使える |
+| 性能カウンタ | `hpmcounter3`〜`6`、イベント 29 種(キャッシュ・L2・TLB のミス、分岐予測ミス、停止の理由、ページテーブルの探索のサイクル、メモリの待ちの内訳、I$ の先読み)。Linux の `perf stat` / `perf record`、関数ごとの `perf report` で使える |
 | デバッグ | JTAG / cJTAG(Debug Spec 1.0)。OpenOCD / gdb で halt / step / レジスタ / メモリ、ソフトウェアとハードウェアのブレークポイント、ウォッチポイント(動いている Linux カーネルにも置ける) |
 | FPGA | 50 MHz で WNS +0.664 ns、LUT 46,928 / 63,400(74.0 %)、スライス 86.2 %、ブロック RAM 108.5 / 135 タイル(L2 を含む) |
 
@@ -73,7 +73,7 @@ Ethernet・SD カードの同時照合)は Rev.01 でも PASS(`LitexSystem/docs/
 
 | 文書 | 内容 |
 |---|---|
-| [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC_J.md) | CPU コア(命令セット、パイプライン、MMU、CSR、デバッグ、決定事項 1〜78) |
+| [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC_J.md) | CPU コア(命令セット、パイプライン、MMU、CSR、デバッグ、決定事項 1〜80) |
 | [`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`](RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC_J.md) | L1 キャッシュ(パラメータ、インタフェース、動作、検証結果) |
 | [`RTL/CPU/CPU_L2/CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC_J.md) | L2 キャッシュ(方式、動作、資源、検証、実機の効果) |
 | [`RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`](RTL/CPU/CPU_DBG/CPU_DBG_SPEC_J.md) | デバッグ論理(JTAG/cJTAG DTM、DM、認証) |
@@ -179,7 +179,7 @@ LitexRocket/        Rocket 構成の LiteX 一式(ワークスペース、OpenSB
 | `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 339 種(背圧あり/なしの両方) | 全て検出 |
 | `cd SIM/SIM_SYS && make` | コア + 本物の L1 / L2 キャッシュ + AXI + DMA ポート(自作試験 27 本、DMA・PMU などのプログラム 4 本)。`PARAMS=-GL2_SIZE=0` で L2 なし | 全 PASS(L2 あり / なし) |
 | `cd SIM/SIM_SYS && make riscv-tests` | riscv-tests を本物のキャッシュ越しに | 133 PASS、既知の不合格 4 |
-| `cd SIM/SIM_SYS && ./bug_inject.sh` | バグ注入 23 種(浮動小数点の核のサイクルの上限 `bench/fploop` と M0 のメモリの待ちのイベントを含む) | 全て検出 |
+| `cd SIM/SIM_SYS && ./bug_inject.sh` | バグ注入 26 種(浮動小数点の核のサイクルの上限 `bench/fploop`、M0 のメモリの待ちのイベント、E3a の探索のイベントを含む) | 全て検出 |
 | `cd SIM/SIM_CACHE && make` | L1 キャッシュ全試験(CPU と DMA ポートを同じラインで同時にランダムに、取り消しを含む) | PASS 64,914 チェック |
 | `cd SIM/SIM_CACHE && ./bug_inject.sh` | バグ注入 59 種 | 全て検出 |
 | `cd SIM/SIM_L2 && make` / `./sweep.sh` / `./bug_inject.sh` | L2 キャッシュ(256 KB・4 ウェイ)/ 容量・ウェイ・置き換えの 11 構成 / バグ注入 31 種 | PASS 約 150 万チェック / 全 PASS / 全て検出 |

@@ -52,6 +52,7 @@ SIM/SIM_BIOS/initrd_fw/
 SIM/SIM_BIOS/sdcard.img
 SIM/SIM_BIOS/sdcard_run.img
 SIM/SIM_BIOS/sdcard_perf.img
+SIM/SIM_BIOS/sdcard_tlb*.img
 SIM/SIM_BIOS/pmu_sbi/*.elf
 SIM/SIM_BIOS/pmu_sbi/*.bin
 SIM/SIM_BIOS/pmu_sbi/*.hex

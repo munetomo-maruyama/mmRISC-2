@@ -79,15 +79,15 @@ left is in the TLB and in the writes that the copies and the drivers make.
 
 ### E3. A second-level TLB (the largest for user-mode loads)
 
-The ITLB and the DTLB have 8 entries each, fully associative and compared in the cycle of the address (on
+The ITLB and the DTLB had 8 entries each (the DTLB 16 since 2026-10-17, decision 80), fully associative and compared in the cycle of the address (on
 the worst path, so they cannot simply be made larger). User-mode loads walk the page tables 0.5 to 14 times
 per 1000 instructions, about 15 cycles each through the D$ and the L2: **about 13 % of the cycles of `awk`,
 10 % of `gunzip`**, and 4 to 9 % of the kernel loads (`ls` 12 walks per 1000 instructions, `forkexec` 5).
 
 | Step | Size | Contents |
 |---|---|---|
-| E3a | Small | **Measure first**: a PMU event for the cycles the walker is busy (data and instruction side apart), so that the cost of the walks is counted instead of estimated; and in SIM_BIOS, the DTLB with 16 / 32 / 64 entries (only the parameter, the timing does not matter there) to see how many walks a larger table would take away |
-| E3b | Medium | A shared second level of 64 to 128 entries, set associative in distributed RAM (4 ways × 16 to 32 sets, about 100 bits an entry), between the two L1 TLBs and the walker: a miss of an L1 TLB asks it (1 to 2 cycles) before walking. Superpages need either a second table or a lookup per size (Linux maps the kernel with 2 MB / 1 GB pages, the L1 holds them already). `sfence.vma` invalidates both levels. About LUT +500 to +1,000; nothing on EX's path |
+| E3a | Small | **Done in simulation (2026-10-17, `BENCH.md` 26; events 27 to 29, decision 79): a DTLB of 16 entries takes 95 % of the walks of `gunzip` and 80 % of `awk`, −9.8 % / −14.2 % of their cycles; 32 entries −10.3 % / −17.7 %, with an ITLB of 32 too −20.0 % on `awk`. On the board to follow.** **Measure first**: a PMU event for the cycles the walker is busy (data and instruction side apart), so that the cost of the walks is counted instead of estimated; and in SIM_BIOS, the DTLB with 16 / 32 / 64 entries (only the parameter, the timing does not matter there) to see how many walks a larger table would take away |
+| E3b | Medium | **First step (2026-10-17, decision 80): the DTLB from 8 to 16 entries, a parameter only; on the board to follow. The second level below is decided from the walks left with 16.** A shared second level of 64 to 128 entries, set associative in distributed RAM (4 ways × 16 to 32 sets, about 100 bits an entry), between the two L1 TLBs and the walker: a miss of an L1 TLB asks it (1 to 2 cycles) before walking. Superpages need either a second table or a lookup per size (Linux maps the kernel with 2 MB / 1 GB pages, the L1 holds them already). `sfence.vma` invalidates both levels. About LUT +500 to +1,000; nothing on EX's path |
 
 ### W. Writes (new, from the profile)
 
