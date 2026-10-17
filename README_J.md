@@ -73,7 +73,7 @@ Ethernet・SD カードの同時照合)は Rev.01 でも PASS(`LitexSystem/docs/
 
 | 文書 | 内容 |
 |---|---|
-| [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC_J.md) | CPU コア(命令セット、パイプライン、MMU、CSR、デバッグ、決定事項 1〜80) |
+| [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC_J.md) | CPU コア(命令セット、パイプライン、MMU、CSR、デバッグ、決定事項 1〜81) |
 | [`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`](RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC_J.md) | L1 キャッシュ(パラメータ、インタフェース、動作、検証結果) |
 | [`RTL/CPU/CPU_L2/CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC_J.md) | L2 キャッシュ(方式、動作、資源、検証、実機の効果) |
 | [`RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`](RTL/CPU/CPU_DBG/CPU_DBG_SPEC_J.md) | デバッグ論理(JTAG/cJTAG DTM、DM、認証) |
@@ -244,7 +244,7 @@ vivado -mode batch -source build.tcl
 | LiteX SoC 上の Linux | 実機で SD カードの ext4 から BusyBox まで。Ethernet、TFTP ネットブート。負荷試験 120 分 PASS |
 | 性能 | 2.786 CoreMark/MHz、1.496 DMIPS/MHz(実機、Linux 上、`-O2`。最大の最適化で 3.025 / 1.542)。性能カウンタと `perf` で実機の内訳を測れる |
 | L2 キャッシュ | 完了(256 KB、[`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC_J.md))。実機でカーネルの負荷が 1.2〜1.7 倍 |
-| 次のテーマ | 2 段目の TLB(ユーザモードの負荷)、読まずに書くライン全体の書き込みとキャッシュ無しのストアを待たないこと(カーネルのコピーとドライバ)([`ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md)) |
+| 次のテーマ | `dev` で TLB を大きくする(DTLB 16 は測定済み、次は ITLB 16 / DTLB 32)、読まずに書くライン全体の書き込みとキャッシュ無しのストアを待たないこと(カーネルのコピーとドライバ)([`ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md)) |
 
 ## ライセンス
 

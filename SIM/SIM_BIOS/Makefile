@@ -205,8 +205,8 @@ pmu-sbi: obj_dir/V$(TOP) fw_jump.hex pmu_sbi/pmu_sbi.hex
 # E3a: the TLBs at other sizes (make linux-tlb ITLB=8 DTLB=32), each build in
 # its own directory; sim_tlb.sh runs small versions of the user-mode loads of
 # workload.sh under perf stat before the shell, with an input cut from Image
-ITLB ?= 8
-DTLB ?= 16
+ITLB ?= 16
+DTLB ?= 32
 TLB_OBJ := obj_tlb_i$(ITLB)_d$(DTLB)
 $(TLB_OBJ)/V$(TOP): $(SRCS)
 	@mkdir -p $(TLB_OBJ)

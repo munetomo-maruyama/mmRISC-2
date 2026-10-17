@@ -76,7 +76,7 @@ Every document has a Japanese version next to it (`XXXX.md` is English, `XXXX_J.
 
 | Document | Contents |
 |---|---|
-| [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md) | CPU core (instruction set, pipeline, MMU, CSRs, debug, decisions 1 to 80) |
+| [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md) | CPU core (instruction set, pipeline, MMU, CSRs, debug, decisions 1 to 81) |
 | [`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`](RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md) | L1 caches (parameters, interfaces, behavior, verification results) |
 | [`RTL/CPU/CPU_L2/CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md) | L2 cache (design, behavior, resources, verification, effect on the board) |
 | [`RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`](RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md) | Debug logic (JTAG/cJTAG DTM, DM, authentication) |
@@ -245,7 +245,7 @@ The bitstream and reports go to `output/`. The OpenOCD configuration is in `open
 | Linux on the LiteX SoC | On the board from the SD card's ext4 to BusyBox. Ethernet, TFTP netboot. 120-minute stress test PASS |
 | Performance | 2.786 CoreMark/MHz, 1.496 DMIPS/MHz (board, under Linux, `-O2`; 3.025 / 1.542 with the most optimization). The breakdown on the board can be measured with the performance counters and `perf` |
 | L2 cache | Done (256 KB, [`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md)). Kernel loads 1.2 to 1.7 times faster on the board |
-| Next themes | A second-level TLB (user-mode loads), whole-line writes without the read and posted uncached stores (the kernel's copies and drivers) ([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |
+| Next themes | Larger TLBs on `dev` (DTLB 16 measured, ITLB 16 / DTLB 32 next), whole-line writes without the read and posted uncached stores (the kernel's copies and drivers) ([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |
 
 ## License
 

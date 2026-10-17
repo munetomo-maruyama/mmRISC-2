@@ -41,8 +41,8 @@ module CPU_CORE
         parameter logic [63:0] HART_ID      = 64'd0,
         parameter int          PQ_DEPTH     = 16,     // parcels in the fetch queue
         parameter int          PMP_ENTRIES  = 8,     // 0 removes PMP
-        parameter int          ITLB_ENTRIES = 8,
-        parameter int          DTLB_ENTRIES = 16,    // E3b (decision 80)
+        parameter int          ITLB_ENTRIES = 16,
+        parameter int          DTLB_ENTRIES = 32,    // E3b (decisions 80, 81)
         parameter int          BTB_ENTRIES  = 256,
         // the cacheable region begins here (CPU_CACHE_SPEC.md 4.1): a load
         // below it may have a side effect and does not go early

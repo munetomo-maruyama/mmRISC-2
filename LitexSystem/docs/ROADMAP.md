@@ -87,7 +87,7 @@ works for the ITLB 2.2 to 2.4 % of `awk` and `ls`.
 
 | Step | Size | Contents |
 |---|---|---|
-| E3b | Small (parameters) | **An ITLB of 16 and a DTLB of 32 entries**: in simulation (section 26.2 of `BENCH.md`) `awk` −6.0 % from today (88 % of what is left), `gunzip` −0.5 %; on the board perhaps 2 to 4 % for `ls` and `tftp`. Only the parameters (`ITLB_ENTRIES`, `DTLB_ENTRIES` of `CPU_TOP.sv`); to be seen in synthesis: the DTLB's own path has more than +0.83 ns today (TIMING 45), the slices go to about 93 % |
+| E3b | Small (parameters) | **An ITLB of 16 and a DTLB of 32 entries** (decision 81, 2026-10-17; on the board to follow): in simulation (section 26.2 of `BENCH.md`) `awk` −6.0 % from today (88 % of what is left), `gunzip` −0.5 %; on the board perhaps 2 to 4 % for `ls` and `tftp`. Only the parameters (`ITLB_ENTRIES`, `DTLB_ENTRIES` of `CPU_TOP.sv`); to be seen in synthesis: the DTLB's own path has more than +0.83 ns today (TIMING 45), the slices go to about 93 % |
 | (E3c) | Dropped | A shared second level of 64 to 128 entries between the L1 TLBs and the walker. After 16 / 32 entries it would have under 0.5 % of the cycles to take (section 26.2), so it is not worth its LUT +500 to +1,000 |
 
 ### W. Writes (new, from the profile)

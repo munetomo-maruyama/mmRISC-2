@@ -60,8 +60,8 @@ module tb_BIOS
         parameter int          IC_PREFETCH = 0,
         // the entries of the TLBs (E3a: what a larger TLB would save;
         // make linux-tlb ITLB=.. DTLB=..), as in the SoC
-        parameter int          ITLB_ENTRIES = 8,
-        parameter int          DTLB_ENTRIES = 16
+        parameter int          ITLB_ENTRIES = 16,
+        parameter int          DTLB_ENTRIES = 32
     );
 
     localparam int          SOC_ADDR_WIDTH = 40;
