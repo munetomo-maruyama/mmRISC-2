@@ -1210,3 +1210,53 @@ iterations, `md5sum` of 256 KB). Change of the cycles against the 8 entries of t
 - **For E3b**: a DTLB of 16 entries takes most of it for `gunzip`, `awk` wants 32 or a second level. The DTLB's
   compare is on the worst path (TIMING 44), so a larger first level has to be checked in synthesis; a second
   level of 64 entries keeps the compare as it is and costs a cycle or two on a miss of the first.
+
+### 26.1 On the board: a DTLB of 16 entries (2026-10-17)
+
+`workload.sh` (run 8, with the events 27 to 29) on the bitstream of TIMING 45: the DTLB of 16 entries
+(decision 80). Against 25 (Rev.01, 8 entries); the DTLB walks of 8 entries are those of section 14 (the table
+has not changed size since), `tftp`'s of section 25:
+
+| Load | CPI | Change | DTLB walks / 1000 instr. | MR waits for the DTLB | Walker for the DTLB / ITLB |
+|---|---|---|---|---|---|
+| `gunzip` | 1.245 → 1.108 | **−11.0 %** | 7.91 → 0.22 | 0.4 % | 0.4 / 0.0 % |
+| `md5sum` | 1.131 → 1.129 | −0.2 % | 0.48 → 0.34 | 0.6 % | 0.5 / 0.1 % |
+| `awk` | 1.598 → 1.363 | **−14.7 %** (*) | 14.03 → 3.41 | 4.1 % | 2.7 / 2.2 % |
+| `ls -lR` | 2.046 → 1.926 | **−5.9 %** | 11.40 → 4.28 | 4.2 % | 3.3 / 2.4 % |
+| `ext4read` | 2.361 → 2.275 | −3.6 % | 8.55 → 2.06 | 2.6 % | 2.0 / 0.3 % |
+| `sdread` | 2.646 → 2.566 | −3.0 % | 8.44 → 2.03 | 2.3 % | 1.8 / 0.2 % |
+| `forkexec` | 2.040 → 1.995 | −2.2 % | 5.37 → 1.90 | 2.2 % | 1.8 / 0.4 % |
+| `tftp` | 2.688 → 2.581 | −4.0 % | 10.0 → 4.55 | 4.1 % | 3.4 / 0.8 % |
+
+- **The simulation was right, and a little low**: `gunzip` −11.0 % on the board against −9.8 % in section 26,
+  `awk` −14.7 % against −14.2 % (its walks 3.41 against 3.18 per 1000 instructions, MR's waits 4.1 % against
+  4.2 %). The memory of the board is slower than the model, so a walk saved is worth more there.
+- (*) `awk` against its slower value of 25 (1.598); against the faster one (1.545) −11.8 %. The two values came
+  from the walks (13.5 / 14.0 per 1000 instructions, by where its pages land); with 16 entries there is only one
+  so far.
+- **The kernel loads gain 2 to 6 %**: their walks fell by 55 to 78 %. `md5sum` had few walks to begin with.
+- **What is left of the walks** (the upper bound of a larger TLB): MR waits for the DTLB 4.1 to 4.2 % of the
+  cycles of `awk`, `ls` and `tftp`, 2.2 to 2.6 % of the other kernel loads, under 1 % of `gunzip` and `md5sum`;
+  the walker works for the ITLB 2.2 to 2.4 % of `awk` and `ls`. A walk takes 11 to 12 cycles in `awk` (its page
+  tables stay in the caches) and 15 to 22 in the kernel loads.
+
+### 26.2 What a larger TLB would add to 16 entries (2026-10-17, simulation)
+
+`make linux-tlb` as in 26, against the DTLB of 16 and the ITLB of 8 of today (`md5sum` left out, as in 26):
+
+| ITLB / DTLB | `gunzip` | `awk` | `awk`: ITLB / DTLB walks per 1000 instr. | `awk`: MR waits for the DTLB |
+|---|---|---|---|---|
+| 8 / 16 (today) | 30.64 M | 170.3 M | 2.83 / 3.18 | 4.2 % |
+| 16 / 16 | 0 | −1.6 % | 0.72 / 3.37 | 3.9 % |
+| 8 / 32 | −0.5 % | −4.1 % | 2.83 / 0.16 | 0.9 % |
+| **16 / 32** | −0.5 % | **−6.0 %** | 0.72 / 0.16 | 0.4 % |
+| 32 / 32 | −0.5 % | −6.8 % | 0.00 / 0.16 | 0.3 % |
+
+- **`gunzip` has nothing left** (−0.5 % at most). The rest is `awk` and, by their MR waits on the board (26.1),
+  `ls -lR` and `tftp` (4 %), less the other kernel loads (2 to 2.6 %).
+- **ITLB 16 + DTLB 32 takes 88 % of what is left in `awk`**; 32 / 32 adds 0.8 %. On the board this would be
+  about −6 % for `awk` (the board has gained a little more than the simulation, 26.1) and, if the kernel loads
+  lose their MR waits as `awk` does, 2 to 4 % for them.
+- A second level (E3b) could not take more than this: what is left after 16 / 32 is under 0.5 % of the cycles.
+  The question is only whether the first levels of 16 / 32 entries fit the timing (TIMING 45: the DTLB's own path
+  has more than +0.83 ns) and the slices (87.9 %; the 8 entries of TIMING 45 took +274, so the 24 more about +800, to about 93 %).

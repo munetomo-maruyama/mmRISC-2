@@ -1,4 +1,4 @@
-# Next design themes (as of 2026-10-12)
+# Next design themes (as of 2026-10-17)
 
 [日本語](ROADMAP_J.md)
 
@@ -8,8 +8,8 @@ documents they point to; earlier versions of this document are in the git histor
 what is left, ranked again by what the board's loads spend their cycles on, function by function (sections 24
 and 25 of `BENCH.md`).
 
-This is the state of **Rev.01** (the tag on `main`, 2026-10-12). The themes of section 3 are developed in the
-`dev` branch.
+Section 1 was the state of **Rev.01** (the tag on `main`, 2026-10-12); the themes of section 3 are developed in the
+`dev` branch, and section 1 now follows `dev` (E3a and the DTLB of 16 entries, 2026-10-17).
 
 ## 1. Where things are
 
@@ -21,16 +21,16 @@ On the board (Arty A7-100T, 50 MHz, Linux 7.2):
 | Dhrystone | 1.490 / 1.501 DMIPS/MHz (`-O2`), 1.536 / 1.542 (fastest options within the rules) | Section 17 of `BENCH.md` |
 | Floating point | 8-tap FIR **1.53 cycles per multiply-add** (65.6 MFLOPS), matrix multiply 64×64 **2.42** (41.2 MFLOPS, assembler and cache blocking) | `RTL/CPU/CPU_FPU/README.md` |
 | ISA | RV64GC, Zba, Zbb, **Zbs**, **Zbc**, Zicond, **Zicboz**, Zihintpause, Zihintntl, Sstc, Sdtrig, Zihpm / Sscofpmf / Smcntrpmf, Sv39, PMP 8 entries | `README.md` |
-| Resources | LUT 46,928 (74.0 %), FF 26,516 (20.9 %), **slices 86.2 % (about 2,190 left)**, block RAM 108.5 / 135 (26.5 left), DSP 32 / 240 | Section 44 of `TIMING.md` |
-| Timing | **WNS +0.664 ns** (50 MHz). The ten worst paths are the load's value forwarded to the next instruction in EX (into the DTLB, the ALU and the IFU) | Same |
+| Resources | LUT 47,509 (74.9 %), FF 27,297 (21.5 %), **slices 87.9 % (about 1,920 left)**, block RAM 108.5 / 135 (26.5 left), DSP 32 / 240 | Section 45 of `TIMING.md` |
+| Timing | **WNS +0.514 ns** (50 MHz; Rev.01 +0.664 ns). The worst paths are the data side's PMP range compares in MR, into the cancel of the D$'s early request (T4, second step) | Same |
 
 **Where the time goes** (`workload.sh`, `workload.sh profile`, sections 24 and 25 of `BENCH.md`):
 
 | Kind | Loads | CPI | What the cycles go to |
 |---|---|---|---|
 | Fits in the caches | CoreMark | 1.12 | Nothing large: front end empty 4.8 %, back end 5.6 %, load use 2.0 % |
-| User mode | `gunzip`, `md5sum`, `awk` | 1.13 to 1.60 | **DTLB walks**: 7.9 (`gunzip`) and 14.0 (`awk`) per 1000 instructions, about 15 cycles each, so **about 10 % and 13 % of their cycles** (section 14 of `BENCH.md`). `md5sum`: the copy to user space 6.6 %, D$ wait 8 % |
-| Kernel heavy | `ls`, `ext4read`, `sdread`, `forkexec`, `tftp` | 2.0 to 2.7 | Front end empty 21 to 31 % (I$ misses 19 to 61 per 1000 instructions, mostly L2 hits) and D$ wait 13 to 34 %. By function: **the copy to user space** (21 % of `sdread`, 4 % of `tftp`), **`memcpy`** (4 % of `forkexec`), **`liteeth_start_xmit`** (11 % of `tftp`: uncached writes to LiteEth), time with interrupts off around the SD card driver (`queue_work_on` 15 to 20 % of `ext4read` / `sdread`), wrong guesses on 27 to 68 % of the branches |
+| User mode | `gunzip`, `md5sum`, `awk` | 1.11 to 1.36 | The DTLB walks were 7.9 (`gunzip`) and 14.0 (`awk`) per 1000 instructions, about 10 % and 13 % of their cycles; **the DTLB of 16 entries took −11.0 % / −14.7 %** (section 26.1 of `BENCH.md`). `awk` still waits 4.1 % for the DTLB and walks 2.2 % for the ITLB. `md5sum`: the copy to user space 6.6 %, D$ wait 8 % |
+| Kernel heavy | `ls`, `ext4read`, `sdread`, `forkexec`, `tftp` | 1.9 to 2.6 (2 to 6 % less with the DTLB of 16) | Front end empty 21 to 31 % (I$ misses 19 to 61 per 1000 instructions, mostly L2 hits) and D$ wait 13 to 34 %. By function: **the copy to user space** (21 % of `sdread`, 4 % of `tftp`), **`memcpy`** (4 % of `forkexec`), **`liteeth_start_xmit`** (11 % of `tftp`: uncached writes to LiteEth), time with interrupts off around the SD card driver (`queue_work_on` 15 to 20 % of `ext4read` / `sdread`), wrong guesses on 27 to 68 % of the branches |
 
 What was the main theme of the previous version, overlapping memory waits, is done as far as it pays: the D$
 no longer makes the core wait for store misses (M1), asks for the fill before copying a dirty victim out (M5),
@@ -55,6 +55,7 @@ left is in the TLB and in the writes that the copies and the drivers make.
 | D1 | Linux loads measured with the PMU | `workload.sh` (8 loads) | Section 14 of `BENCH.md` |
 | D2 | `perf` with function names (2026-10-12) | `perf` with libelf (`scripts/build_perf_libs.sh`); `perf.sh` and `workload.sh profile` report by function, the kernel's names included | Sections 23 and 24 of `BENCH.md` |
 | E1 | L2 cache (256 KB) | Kernel-heavy loads 1.2 to 1.7 times faster | `CPU_L2_SPEC.md`, section 15 of `BENCH.md` |
+| E3a | The walks measured, and a DTLB of 16 entries (2026-10-17) | Events 27 to 29; `gunzip` −11.0 %, `awk` −14.7 %, kernel loads −2 to −6 %; WNS +0.514 ns | Decisions 79 and 80, sections 26 and 26.1 of `BENCH.md`, section 45 of `TIMING.md` |
 | F1 | Zbs (2026-10-12) | `bset` / `bclr` / `binv` / `bext` in the ALU; with Zba / Zbb the B extension | Decision 77 |
 | F2 | Zicboz (2026-10-12) | `cbo.zero` makes a line of zeros in the D$ without reading memory; `forkexec` −1.8 %, its D$ fills −9 %, its store waits halved | Decision 76, section 23 of `BENCH.md` |
 | F3 | Zbc (2026-10-12) | `clmul` / `clmulh` / `clmulr` in the MDU (16 bits a cycle, 5 cycles); the kernel's `crc32c` uses it: `ls -lR` about −3 % of its cycles | Decision 77, section 25 of `BENCH.md` |
@@ -77,17 +78,17 @@ left is in the TLB and in the writes that the copies and the drivers make.
 
 ## 3. Next themes
 
-### E3. A second-level TLB (the largest for user-mode loads)
+### E3. What is left of the TLBs
 
-The ITLB and the DTLB had 8 entries each (the DTLB 16 since 2026-10-17, decision 80), fully associative and compared in the cycle of the address (on
-the worst path, so they cannot simply be made larger). User-mode loads walk the page tables 0.5 to 14 times
-per 1000 instructions, about 15 cycles each through the D$ and the L2: **about 13 % of the cycles of `awk`,
-10 % of `gunzip`**, and 4 to 9 % of the kernel loads (`ls` 12 walks per 1000 instructions, `forkexec` 5).
+The ITLB has 8 entries and the DTLB 16 (E3a, section 2), fully associative and compared in the cycle of the
+address. What is left on the board (section 26.1 of `BENCH.md`): MR waits for the DTLB 4.1 to 4.2 % of the cycles
+of `awk`, `ls` and `tftp`, 2.2 to 2.6 % of the other kernel loads, under 1 % of `gunzip` and `md5sum`; the walker
+works for the ITLB 2.2 to 2.4 % of `awk` and `ls`.
 
 | Step | Size | Contents |
 |---|---|---|
-| E3a | Small | **Done in simulation (2026-10-17, `BENCH.md` 26; events 27 to 29, decision 79): a DTLB of 16 entries takes 95 % of the walks of `gunzip` and 80 % of `awk`, −9.8 % / −14.2 % of their cycles; 32 entries −10.3 % / −17.7 %, with an ITLB of 32 too −20.0 % on `awk`. On the board to follow.** **Measure first**: a PMU event for the cycles the walker is busy (data and instruction side apart), so that the cost of the walks is counted instead of estimated; and in SIM_BIOS, the DTLB with 16 / 32 / 64 entries (only the parameter, the timing does not matter there) to see how many walks a larger table would take away |
-| E3b | Medium | **First step (2026-10-17, decision 80): the DTLB from 8 to 16 entries, a parameter only; on the board to follow. The second level below is decided from the walks left with 16.** A shared second level of 64 to 128 entries, set associative in distributed RAM (4 ways × 16 to 32 sets, about 100 bits an entry), between the two L1 TLBs and the walker: a miss of an L1 TLB asks it (1 to 2 cycles) before walking. Superpages need either a second table or a lookup per size (Linux maps the kernel with 2 MB / 1 GB pages, the L1 holds them already). `sfence.vma` invalidates both levels. About LUT +500 to +1,000; nothing on EX's path |
+| E3b | Small (parameters) | **An ITLB of 16 and a DTLB of 32 entries**: in simulation (section 26.2 of `BENCH.md`) `awk` −6.0 % from today (88 % of what is left), `gunzip` −0.5 %; on the board perhaps 2 to 4 % for `ls` and `tftp`. Only the parameters (`ITLB_ENTRIES`, `DTLB_ENTRIES` of `CPU_TOP.sv`); to be seen in synthesis: the DTLB's own path has more than +0.83 ns today (TIMING 45), the slices go to about 93 % |
+| (E3c) | Dropped | A shared second level of 64 to 128 entries between the L1 TLBs and the walker. After 16 / 32 entries it would have under 0.5 % of the cycles to take (section 26.2), so it is not worth its LUT +500 to +1,000 |
 
 ### W. Writes (new, from the profile)
 
@@ -115,9 +116,9 @@ per 1000 instructions, about 15 cycles each through the D$ and the L2: **about 1
 
 ### T. Timing
 
-WNS +0.664 ns. The ten worst paths are the load's value forwarded from MA into EX (section 44 of `TIMING.md`),
-the design's load-to-use path; shortening it means one more cycle of load use. Nothing is planned until a theme
-takes the margin away.
+WNS +0.514 ns. The worst paths are the data side's PMP range compares in MR, into the cancel of the D$'s early
+request (section 45 of `TIMING.md`): T4 (second step) below. Behind them, the load's value forwarded from MA into
+EX (section 44), the design's load-to-use path. Nothing is planned until a theme takes the margin away.
 
 | # | Theme | Size | Contents |
 |---|---|---|---|
@@ -144,8 +145,8 @@ takes the margin away.
 ## 4. Recommended order
 
 0. ~~A 120-minute `stress.sh` on the current bitstream~~: **done, PASS** (round 18 of `BRINGUP.md`, Rev.01).
-1. **E3a, then E3b** (the second-level TLB): the largest measured loss of the user-mode loads (10 to 13 %),
-   and a few % of the kernel loads. E3a decides the size.
+1. ~~E3a~~: **done** (the DTLB of 16 entries, section 26.1 of `BENCH.md`). **E3b** (ITLB 16, DTLB 32) is one
+   synthesis: taken if the timing holds, else E3 is closed as it is.
 2. **W1** (write-validate), after checking where the copy's samples fall: the copy to user space is the largest
    single function of the kernel loads.
 3. **W2** (posted uncached stores), after the same check on `liteeth_start_xmit`.
