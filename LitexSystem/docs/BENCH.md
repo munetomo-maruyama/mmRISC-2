@@ -1283,3 +1283,48 @@ has not changed size since), `tftp`'s of section 25:
   TLBs is now 1 to 3 % of their cycles (`ls` and `tftp`: they touch many pages once, which no TLB keeps).
 - **E3 is done**: from Rev.01, `awk` −20.5 %, `gunzip` −11.4 %, the kernel loads −3.4 to −8.8 %, for parameters
   only. The price is the timing margin (TIMING 46: +0.065 ns).
+
+## 27. Where the copies and the driver wait, by instruction (W1 / W2, 2026-10-18, board)
+
+The checks before W1 and W2 of `ROADMAP.md`, on the bitstream of TIMING 46. `sh workload.sh <server> ips`
+samples `md5sum`, `sdread`, `forkexec` and `tftp` every 20,000 events of `r1` (cycles), `r14` (MA waits for a
+store) and `r15` (MA waits while the D$ handles a miss) and counts the samples by instruction; they are read
+against the disassembly of the board's kernel (`vmlinux` of the same build as `Image`). `uclat` times
+uncached accesses through `/dev/mem`.
+
+**Where a sample lands**: an interrupt is attached to the instruction entering EX, and in both copy loops the
+samples of the source's misses (`r15`) sit on the fourth load of a line, three instructions after the first
+one, which waits. A sample is read as three instructions after the one that waits.
+
+**The copy to user space** (`fallback_scalar_usercopy_sum_enabled`: 8 `ld`, then 8 `sd`, 64 bytes a turn):
+
+| | Its loads (the source) | Its stores (the destination) |
+|---|---|---|
+| `sdread`, `r1` | about 10 % of the cycles (+0x3e / +0x42) | **about 10 %** (+0x56 to +0x76) |
+| `sdread`, `r14` | | 78 % of its store waits |
+| `sdread`, `r15` | 36 % of its miss waits | 19 % |
+| `md5sum`, `r1` | about 2.5 % | about 2.5 % |
+
+- In `sdread` a line of the copy takes about 170 cycles: about 85 waiting for the source (lines the SD card's
+  DMA has just written, read from memory: nothing to save there) and about 85 at the stores. Those are what W1
+  aims at: the destination's line read before it is overwritten (the 64 KB buffer of `dd`, from the L2) and the
+  two MSHRs held by it while the next store waits for one. The dirty lines would still be written back.
+- `memcpy` of `forkexec` (10 `ld` / 10 `sd`, 128 bytes a turn) shows the same split; its stores wait about
+  0.6 % of the cycles. `tftp` copies with the unaligned loop (+0x94 to +0xb0), about 3 % of its cycles in all.
+- **Upper bound of W1**: `sdread` 6 to 8 %, `md5sum` 1.5 to 2 %, `forkexec` and `tftp` under 1 %.
+
+**`liteeth_start_xmit`**: 6.2 % of the samples of `tftp` fall on one instruction (+0xee), three after a
+cacheable `sh` that follows the driver's three register writes. About 3,700 cycles per packet sent.
+
+| `uclat` (cycles of one, empty loop taken off) | |
+|---|---|
+| `sw` uncached (`ctrl_scratch`) | 13.1 |
+| `lw` uncached (`ctrl_scratch`) | 14.2 |
+| `lw` of LiteEth's TX ready | 14.0 |
+| `sw` uncached, then `sh` and `lw` cacheable | 20.1 |
+| `sh` and `lw` cacheable | 0.9 |
+
+- **An uncached store costs 13 cycles**, and the cacheable accesses behind it about 6 more. The driver's three
+  register writes and one read are about 60 cycles a packet, not 3,700: **W2 could save under 0.1 % of `tftp`**.
+  What the samples at +0xee stand for is not explained by these accesses; `r14` and `r15` count only a sixth of
+  them. `memcpy_toio` (an ACK of about 60 bytes, 8 uncached stores) is under 0.3 % of the samples.
