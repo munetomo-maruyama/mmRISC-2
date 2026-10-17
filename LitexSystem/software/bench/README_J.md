@@ -12,6 +12,7 @@ CoreMark・Dhrystone・小さな測定(`micro`)を、静的リンクの Linux �
 | `Makefile` | `make` で `out/coremark`、`out/dhrystone`、`out/micro`、Zba / Zbb で作った `out/coremark_zb`、`out/dhrystone_zb`、最大の最適化で作った `out/coremark_max`、`out/dhrystone_max`、`out/coremark_zb_max`、`out/dhrystone_zb_max`、`out/dhrystone_lto`、`out/dhrystone_zb_lto`(下の「最大の最適化」)。`make tftp` で TFTP サーバへ(sudo) |
 | `bench.sh` | ボードで実行。3 つを TFTP で `/tmp` に取ってきて順に走らせ、MHz あたりの値を出す。サーバに `*_zb`(コアが Zba / Zbb を持つとき、`/proc/cpuinfo`)、`*_max`、`*_zb_max`、`dhrystone_*lto` があればそれも走らせる |
 | `micro.c` | 帯域(D$ に入る / 入らない)、依存ロードの遅延、不整列ロード、倍精度の積和(C と、`fpkern.S` のアセンブラ)。`micro 50 fp` で浮動小数点だけ |
+| `uclat.c` | キャッシュ無しのアクセスのコスト(ROADMAP_J.md の W2): `/dev/mem` を通した LiteX と LiteEth のレジスタへのストアとロード、キャッシュ無しのストアの後のキャッシュありのアクセス。root で `./uclat` |
 | `fpkern.S` / `fpkern.c` / `fpkern.h` | パイプライン化した FPU(`CPU_CORE_SPEC.md` 10.11)向けのアセンブラの核: 行列積(4×4 のブロック、そのままと D$ に合わせて切ったもの(`fpkern.c`、`../../docs/BENCH.md` 16 章))、FIR 8 タップ、内積。`fpkern.h` に同じ計算の C 版(答えの照合用)。シミュレーションでは `SIM/SIM_SYS/bench/fploop.c` が同じ核を走らせる |
 | `dhry_shim.c` | riscv-tests の Dhrystone が裸の環境に求めるもの(タイマ、表示)を Linux で |
 | `workload.sh` | ボードで実行。CoreMark の外の負荷(gunzip、md5sum、awk、ls、ext4 と SD の読み出し、fork + exec、TFTP)を PMU で数え、1 行 1 負荷の表にする(下の「workload.sh」) |
