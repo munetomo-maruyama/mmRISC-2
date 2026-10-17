@@ -167,7 +167,8 @@ With `ips` (`sh workload.sh 192.168.0.12 ips`, about 3 minutes) it samples `md5s
 and `tftp` by instruction: `r1` (cycles), `r14` (MA waits for a store) and `r15` (MA waits while the D$
 handles a miss), one sample every 20000 events, the first 15 `symbol+offset` of each. Read them against
 the kernel's disassembly on the host (`objdump -d vmlinux`; ROADMAP.md W1 / W2). An interrupt is attached
-to the instruction entering EX, so a sample lands about two instructions after the one MA waits for.
+to the instruction entering EX, so a sample lands about two instructions after the one MA waits for. `ips report` lists the same again from
+the data of the last run (`/tmp/wl/*.data`) without sampling.
 
 Columns of the final table: `Mcyc` (millions of cycles), `CPI`, I$ / D$ misses (line fills), ITLB /
 DTLB misses (page table walks) and exceptions per 1000 instructions, the shares of the cycles spent

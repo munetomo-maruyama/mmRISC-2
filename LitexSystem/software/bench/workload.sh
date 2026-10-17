@@ -5,6 +5,7 @@
 #   tftp -g -r workload.sh 192.168.0.12 && sh workload.sh 192.168.0.12
 #   ... && sh workload.sh 192.168.0.12 profile     (by function instead)
 #   ... && sh workload.sh 192.168.0.12 ips         (by instruction, W1 / W2)
+#   ... && sh workload.sh 192.168.0.12 ips report  (the same, from the last data)
 #
 # CoreMark fits in the caches (BENCH.md 13). This runs ordinary work that
 # does not, each one five times under perf stat. Only applets the BusyBox of
@@ -109,14 +110,21 @@ if [ "$2" = ips ]; then
     for w in md5sum sdread forkexec tftp; do
         c=$(cmd $w)
         for ev in r1 r14 r15; do
-            cold $w
-            ./perf record -e $ev -c 20000 -o "$w.$ev.data" sh -c "$c" > /dev/null 2>> "$LOG"
+            if [ "$3" != report ]; then
+                cold $w
+                ./perf record -e $ev -c 20000 -o "$w.$ev.data" sh -c "$c" > /dev/null 2>> "$LOG"
+            fi
+            # the first 15 by count (BusyBox has no sort)
             ./perf script -i "$w.$ev.data" -F ip,sym,symoff 2>/dev/null |
                 awk -v w="$w" -v ev="$ev" '{ k = ($2 == "") ? $1 : $2; n[k]++; t++ }
-                    END { printf "=== %s %s: %d samples\n", w, ev, t; fflush()
-                          s = "sort -k1,1nr | head -15"
-                          for (k in n) printf "%6.2f %5d %s\n", 100 * n[k] / t, n[k], k | s
-                          close(s) }' | tee -a "$LOG"
+                    END { printf "=== %s %s: %d samples\n", w, ev, t
+                          for (i = 0; i < 15; i++) {
+                              m = 0
+                              for (k in n) if (n[k] > m) { m = n[k]; b = k }
+                              if (m == 0) break
+                              printf "%6.2f %5d %s\n", 100 * m / t, m, b
+                              delete n[b]
+                          } }' | tee -a "$LOG"
         done
     done
     rm -f "$SDFILE"
