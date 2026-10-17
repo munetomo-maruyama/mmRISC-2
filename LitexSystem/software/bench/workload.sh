@@ -4,6 +4,7 @@
 #
 #   tftp -g -r workload.sh 192.168.0.12 && sh workload.sh 192.168.0.12
 #   ... && sh workload.sh 192.168.0.12 profile     (by function instead)
+#   ... && sh workload.sh 192.168.0.12 ips         (by instruction, W1 / W2)
 #
 # CoreMark fits in the caches (BENCH.md 13). This runs ordinary work that
 # does not, each one five times under perf stat. Only applets the BusyBox of
@@ -46,8 +47,16 @@
 # functions, then the share of the CRC and checksum functions in each load
 # (it judged Zbc, ROADMAP.md F3: BENCH.md 24 and 25). Needs perf with libelf (D2).
 #
+# With "ips" it samples md5sum, sdread, forkexec and tftp three times each
+# (perf record every 20000 events of r1 cycles, r14 MA waits for a store, r15
+# MA waits while the D$ handles a miss) and counts the samples by instruction
+# (symbol+offset), the first 15 of each, to be read against the kernel's
+# disassembly on the host (ROADMAP.md W1 / W2). An interrupt is attached to
+# the instruction entering EX, so a sample lands about two instructions after
+# the one MA waits for.
+#
 # Needs the PMU (bitstream, fw_jump.bin, Image with perf; perf.sh works).
-# About 16 minutes (profile: about 4).
+# About 16 minutes (profile: about 4, ips: about 3).
 #---------------------------------------------------------------------------
 SERVER=${1:?usage: sh workload.sh <tftp server>}
 DIR=${WL_DIR:-/tmp/wl}
@@ -95,6 +104,24 @@ EVSETS="r7,r8,r9,ra rb,rc,r11,rd r5,r6,r3,r4 re,rf,r10,r1 r12,r13 r14,r15,r16,r1
 WORKLOADS="gunzip md5sum awk ls ext4read sdread forkexec tftp"
 
 cold() { case $1 in ext4read|sdread) drop ;; esac; }
+
+if [ "$2" = ips ]; then
+    for w in md5sum sdread forkexec tftp; do
+        c=$(cmd $w)
+        for ev in r1 r14 r15; do
+            cold $w
+            ./perf record -e $ev -c 20000 -o "$w.$ev.data" sh -c "$c" > /dev/null 2>> "$LOG"
+            ./perf script -i "$w.$ev.data" -F ip,sym,symoff 2>/dev/null |
+                awk -v w="$w" -v ev="$ev" '{ k = ($2 == "") ? $1 : $2; n[k]++; t++ }
+                    END { printf "=== %s %s: %d samples\n", w, ev, t; fflush()
+                          s = "sort -k1,1nr | head -15"
+                          for (k in n) printf "%6.2f %5d %s\n", 100 * n[k] / t, n[k], k | s
+                          close(s) }' | tee -a "$LOG"
+        done
+    done
+    rm -f "$SDFILE"
+    exit 0
+fi
 
 if [ "$2" = profile ]; then
     for w in $WORKLOADS; do
