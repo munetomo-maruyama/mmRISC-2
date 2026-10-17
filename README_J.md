@@ -244,7 +244,7 @@ vivado -mode batch -source build.tcl
 | LiteX SoC 上の Linux | 実機で SD カードの ext4 から BusyBox まで。Ethernet、TFTP ネットブート。負荷試験 120 分 PASS |
 | 性能 | 2.786 CoreMark/MHz、1.496 DMIPS/MHz(実機、Linux 上、`-O2`。最大の最適化で 3.025 / 1.542)。性能カウンタと `perf` で実機の内訳を測れる |
 | L2 キャッシュ | 完了(256 KB、[`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC_J.md))。実機でカーネルの負荷が 1.2〜1.7 倍 |
-| 次のテーマ | `dev` で TLB を大きくする(DTLB 16 は測定済み、次は ITLB 16 / DTLB 32)、読まずに書くライン全体の書き込みとキャッシュ無しのストアを待たないこと(カーネルのコピーとドライバ)([`ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md)) |
+| 次のテーマ | `dev` で TLB は済み(ITLB 16 / DTLB 32: `awk` −20 %、`gunzip` −11 %、カーネルの負荷 −3〜−9 %)。次は読まずに書くライン全体の書き込みとキャッシュ無しのストアを待たないこと(カーネルのコピーとドライバ)([`ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md)) |
 
 ## ライセンス
 

@@ -1260,3 +1260,26 @@ has not changed size since), `tftp`'s of section 25:
 - A second level (E3b) could not take more than this: what is left after 16 / 32 is under 0.5 % of the cycles.
   The question is only whether the first levels of 16 / 32 entries fit the timing (TIMING 45: the DTLB's own path
   has more than +0.83 ns) and the slices (87.9 %; the 8 entries of TIMING 45 took +274, so the 24 more about +800, to about 93 %).
+
+### 26.3 On the board: an ITLB of 16 and a DTLB of 32 entries (2026-10-17)
+
+`workload.sh` on the bitstream of TIMING 46 (decision 81). Against 26.1 (ITLB 8, DTLB 16) and 25 (Rev.01, 8 / 8):
+
+| Load | CPI | Change from 26.1 | From Rev.01 | ITLB / DTLB walks per 1000 instr. | MR waits for the DTLB |
+|---|---|---|---|---|---|
+| `gunzip` | 1.108 → 1.103 | −0.5 % | **−11.4 %** | 0.007 / 0.05 | 0.4 → 0.1 % |
+| `md5sum` | 1.129 → 1.120 | −0.8 % | −1.0 % | 0.006 / 0.03 | 0.6 → 0.1 % |
+| `awk` | 1.363 → 1.271 | **−6.7 %** | **−20.5 %** | 0.19 / 0.14 | 4.1 → 0.3 % |
+| `ls -lR` | 1.926 → 1.865 | **−3.2 %** | **−8.8 %** | 1.78 / 2.24 | 4.2 → 2.4 % |
+| `ext4read` | 2.275 → 2.227 | −2.1 % | −5.7 % | 0.74 / 0.57 | 2.6 → 1.1 % |
+| `sdread` | 2.566 → 2.521 | −1.8 % | −4.7 % | 0.72 / 0.65 | 2.3 → 1.1 % |
+| `forkexec` | 1.995 → 1.970 | −1.3 % | −3.4 % | 0.29 / 0.82 | 2.2 → 1.3 % |
+| `tftp` | 2.581 → 2.522 | −2.3 % | −6.2 % | 0.62 / 2.02 | 4.1 → 3.0 % |
+
+- **`awk` as the simulation said, a little better** (−6.7 % against −6.0 % in 26.2): its walks fell from 2.66 /
+  3.41 to 0.19 / 0.14 per 1000 instructions, MR's waits 4.1 → 0.3 %, and with them the D$ fills (2.78 → 1.66,
+  the walks' reads gone) and the back end full (11.3 → 7.1 %).
+- **The kernel loads gain 1.3 to 3.2 %**, `ls -lR` the most (its ITLB walks 3.68 → 1.78). What is left of the
+  TLBs is now 1 to 3 % of their cycles (`ls` and `tftp`: they touch many pages once, which no TLB keeps).
+- **E3 is done**: from Rev.01, `awk` −20.5 %, `gunzip` −11.4 %, the kernel loads −3.4 to −8.8 %, for parameters
+  only. The price is the timing margin (TIMING 46: +0.065 ns).

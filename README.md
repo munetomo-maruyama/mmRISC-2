@@ -245,7 +245,7 @@ The bitstream and reports go to `output/`. The OpenOCD configuration is in `open
 | Linux on the LiteX SoC | On the board from the SD card's ext4 to BusyBox. Ethernet, TFTP netboot. 120-minute stress test PASS |
 | Performance | 2.786 CoreMark/MHz, 1.496 DMIPS/MHz (board, under Linux, `-O2`; 3.025 / 1.542 with the most optimization). The breakdown on the board can be measured with the performance counters and `perf` |
 | L2 cache | Done (256 KB, [`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md)). Kernel loads 1.2 to 1.7 times faster on the board |
-| Next themes | Larger TLBs on `dev` (DTLB 16 measured, ITLB 16 / DTLB 32 next), whole-line writes without the read and posted uncached stores (the kernel's copies and drivers) ([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |
+| Next themes | On `dev` the TLBs are done (ITLB 16 / DTLB 32: `awk` −20 %, `gunzip` −11 %, the kernel loads −3 to −9 %); next, whole-line writes without the read and posted uncached stores (the kernel's copies and drivers) ([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |
 
 ## License
 

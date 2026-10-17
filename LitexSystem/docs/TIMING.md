@@ -1783,3 +1783,25 @@ parameter only).
   early request in the D$ (`dc_req_cancel` / `s1_kill`) and end in the D$'s ROB (`rob_done` / `rob_data` CE) or
   its dirty bits (26 levels, 76 % routing, +0.514 ns). This is T4 (second step) of `ROADMAP.md`: the compares
   registered or done in EX would take it off. Not needed at +0.5 ns.
+
+## 46. E3b, an ITLB of 16 and a DTLB of 32 entries: +0.065 ns (2026-10-17)
+
+Decision 81 of `CPU_CORE_SPEC.md`: the ITLB from 8 to 16 entries, the DTLB from 16 to 32 (parameters only).
+
+| | Section 45 | This version |
+|---|---|---|
+| WNS | +0.514 ns | **+0.065 ns** |
+| WHS | +0.051 ns | +0.024 ns |
+| LUT | 47,509 (74.9 %) | 49,700 (78.4 %) |
+| FF | 27,297 (21.5 %) | 29,485 (23.3 %) |
+| Slices | 87.9 % (13,932) | 89.6 % (14,204) |
+
+- The 24 more entries cost LUT +2,191 and FF +2,188, but only slices +272 (the slices were already well
+  filled; about 1,650 are left).
+- **The DTLB's path is back on top, as expected**: the load's value forwarded from MA (`ma_is_load`), EX's
+  address add (`mr_vaddr`), the compare and select of the 32 entries, and the fault of the translation
+  (`mr_tr_fault`, +0.065 ns, 35 levels, 65 % routing) or the physical address (`mr_paddr`, +0.209 ns, 33
+  levels). The IFU's prefetch queue into decode follows (+0.394 ns); the PMP path of 45 is below +0.5 ns.
+- **Met, with little to spare**. If a later theme needs the margin, the DTLB's permission check can move a
+  cycle later: register the one-hot hit and the entry's flags at the end of EX and check them in MR (the fault
+  is raised in MR since decision 75 anyway). This is T8 of `ROADMAP.md`; DTLB 16 (+0.514 ns) is the fallback.
