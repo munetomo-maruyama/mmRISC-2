@@ -2170,7 +2170,11 @@ module CPU_CORE
 
             //---------------------------------------------------------
             // a late branch that guessed wrong empties EX, and MR behind
-            // it (what EX handed over in this cycle)
+            // it (what EX handed over in this cycle). That includes the
+            // wait for the DTLB of an access thrown away: kept, MR stalled
+            // for a walk of an address of the wrong path (in CoreMark the
+            // load behind the end of a list, a walk to page 0 that faults,
+            // 0.7 % of its cycles; decision 82)
             //---------------------------------------------------------
             if (kill_ex) begin
                 ex_valid   <= 1'b0;
@@ -2195,6 +2199,8 @@ module CPU_CORE
                 mr_fp_arith<= 1'b0;
                 mr_fp_we   <= 1'b0;
                 mr_fpu     <= 1'b0;
+                mr_tlb_wait<= 1'b0;
+                mr_tr_fault<= 2'd0;
             end
 
             //---------------------------------------------------------

@@ -12,6 +12,13 @@ run() {
     shift
     perf stat -x, -e $EV sh -c "$*" 2>&1 > /dev/null | grep -v "^$" | sed 's/^#/;/'
 }
+# CoreMark (coremark_zb_max of software/bench): too short for a valid score,
+# but the difference of 90 and 30 iterations is its steady state, the cycles
+# per iteration bench.sh measures (5 first, so that both find the binary in
+# the page cache; decision 82 was found this way)
+run warmup "/root/coremark 0x0 0x0 0x66 5"
+run coremark "/root/coremark 0x0 0x0 0x66 30"
+run coremark90 "/root/coremark 0x0 0x0 0x66 90"
 run gunzip "gunzip -c /root/wl.gz"
 run awk    "awk 'BEGIN { for (i = 0; i < 20000; i++) a[i % 5000] += i; print a[1] }'"
 run md5sum "md5sum /root/wl.bin"

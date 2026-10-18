@@ -33,6 +33,9 @@
 //                     n cycles, to follow the boot where it prints nothing
 //   +utrace=<n>       from the first instruction retired in user mode on,
 //                     every trap, and the first n user mode instructions
+//   +walklog          every fill of the DTLB (@@DW: virtual page, level,
+//                     ASID, the privilege of the access) and every
+//                     SFENCE.VMA (@@SF), with the marks of sim_tlb.sh
 //
 // The run ends at maxcycles, at "Kernel panic", or at "Waiting for root
 // device" / "VFS: Unable to mount", which is as far as a boot can get
@@ -411,6 +414,34 @@ module tb_BIOS
     end
     bit dmalog;
     initial dmalog = $test$plusargs("dmalog");
+
+    // +walklog : what the DTLB is filled with, and when it is flushed
+    bit walklog;
+    logic walk_mark_q;
+    initial walklog = $test$plusargs("walklog");
+    always @(posedge clk) begin
+        walk_mark_q <= (u_per.tx_tail[8*7-1:0] == "== tlb:");
+        if (rst_n && walklog) begin
+            if ((u_per.tx_tail[8*7-1:0] == "== tlb:") && !walk_mark_q)
+                $display("@@MARK %0d", cycle_count);
+            if (`CORE.u_mmu.d_fill)
+                $display("@@DW %07h %0d %04h %0d", `CORE.u_mmu.ptw_vpn_r, `CORE.u_mmu.ptw_level,
+                         `CORE.u_mmu.asid, `CORE.u_mmu.d_priv);
+            // a walk of the data side that starts: its page, privilege,
+            // and the PCs in MR and EX
+            if (!`CORE.u_mmu.grant && `CORE.u_mmu.lsu_idle && `CORE.u_mmu.ptw_need &&
+                !`CORE.u_mmu.kill && `CORE.u_mmu.d_need_walk)
+                $display("@@DS %07h %0d %h %h", `CORE.u_mmu.d_vpn, `CORE.u_mmu.d_priv,
+                         `CORE.mr_pc, `CORE.ex_pc);
+            // a walk of the data side that ends: its page, fault, killed
+            if (`CORE.u_mmu.grant && `CORE.u_mmu.for_d && `CORE.u_mmu.ptw_done)
+                $display("@@DE %07h %0d %0d", `CORE.u_mmu.ptw_vpn_r, `CORE.u_mmu.ptw_fault,
+                         `CORE.u_mmu.killed);
+            if (`CORE.u_mmu.sfence_valid)
+                $display("@@SF %0d %016h %016h", cycle_count, `CORE.u_mmu.sfence_vaddr,
+                         `CORE.u_mmu.sfence_asid);
+        end
+    end
 
     initial begin
         #1;

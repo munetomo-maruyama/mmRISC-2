@@ -146,6 +146,19 @@ _start:
     ori  x12, x12, PTE_V | PTE_R | PTE_X | PTE_A
     sd   x12, 7*8(x14)
 
+    // the PMU for the late branch below (65, 66): counter 3 counts MR's
+    // waits for the DTLB (event 29), counter 4 the wrong guesses (6),
+    // both readable in S
+    li   t0, 29
+    csrw 0x323, t0                       // mhpmevent3
+    li   t0, 6
+    csrw 0x324, t0                       // mhpmevent4
+    csrw 0xb03, x0
+    csrw 0xb04, x0
+    li   t0, 0x18
+    csrs 0x306, t0                       // mcounteren: HPM3, HPM4
+    csrc 0x320, t0                       // mcountinhibit: they count
+
     //-----------------------------------------------------------------
     // turn translation on and drop to supervisor mode
     //-----------------------------------------------------------------
@@ -417,6 +430,51 @@ in_s:
     ld   x11, 0(x10)
     TEST_EQ(51, x29, 1)
     TEST_EQ(52, x28, CAUSE_LPAGE)
+
+    // ---- a late branch that guessed wrong, and the load behind it ----
+    // A list of 40 nodes (next, value) whose last one points into the page
+    // that is not mapped, walked 32 times. At its end the branch on the
+    // pointer just loaded (a late branch, resolved in MR) is taken, guessed
+    // not taken, and the load behind it, on the wrong path, misses the DTLB
+    // at 4000_4008 (CoreMark's list ends in NULL the same way). MR must not
+    // wait for the walk of that load once the branch has thrown it away
+    // (decision 82: it waited, a walk to a page that faults, every time).
+    li   x10, 0x40000800
+    li   x11, 39
+1:
+    addi x12, x10, 16
+    sd   x12, 0(x10)
+    sd   x0, 8(x10)
+    mv   x10, x12
+    addi x11, x11, -1
+    bnez x11, 1b
+    li   x12, 0x40004000
+    sd   x12, 0(x10)
+    li   x29, 0
+    csrr x20, 0xc03                      // hpmcounter3: MR's waits for the DTLB
+    csrr x21, 0xc04                      // hpmcounter4: wrong guesses
+    li   x14, 32
+2:
+    li   x15, 0x40000800
+3:
+    ld   x15, 0(x15)
+    beq  x15, x12, 4f                    // the end: a late branch
+    ld   x16, 8(x15)                     // at the end on the wrong path: 4000_4008
+    j    3b
+4:
+    addi x14, x14, -1
+    bnez x14, 2b
+    csrr x18, 0xc03
+    csrr x19, 0xc04
+    TEST_EQ(65, x29, 0)                  // nothing trapped
+    sub  x18, x18, x20
+    sub  x19, x19, x21
+    li   gp, 66
+    li   t6, 16
+    bltu x19, t6, fail                   // the ends have to be guessed wrong
+    li   gp, 67
+    li   t6, 32
+    bgeu x18, t6, fail                   // and MR does not wait behind them
 
     //-----------------------------------------------------------------
     // user mode, out of the gigabyte mapped at zero

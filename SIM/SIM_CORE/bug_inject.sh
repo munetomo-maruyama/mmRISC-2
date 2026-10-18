@@ -430,6 +430,7 @@ MUTATIONS=(
 "248#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%                ma_issued <= mr_issued;%                ma_issued <= 1'b0;%#LSU: an access that went from EX goes again from MA"
 "250#CPU_CORE/CPU_CORE/CPU_CORE.sv#s%assign older_done  = ~ma_valid | commit;%assign older_done  = 1'b1;%#LSU: a store goes while the instruction in front waits and may still trap (t25)"
 "251#CPU_CORE/CORE_LSU/CORE_LSU.sv#s/assign m_accept = m_valid \& d_req_ready;/assign m_accept = m_valid;/#LSU: an access from MA counts as issued although the cache did not take it"
+"385#CPU_CORE/CPU_CORE/CPU_CORE.sv#/a late branch that guessed wrong empties EX/,/^            end$/ s/mr_tlb_wait<= 1'b0;/;/#late branch: MR still waits for the DTLB for an access it threw away (decision 82)"
 )
 
 # every mutation is run without and with back pressure on both cache ports

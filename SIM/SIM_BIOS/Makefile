@@ -213,9 +213,13 @@ $(TLB_OBJ)/V$(TOP): $(SRCS)
 	$(VERILATOR) $(VERILATOR_FLAGS) -Mdir $(TLB_OBJ) -GITLB_ENTRIES=$(ITLB) -GDTLB_ENTRIES=$(DTLB) \
 	    $(SRCS) > $(TLB_OBJ)/build.log 2>&1 || (tail -30 $(TLB_OBJ)/build.log; exit 1)
 
-sdcard_tlb.img: $(INITRD_BIN) $(shell find $(OVERLAY) -type f) sim_tlb.sh $(PERF_BIN) $(IMAGE_BIN)
+# CoreMark as bench.sh runs it on the board (Zba / Zbb, most optimization),
+# for a fixed count of iterations under perf in sim_tlb.sh
+TLB_CM := ../../LitexSystem/software/bench/out/coremark_zb_max
+sdcard_tlb.img: $(INITRD_BIN) $(shell find $(OVERLAY) -type f) sim_tlb.sh $(PERF_BIN) $(IMAGE_BIN) $(TLB_CM)
 	$(call SD_IMAGE,cp $(PERF_BIN) sd_work/rootfs/usr/bin/perf; \
 	    cp sim_tlb.sh sd_work/rootfs/root/; \
+	    cp $(TLB_CM) sd_work/rootfs/root/coremark; \
 	    head -c 262144 $(IMAGE_BIN) > sd_work/rootfs/root/wl.bin; \
 	    gzip -c sd_work/rootfs/root/wl.bin > sd_work/rootfs/root/wl.gz; \
 	    sed -i 's|^::respawn:|::sysinit:/bin/sh /root/sim_tlb.sh\n::respawn:|' sd_work/rootfs/etc/inittab,24)
