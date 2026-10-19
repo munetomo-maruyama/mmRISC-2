@@ -26,6 +26,9 @@
 //     eight lines of one set (4 KB apart, four ways) evict lines they have
 //     just made dirty, and MA waits while those are copied out (24).
 //     Uncached loads wait in MA on no miss (21 stays)
+//   3b the cycles of the walks (events 27 / 28, E3a of ROADMAP.md): a
+//     second trip to S after sfence.vma, where the fetch and a load both
+//     walk: the walker works for each side, and MR waits for the DTLB (29)
 #include "test.h"
 
     // no linker relaxation: two_fills_b is placed with .org at the end of the
@@ -48,6 +51,9 @@
 #define EV_FILLS_1    22
 #define EV_FILLS_2    23
 #define EV_VIC_COPY   24
+#define EV_DWALK      27
+#define EV_IWALK      28
+#define EV_MR_TLB     29
 #define MHPMCOUNTER5  0xb05
 #define MHPMCOUNTER6  0xb06
 #define MHPMEVENT5    0x325
@@ -288,6 +294,41 @@ back_in_m:
     TEST_EQ(7, x24, 1)                    // DTLB
     TEST_EQ(8, x25, 2)                    // ITLB, after it
     TEST_EQ(9, x26, 1)                    // DTLB: no load since
+
+    // 3b the walker's cycles for each side, and MR waiting for the DTLB
+    li   t0, EV_DWALK
+    csrw MHPMEVENT3, t0
+    li   t0, EV_IWALK
+    csrw MHPMEVENT4, t0
+    li   t0, EV_MR_TLB
+    csrw MHPMEVENT5, t0
+    la   t0, m_trap2
+    csrw mtvec, t0
+    la   t0, page_table
+    srli t0, t0, 12
+    li   t1, 8 << 60                      // Sv39, the same table
+    or   t0, t0, t1
+    csrw satp, t0
+    sfence.vma
+    csrr x20, MHPMCOUNTER3
+    csrr x22, MHPMCOUNTER4
+    csrr x21, MHPMCOUNTER5
+    li   t0, 3 << 11                      // MPP = S
+    csrc mstatus, t0
+    li   t0, 1 << 11
+    csrs mstatus, t0
+    la   t0, s_code2
+    csrw mepc, t0
+    mret
+back_in_m2:
+    csrw satp, x0
+    sfence.vma
+    li   gp, 32
+    beqz x23, fail                        // the load's walk took cycles
+    li   gp, 33
+    beqz x24, fail                        // so did the fetch's
+    li   gp, 34
+    beqz x25, fail                        // and MR waited for it
     TEST_DONE
 
     // S mode. mhpmcounter is M's, so the M handler of the ECALLs below
@@ -303,6 +344,20 @@ s_code:
     li   x27, 2                           // the fetch walks again
     ecall
     // not reached
+
+s_code2:
+    la   x10, lines
+    ld   x11, 0(x10)                      // a walk for the load
+    ecall
+
+m_trap2:
+    csrr x23, MHPMCOUNTER3
+    csrr x24, MHPMCOUNTER4
+    csrr x25, MHPMCOUNTER5
+    sub  x23, x23, x20
+    sub  x24, x24, x22
+    sub  x25, x25, x21
+    j    back_in_m2
 
 m_trap:
     csrr x28, MHPMCOUNTER3

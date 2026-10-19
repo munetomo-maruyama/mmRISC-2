@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>mmRISC-2 White Paper</title>
 <!--
-  WhitePaper_mmRISC-2.html : the source of Doc/20261015_WhitePaper_mmRISC-2.pdf (English)
+  WhitePaper_mmRISC-2.html : the source of Doc/20261020_WhitePaper_mmRISC-2.pdf (English)
   ./make_pdf.sh prints it to PDF with headless Chrome (A4 portrait).
   The figures are figs/*_en.svg, made from the Japanese ones by figs_en.py.
 -->
@@ -80,13 +80,13 @@
   <div class="rule"></div>
   <div class="meta">
     Munetomo Maruyama (professional name; legal name: Takanaga Yamazaki)<br>
-    October 15, 2026 (covers mmRISC-2 Rev.01)<br>
+    October 20, 2026 (covers mmRISC-2 Rev.02, the final version)<br>
     <span class="muted">https://github.com/munetomo-maruyama/mmRISC-2</span>
   </div>
   <div class="abstract box">
     <p style="margin-bottom:1.5mm"><strong>Abstract</strong></p>
     <p>This paper describes <strong>mmRISC-2</strong>, a project in which Anthropic's AI coding agent <strong>Claude Code</strong> designed a 64-bit RISC-V CPU (RV64GC) that boots Linux on a Digilent Arty A7-100T FPGA board. Claude Code wrote the specifications, the RTL, the testbenches and the verification, the scripts and the documents in two languages. The author set the goals, chose among the proposals, and ran Vivado and the board.</p>
-    <p>Linux booted on the home-made CPU from the SD card to the BusyBox shell <strong>12 days</strong> after the start, and <strong>30 days</strong> after the start the project reached Rev.01: an L2 cache, a pipelined FPU, Zba / Zbb / Zbs / Zbc / Zicond / Zicboz, 3.025 CoreMark/MHz, and a 120-minute stress test passed. The paper covers how the work was done, the specification, the history, the rework and how verification improved, an evaluation of AI-driven design, and the role left to the human.</p>
+    <p>Linux booted on the home-made CPU from the SD card to the BusyBox shell <strong>12 days</strong> after the start, and <strong>30 days</strong> after the start the project reached Rev.01: an L2 cache, a pipelined FPU, Zba / Zbb / Zbs / Zbc / Zicond / Zicboz, 3.025 CoreMark/MHz, and a 120-minute stress test passed. <strong>Rev.02</strong>, the final version <strong>38 days</strong> after the start, added larger TLBs (up to 20 % faster on Linux loads), 3.034 CoreMark/MHz and a software environment: <strong>bare-metal C programs in the Eclipse IDE</strong>, debugged on the board over JTAG / cJTAG, and <strong>Debian 13 booting on the board</strong>, where gcc compiles programs on mmRISC-2 itself. The paper covers how the work was done, the specification, the history, the rework and how verification improved, an evaluation of AI-driven design, and the role left to the human.</p>
   </div>
 </section>
 
@@ -95,7 +95,7 @@
 <div class="toc">
   <div>1. Introduction</div>
   <div>2. How the work was done</div>
-  <div>3. Specification (Rev.01)</div>
+  <div>3. Specification (Rev.02)</div>
   <div>4. History of the development</div>
   <div>5. Rework and verification</div>
   <div>6. Evaluation of design by Claude Code</div>
@@ -104,14 +104,14 @@
   <div>Appendix B. References</div>
 </div>
 
-<h3>mmRISC-2 Rev.01 in numbers</h3>
+<h3>mmRISC-2 Rev.02 in numbers</h3>
 <div class="nums">
   <div><b>12 days</b><span>From the start to Linux on the home-made CPU<br>(2026-09-13 → 09-25)</span></div>
-  <div><b>30 days</b><span>To Rev.01, 189 commits<br>(→ 2026-10-12)</span></div>
-  <div><b>22,084 lines</b><span>RTL (SystemVerilog, 46 files)<br>spec, verification, docs: Claude Code too</span></div>
-  <div><b>Linux 7.2</b><span>From the SD card's ext4 to BusyBox<br>Ethernet and perf work too</span></div>
-  <div><b>3.025 /MHz</b><span>CoreMark (fastest options, Zba/Zbb)<br>2.785 with -O2, DMIPS 1.542</span></div>
-  <div><b>550</b><span>Bug injections, all detected<br>(do the tests find broken RTL?)</span></div>
+  <div><b>38 days</b><span>To Rev.02, the final version, 212 commits<br>(Rev.01 in 30 days; → 2026-10-20)</span></div>
+  <div><b>22,100 lines</b><span>RTL (SystemVerilog, 46 files)<br>spec, verification, docs: Claude Code too</span></div>
+  <div><b>Debian 13</b><span>Linux 7.2 from the SD card, BusyBox or Debian;<br>gcc compiles on the board itself</span></div>
+  <div><b>3.034 /MHz</b><span>CoreMark (fastest options, Zba/Zbb)<br>2.794 with -O2, DMIPS 1.545</span></div>
+  <div><b>554</b><span>Bug injections, all detected<br>(do the tests find broken RTL?)</span></div>
 </div>
 
 <!-- ======================================================================= 1 -->
@@ -150,14 +150,15 @@
 <p class="caption-t">Table 2 What the author and Claude Code did</p>
 <table>
   <tr><th style="width:50%">The author</th><th>Claude Code</th></tr>
-  <tr><td>Set the goals, constraints and priorities</td><td>Wrote the specifications and recorded the design decisions (78)</td></tr>
-  <tr><td>Had options proposed and chose among them</td><td>Wrote all of the RTL (22,084 lines of SystemVerilog)</td></tr>
+  <tr><td>Set the goals, constraints and priorities</td><td>Wrote the specifications and recorded the design decisions (82)</td></tr>
+  <tr><td>Had options proposed and chose among them</td><td>Wrote all of the RTL (22,100 lines of SystemVerilog)</td></tr>
   <tr><td>Provided the specification PDFs (Debug Spec, privileged spec and others)</td><td>Built and ran the testbenches, reference models and bug injection</td></tr>
   <tr><td>Synthesized with Vivado and programmed the board</td><td>Integrated the CPU into LiteX; built OpenSBI, the device tree and the Linux side</td></tr>
   <tr><td>Made the SD card, ran the board and passed back logs and numbers</td><td>Read the timing reports and board numbers, found causes and proposed next steps</td></tr>
+  <tr><td>Tried the software environments (Eclipse, Debian) on the board</td><td>Made the bare-metal kit, the Eclipse projects and the Debian root file system, and wrote how to reproduce them</td></tr>
   <tr><td>Looked at the results and pointed out what was wrong</td><td>Wrote the documents (EN / JA), and committed and pushed to GitHub on its own</td></tr>
 </table>
-<p>Claude Code wrote the RTL, the testbenches and the documents. The author's input was about 350 instructions in Japanese, plus the results from the board.</p>
+<p>Claude Code wrote the RTL, the testbenches and the documents. The author's input was about 400 instructions in Japanese, plus the results from the board.</p>
 
 <h3>2.3 Development environment</h3>
 <figure><img src="figs/fig_env_wp_en.svg" alt=""><figcaption>Figure 1 Development environment, tools and the models used</figcaption></figure>
@@ -171,8 +172,8 @@
 <div class="two">
 <div>
 <ul>
-  <li><strong>Write the specification first and keep it in step with the implementation</strong> (78 design decisions in CPU_CORE_SPEC, each with its reasons).</li>
-  <li><strong>Record the board's results chapter by chapter</strong> (BRINGUP 18 rounds, TIMING 44 sections, BENCH 25 sections).</li>
+  <li><strong>Write the specification first and keep it in step with the implementation</strong> (82 design decisions in CPU_CORE_SPEC, each with its reasons).</li>
+  <li><strong>Record the board's results chapter by chapter</strong> (BRINGUP 20 rounds, TIMING 47 sections, BENCH 28 sections).</li>
   <li><strong>Manage themes in a ROADMAP</strong> and mark them when done.</li>
   <li><strong>Documents in two languages</strong> (XXXX.md / XXXX_J.md).</li>
   <li><strong>Keep lessons in Claude Code's memory notes</strong> (e.g. make's timestamp check does not work on the shared folder; read every line of a bug-injection log).</li>
@@ -182,17 +183,17 @@
 <div>
 <table style="margin-top:0">
   <tr><th>Item</th><th>Value</th></tr>
-  <tr><td>Period</td><td>2026-09-13 to 10-12 (30 days)</td></tr>
-  <tr><td>Commits</td><td>189 (git from 09-19)</td></tr>
-  <tr><td>Author's instructions</td><td>about 350</td></tr>
-  <tr><td>RTL</td><td>46 files, 22,084 lines</td></tr>
-  <tr><td>Verification</td><td>tests and scripts, 28,926 lines</td></tr>
-  <tr><td>Documents</td><td>EN 9,777 + JA 9,505 lines</td></tr>
-  <tr><td>Design decisions</td><td>78</td></tr>
-  <tr><td>Bug injections</td><td>550, all detected</td></tr>
-  <tr><td>API calls</td><td>about 6,400</td></tr>
-  <tr><td>Input tokens</td><td>about 2.9 billion (98 % cache)</td></tr>
-  <tr><td>Output tokens</td><td>about 7.6 million (incl. thinking)</td></tr>
+  <tr><td>Period</td><td>2026-09-13 to 10-20 (38 days)</td></tr>
+  <tr><td>Commits</td><td>212 (git from 09-19)</td></tr>
+  <tr><td>Author's instructions</td><td>about 400</td></tr>
+  <tr><td>RTL</td><td>46 files, 22,100 lines</td></tr>
+  <tr><td>Verification</td><td>tests and scripts, about 29,500 lines</td></tr>
+  <tr><td>Documents</td><td>EN 10,600 + JA 10,300 lines</td></tr>
+  <tr><td>Design decisions</td><td>82</td></tr>
+  <tr><td>Bug injections</td><td>554, all detected</td></tr>
+  <tr><td>API calls</td><td>about 7,100</td></tr>
+  <tr><td>Input tokens</td><td>about 3.3 billion (98 % cache)</td></tr>
+  <tr><td>Output tokens</td><td>about 8.3 million (incl. thinking)</td></tr>
   <tr><td>Plan</td><td>Claude Pro</td></tr>
 </table>
 </div>
@@ -200,7 +201,7 @@
 <p class="small muted">The token counts are estimates summed from Claude Code's conversation logs. They do not include the session of the first request or the compaction of conversations. Most of the input is the conversation history read again from the cache at every call.</p>
 
 <!-- ======================================================================= 3 -->
-<h2>3. Specification (Rev.01)</h2>
+<h2>3. Specification (Rev.02)</h2>
 <h3>3.1 CPU core</h3>
 <figure><img src="figs/fig_core_en.svg" alt=""><figcaption>Figure 3 Block diagram of the CPU</figcaption></figure>
 <p class="caption-t">Table 3 Main features of the CPU</p>
@@ -211,18 +212,47 @@
   <tr><td>Branch prediction</td><td>BTB 256, gshare (PHT 8192), return address stack 8; branches on a load's value resolved in MR</td></tr>
   <tr><td>Multiply / divide</td><td>Multiply in 1 to 2 cycles, divide with early exit, carry-less multiply in 5 cycles</td></tr>
   <tr><td>Floating point</td><td>F / D, a 9-stage pipeline issuing one operation (FMA) a cycle; divide and square root iterate</td></tr>
-  <tr><td>MMU and protection</td><td>Sv39, ITLB / DTLB of 8 entries each, hardware page table walker, PMP 8</td></tr>
+  <tr><td>MMU and protection</td><td>Sv39, ITLB of 16 and DTLB of 32 entries, hardware page table walker, PMP 8</td></tr>
   <tr><td>Caches</td><td>L1 I$ / D$ 16 KB each (4 ways, 64 B); the D$ is non-blocking and write-back; L2 256 KB</td></tr>
   <tr><td>Interrupts, privilege</td><td>CLINT, PLIC (M / S), Sstc, privileged spec 1.12</td></tr>
   <tr><td>Debug</td><td>JTAG / cJTAG (Debug Spec 1.0), 4 triggers (Sdtrig), authentication</td></tr>
-  <tr><td>Performance counters</td><td>4 counters, 26 events, Sscofpmf, Smcntrpmf (usable from Linux's perf)</td></tr>
-  <tr><td>FPGA</td><td>Arty A7-100T, 50 MHz, WNS +0.664 ns, LUT 74 %, slices 86 %, BRAM 108.5 / 135</td></tr>
+  <tr><td>Performance counters</td><td>4 counters, 29 events, Sscofpmf, Smcntrpmf (usable from Linux's perf)</td></tr>
+  <tr><td>FPGA</td><td>Arty A7-100T, 50 MHz, WNS +0.140 ns, LUT 79 %, slices 93 %, BRAM 108.5 / 135</td></tr>
 </table>
 <p>Loads and stores are issued to the D$ from EX; a hit takes 2 cycles and one access flows every cycle. The SoC's DMA also goes through the D$, so the cache coherence Linux expects is kept in hardware. The external interfaces are AXI4 for memory, AXI-Lite for peripherals, a DMA input and JTAG / cJTAG. On top of what Linux needs, extensions for speed (Zba / Zbb / Zbc, Zicboz) and a PMU for measurement were added later.</p>
 
 <h3>3.2 Linux system</h3>
 <figure><img src="figs/fig_soc_en.svg" alt=""><figcaption>Figure 4 The Linux system</figcaption></figure>
-<p>The CPU of the SoC generated by LiteX was replaced with mmRISC-2. At first the memory map matched the Rocket configuration byte for byte, and only the CPU node of the device tree was rewritten. Later LiteX's L2 was removed in favour of the CPU's own L2, the DMA was routed through the D$, and Ethernet was added. The software boots in the order LiteX BIOS → OpenSBI v1.9 → Linux 7.2 → BusyBox.</p>
+<p>The CPU of the SoC generated by LiteX was replaced with mmRISC-2. At first the memory map matched the Rocket configuration byte for byte, and only the CPU node of the device tree was rewritten. Later LiteX's L2 was removed in favour of the CPU's own L2, the DMA was routed through the D$, and Ethernet was added. The software boots in the order LiteX BIOS → OpenSBI v1.9 → Linux 7.2 → BusyBox (or Debian 13, section 3.3).</p>
+
+<h3>3.3 Software development: Eclipse and Debian</h3>
+<p>Before Rev.02, two ways of writing software for mmRISC-2 were added, each with a procedure written for someone doing it for the first time (LitexSystem/docs/ECLIPSE.md and DEBIAN.md).</p>
+<div class="two">
+<div class="box" style="margin-top:0">
+<p><strong>Bare metal in Eclipse (cross development)</strong></p>
+<ul class="small">
+  <li>Eclipse Embedded CDT and xPack RISC-V GCC, on Ubuntu or Windows.</li>
+  <li>A start-up kit (crt0, linker script, printf to the UART, the timer and interrupts) and example projects; a script makes a new project from a copy.</li>
+  <li>One click builds, loads the program into DRAM over <strong>JTAG or cJTAG</strong> (OpenOCD) after the LiteX BIOS has set the DRAM up, and stops at <code>main</code>.</li>
+  <li>Step through C, breakpoints, variables, registers and memory, with the on-chip debugger of section 4.1.</li>
+</ul>
+</div>
+<div class="box y" style="margin-top:0">
+<p><strong>Debian 13 on the board (self-hosted builds)</strong></p>
+<ul class="small">
+  <li>The second partition of the SD card holds <strong>Debian 13</strong> (riscv64, sysvinit) instead of BusyBox; the kernel, OpenSBI and the bitstream stay as they are.</li>
+  <li><strong>gcc 14, make, gdb 16, git</strong> on the board, and <code>apt</code> for more of Debian.</li>
+  <li>One script makes the root file system on the host without root (mmdebstrap with qemu-user); another writes it to the card.</li>
+  <li>A small C file compiles in about 20 s at 50 MHz; the login comes about 3 minutes after reset.</li>
+</ul>
+</div>
+</div>
+<div class="term">Debian GNU/Linux 13 mmrisc2 ttyLXU0
+
+root@mmrisc2:~# time gcc -O2 -o t t.c &amp;&amp; ./t
+real    0m20.712s
+build on mmRISC-2</div>
+<p>Debian's gcc, binutils and glibc, built by others for any RV64GC machine, run on mmRISC-2 unchanged: a broad check of the user ISA by code the project did not write. Claude Code built both environments too. It generated the Eclipse project files (including the identifiers Eclipse derives from tool names), found a chain of signature checks that gets Debian 13's keys on Ubuntu, and fixed what the board showed (a missing <code>fsck.ext4</code>, and a clock stepped twice to the year 2083).</p>
 
 <!-- ======================================================================= 4 -->
 <h2>4. History of the development</h2>
@@ -232,7 +262,7 @@
 
 <h3>4.2 Schedule</h3>
 <figure><img src="figs/fig_timeline_wp_en.svg" alt=""><figcaption>Figure 6 The actual schedule and the main events</figcaption></figure>
-<p>The CPU core, from the pipeline skeleton to the integration into LiteX, took the two days of 09-20 and 21, and timing took the three days from 09-22 to 24. The BIOS came up on the board on 09-24 and Linux on 09-25. In October the work turned to performance and measurement, and from 10-10 to 12 to the memory waits and the remaining timing paths.</p>
+<p>The CPU core, from the pipeline skeleton to the integration into LiteX, took the two days of 09-20 and 21, and timing took the three days from 09-22 to 24. The BIOS came up on the board on 09-24 and Linux on 09-25. In October the work turned to performance and measurement, and from 10-10 to 12 to the memory waits and the remaining timing paths (Rev.01). From 10-13 to 19 the TLBs were enlarged, W1 and W2 were checked and decision 82 was made (the Rev.02 hardware), and on 10-19 and 20 the Eclipse and Debian environments were set up.</p>
 
 <h3>4.3 Main decisions and changes</h3>
 <p class="caption-t">Table 4 Main decisions and changes of the specification</p>
@@ -248,18 +278,22 @@
   <tr><td>10-09</td><td>FPU <strong>pipelined</strong></td><td>One operation a cycle, and fewer resources</td></tr>
   <tr><td>10-11</td><td>I$ prefetch built but <strong>switched off</strong></td><td>0 to 4 % slower on the board (section 5.2)</td></tr>
   <tr><td>10-12</td><td>No second read on the bus; <strong>measure first</strong></td><td>It would gain 0.26 %; a grant one cycle earlier (FAST_READ) instead</td></tr>
+  <tr><td>10-17</td><td><strong>ITLB 16 / DTLB 32 entries</strong> (from 8 / 8)</td><td>Page table walks had taken 10 to 13 % of user-mode loads; awk −20.5 %, gunzip −11.4 %</td></tr>
+  <tr><td>10-18</td><td>Write-validate (W1) built and verified, then <strong>not taken</strong>; posted uncached stores (W2) not built</td><td>W1 +0.1 % on a copy in simulation, W2 under 0.1 % of tftp by measurement (section 5.2)</td></tr>
+  <tr><td>10-19</td><td>Decision 82: a wrong-path load no longer leaves MR waiting for the DTLB</td><td>CoreMark 3.015 → 3.034 /MHz (section 5.4)</td></tr>
+  <tr><td>10-20</td><td><strong>Eclipse</strong> bare-metal kit; <strong>Debian 13</strong> with gcc on the board</td><td>Software development both ways (section 3.3); Rev.02</td></tr>
 </table>
 <p>The author made the final choices, but Claude Code proposed most of the options and their reasoning. In the later part, "measure before building" became the rule.</p>
 
 <h3>4.4 Performance</h3>
 <figure><img src="figs/fig_perf_en.svg" alt=""><figcaption>Figure 7 CoreMark and Dhrystone (on the board, under Linux, 50 MHz)</figcaption></figure>
-<p>From 1.584 CoreMark/MHz in the first version (10-01), the steps were: D$ hits in 2 cycles, loads and stores issued from EX, 1-cycle multiply, gshare, branches on a load's value resolved in MR, Zba / Zbb, the L2 and finally the compiler options. CoreMark rose by 91 % and Dhrystone by 87 %.</p>
+<p>From 1.584 CoreMark/MHz in the first version (10-01), the steps were: D$ hits in 2 cycles, loads and stores issued from EX, 1-cycle multiply, gshare, branches on a load's value resolved in MR, Zba / Zbb, the L2 and the compiler options; Rev.02 adds decision 82. CoreMark rose by 92 % and Dhrystone by 88 %.</p>
 <figure><img src="figs/fig_workload_en.svg" alt=""><figcaption>Figure 8 CPI of real Linux loads, counted by the PMU (lower is faster)</figcaption></figure>
-<p>CoreMark fits in the caches, so eight real Linux loads were chosen and counted with the PMU (workload.sh). Kernel-heavy loads spent 50 to 70 % of their cycles waiting for the caches; the L2 made them 1.2 to 1.7 times faster. Not waiting for store misses, fetching before writing back a dirty victim, cbo.zero and the bus improvements then cut another 7 to 11 %. The breakdown by function (perf) also confirmed the faster CRC with Zbc.</p>
+<p>CoreMark fits in the caches, so eight real Linux loads were chosen and counted with the PMU (workload.sh). Kernel-heavy loads spent 50 to 70 % of their cycles waiting for the caches; the L2 made them 1.2 to 1.7 times faster. Not waiting for store misses, fetching before writing back a dirty victim, cbo.zero and the bus improvements then cut another 7 to 11 %, and the larger TLBs of Rev.02 took 11 to 20 % off awk and gunzip and 3.5 to 8.7 % off the kernel loads. The breakdown by function (perf) also confirmed the faster CRC with Zbc.</p>
 
 <h3>4.5 Timing (WNS)</h3>
 <figure><img src="figs/fig_wns_en.svg" alt=""><figcaption>Figure 9 WNS over time (after place and route, 50 MHz)</figcaption></figure>
-<p>The first synthesis gave −20.4 ns (about 25 MHz). Judging the cause to be logic depth rather than routing congestion, the paths were read and cut one by one. Step 2 made things worse and was redone, and adding stage MR finally met 50 MHz on 09-24. After that, every new feature brought WNS back near 0, and each time the worst path was read and fixed (T1 to T7). Rev.01 closes at +0.664 ns.</p>
+<p>The first synthesis gave −20.4 ns (about 25 MHz). Judging the cause to be logic depth rather than routing congestion, the paths were read and cut one by one. Step 2 made things worse and was redone, and adding stage MR finally met 50 MHz on 09-24. After that, every new feature brought WNS back near 0, and each time the worst path was read and fixed (T1 to T7). Rev.01 closed at +0.664 ns; the larger TLBs brought it down to +0.065 ns, and Rev.02 closes at +0.140 ns.</p>
 
 <!-- ======================================================================= 5 -->
 <h2>5. Rework and verification</h2>
@@ -293,7 +327,7 @@
 </div>
 <div style="flex:0 0 72mm"><figure style="margin-top:0"><img src="figs/fig_prefetch_en.svg" alt=""><figcaption>Figure 10 CPI change with the prefetch</figcaption></figure></div>
 </div>
-<p>The prefetch was switched off, and from then on the rule was <strong>to measure before building</strong>. For example, letting the bus take a second read was found in advance to gain only 0.26 %, and was not built. The AI did not question the simulation's assumption (memory answers at once) and reported "faster". <strong>The board's numbers exposed the wrong assumption.</strong></p>
+<p>The prefetch was switched off, and from then on the rule was <strong>to measure before building</strong>. For example, letting the bus take a second read was found in advance to gain only 0.26 %, and was not built. Before Rev.02, write-validate (W1), estimated at up to 6 to 8 % for SD reads, was built and verified, but with the latency model it gained 0.1 %: the copy's stores were already slow for another reason, which hid the read it was to remove. It was taken out. The AI did not question the simulation's assumption (memory answers at once) and reported "faster". <strong>The board's numbers exposed the wrong assumption.</strong></p>
 
 <h3>5.3 Rework 3: a wrong report by the AI, and traps of the environment</h3>
 <div class="two">
@@ -316,11 +350,19 @@
 </div>
 <p>The AI's mistakes show up as plausible summaries, and a rule of reading the raw logs prevents them. The traps of the environment lie on the human's side, and the AI can infer their causes from the records.</p>
 
-<h3>5.4 How verification evolved</h3>
+<h3>5.4 Rework 4: the last 0.3 % of CoreMark (10-19)</h3>
+<ul>
+  <li>The final measurements showed CoreMark <strong>0.3 % below Rev.01's</strong> in every build (3.015 against 3.025). The benchmark had not been run since 10-09; the core alone in simulation was not slower.</li>
+  <li><strong>What found it</strong>: a log of every TLB fill and page table walk added to SIM_BIOS. Nearly every walk in CoreMark went to <strong>page 0</strong>: at the end of a list a load behind a mispredicted branch, on the wrong path, missed the DTLB at address 8. The branch threw the load away but not its wait for the DTLB, a wait added on 10-11 for timing (T2).</li>
+  <li><strong>Fix</strong> (decision 82): the same flush also clears the wait. 3.034 CoreMark/MHz, and a test and a mutation that keep it.</li>
+</ul>
+<p>The loss was 0.79 % of the cycles and hid behind a change for timing; it was found because the author asked for CoreMark not to go down at all, and Claude Code then traced it to two instructions.</p>
+
+<h3>5.5 How verification evolved</h3>
 <figure><img src="figs/fig_verif_en.svg" alt=""><figcaption>Figure 11 How verification evolved (yellow: added after a problem on the board)</figcaption></figure>
 <p>Each time the board stopped, a simulation that reproduced the problem was built first, and only then was the problem fixed. The board shows where the holes in verification are.</p>
 
-<h3>5.5 Final verification (Rev.01)</h3>
+<h3>5.6 Final verification (Rev.02)</h3>
 <p class="caption-t">Table 5 Final verification results</p>
 <table>
   <tr><th style="width:17%">Environment</th><th>What it does</th><th style="width:22%">Result</th></tr>
@@ -331,12 +373,12 @@
   <tr><td>SIM_L2 / MMU / FPU</td><td>L2 about 1.5 million, PMP 200,000, FPU (against SoftFloat) about 1.3 million</td><td>PASS</td></tr>
   <tr><td>SIM_BIOS</td><td>The real LiteX BIOS, Linux boot from an SD card model, perf</td><td>To the prompt</td></tr>
   <tr><td>SIM_OCD</td><td>Co-simulation with OpenOCD (breakpoints, watchpoints)</td><td>PASS</td></tr>
-  <tr><td>Bug injection</td><td>CORE 339, CACHE 59, SYS 23, L2 31, MMU 21, FPU 62, DBG 15</td><td><strong>All 550 detected</strong></td></tr>
-  <tr><td>Board</td><td>Linux boot, Ethernet, 120-minute stress test (memory, network and SD checked at once)</td><td>PASS</td></tr>
+  <tr><td>Bug injection</td><td>CORE 340, CACHE 59, SYS 26, L2 31, MMU 21, FPU 62, DBG 15</td><td><strong>All 554 detected</strong></td></tr>
+  <tr><td>Board</td><td>Linux boot, Ethernet, 120-minute stress test (memory, network and SD checked at once), Debian 13 and gcc</td><td>PASS</td></tr>
 </table>
 <p class="small muted">The 4 failing riscv-tests require features not implemented (misaligned accesses in hardware, Zacas).</p>
 
-<h3>5.6 On the board</h3>
+<h3>5.7 On the board</h3>
 <div class="two">
 <div>
 <div class="term">        __   _ __      _  __
@@ -360,7 +402,8 @@ udhcpc: lease of 192.168.0.9 obtained
 <ul class="small">
   <li>init 3.4 s after the kernel starts; DHCP, TFTP</li>
   <li>perf with function names; gdb hardware breakpoints in the running kernel</li>
-  <li>120-minute stress test PASS (Rev.01: mem 81, net 41, sd 517, NG 0)</li>
+  <li>120-minute stress test PASS (Rev.02: mem 84, net 45, sd 502, NG 0)</li>
+  <li>Debian 13 from the same card; gcc on the board</li>
 </ul>
 </div>
 <div style="flex:0 0 66mm"><figure style="margin-top:2mm"><img src="figs/fpga_board.jpg" alt=""><figcaption>Figure 12 The Arty A7-100T and the JTAG debugger (the green board on top)</figcaption></figure></div>
@@ -373,11 +416,12 @@ udhcpc: lease of 192.168.0.9 obtained
   <tr><th style="width:50%">Strengths (pros)</th><th>Weaknesses (cons)</th></tr>
   <tr><td><strong>Fast</strong>: Linux on a home-made CPU in 12 days, +91 % performance in 30 days</td><td><strong>The board needs a human</strong>: Vivado, the board, the SD card, observation</td></tr>
   <tr><td><strong>Writes and maintains</strong> specification, RTL, verification and documents <strong>consistently</strong> (EN / JA)</td><td><strong>Carries on plausibly from a wrong assumption</strong> ("faster" with an instantly answering memory)</td></tr>
-  <tr><td><strong>Thorough verification</strong>: builds and runs reference models, random tests, sweeps and 550 bug injections itself</td><td><strong>Can report wrongly</strong> (56 / 59 reported as 59 / 59)</td></tr>
+  <tr><td><strong>Thorough verification</strong>: builds and runs reference models, random tests, sweeps and 554 bug injections itself</td><td><strong>Can report wrongly</strong> (56 / 59 reported as 59 / 59)</td></tr>
   <tr><td><strong>Reads the board's numbers</strong>: finds causes and next steps from timing reports and the PMU</td><td><strong>Weak against traps of the environment</strong> (shared-folder timestamps, macOS mounts)</td></tr>
   <tr><td>Reads public specifications (PDF) and implements them</td><td>Long conversations get compacted: keeping documents and notes is a must</td></tr>
   <tr><td>Keeps working through the night and leaves records</td><td>What to build and where to stop is decided by the human</td></tr>
   <tr><td><strong>Commits and pushes to GitHub on its own</strong> → the history is always kept</td><td></td></tr>
+  <tr><td><strong>Builds the software environment too</strong>: the Eclipse projects, a Debian root file system, procedures for others</td><td></td></tr>
 </table>
 <p>Most of the weaknesses are covered by the human checking on the board and giving the AI the raw numbers.</p>
 
@@ -403,16 +447,18 @@ udhcpc: lease of 192.168.0.9 obtained
 <ul>
   <li>Claude Code designed an RV64GC CPU, and <strong>Linux booted on it on the Arty A7-100T in 12 days</strong>.</li>
   <li><strong>Rev.01</strong> in 30 days: L2, pipelined FPU, Zbc / Zicboz, 3.0 CoreMark/MHz, WNS +0.664 ns, 120-minute stress test passed.</li>
+  <li><strong>Rev.02</strong>, the final version, in 38 days: ITLB 16 / DTLB 32, decision 82, <strong>3.034 CoreMark/MHz</strong>, WNS +0.140 ns, stress test passed; <strong>bare-metal development in Eclipse</strong> over JTAG / cJTAG, and <strong>Debian 13 with gcc on the board</strong>.</li>
   <li>The human's role is <strong>the goals and decisions, the board, and checking what the AI reports</strong>.</li>
 </ul>
 
-<h3>7.2 Next themes (ROADMAP)</h3>
-<p>The tag Rev.01 stays on main, and development continues on the dev branch. From the board's loads measured function by function, the next themes are:</p>
+<h3>7.2 Where mmRISC-2 stops, and what is left (ROADMAP)</h3>
+<p><strong>mmRISC-2 closes with Rev.02</strong> (tag Rev.02 on main). The rule set when the gains began to level off: drop any theme whose estimated upper bound is under a few percent, and close when what is left gives 1 to 2 %. The three themes planned after Rev.01 ended this way:</p>
 <ul>
-  <li><strong>A second-level TLB</strong>: page table walks take 10 to 13 % of the cycles of user-mode loads.</li>
-  <li><strong>No read when a whole line is written</strong> (write-validate): skip reading the destination lines in the kernel's copies to user space.</li>
-  <li><strong>Not waiting for uncached stores</strong> (posted stores): the drivers' writes, such as Ethernet transmission.</li>
+  <li><strong>Larger TLBs</strong> (done): page table walks went from 10 to 13 % of user-mode loads to under 0.3 %, so the second-level TLB was not needed.</li>
+  <li><strong>Write-validate</strong> (W1, built, not taken): +0.1 %. What it revealed is left for the future: the core waits for the answer of every store that misses (M1b).</li>
+  <li><strong>Posted uncached stores</strong> (W2, not built): an uncached store costs 13 cycles; under 0.1 % of tftp.</li>
 </ul>
+<p>Also left in the ROADMAP: the SD card's DMA writes in the L2, software prefetch, the DTLB check a cycle later for timing, and the larger themes below.</p>
 
 <h3>7.3 Next concept: mmRISC-3 (tentative)</h3>
 <p>A paper study (no design yet) of whether a <strong>dual-issue, out-of-order RV64GC</strong> core can run Linux on the same Arty A7-100T.</p>
@@ -420,7 +466,7 @@ udhcpc: lease of 192.168.0.9 obtained
 <div class="box" style="margin-top:0">
 <p><strong>Outlook</strong></p>
 <ul class="small">
-  <li><strong>A design of reallocating resources</strong>: slices are already at 86 %. Shrink the L2 and move logic from LUTs to BRAM, LUTRAM and DSPs.</li>
+  <li><strong>A design of reallocating resources</strong>: slices are already at 93 %. Shrink the L2 and move logic from LUTs to BRAM, LUTRAM and DSPs.</li>
   <li>For scale: NaxRiscv RV64, an out-of-order core for FPGAs, is about 18k LUTs for the core (without FPU and Zb extensions).</li>
   <li><strong>Stay at 50 MHz</strong> and save resources with fewer stages.</li>
   <li>The biggest fork is <strong>the FPU</strong> (its own renaming / shared with the integer side / reduced).</li>
@@ -476,8 +522,10 @@ udhcpc: lease of 192.168.0.9 obtained
   <li>OpenSBI: https://github.com/riscv-software-src/opensbi, riscv-tests: https://github.com/riscv-software-src/riscv-tests</li>
   <li>Arty A7 Reference Manual: https://digilent.com/reference/programmable-logic/arty-a7/start</li>
   <li>NaxRiscv: https://github.com/SpinalHDL/NaxRiscv</li>
+  <li>Eclipse Embedded CDT: https://eclipse-embed-cdt.github.io, xPack RISC-V GCC / OpenOCD: https://xpack-dev-tools.github.io</li>
+  <li>Debian riscv64: https://wiki.debian.org/RISC-V, mmdebstrap: https://gitlab.mister-muffin.de/josch/mmdebstrap</li>
 </ul>
-<p class="small muted" style="margin-top:6mm">The figures in this paper are those of mmRISC-2 Rev.01 as of 2026-10-12. The text and figures of this paper were also written by Claude Code under the author's direction. A Japanese version is in Doc/20261015_WhitePaper_mmRISC-2_J.pdf.</p>
+<p class="small muted" style="margin-top:6mm">The figures in this paper are those of mmRISC-2 Rev.02 as of 2026-10-20. The text and figures of this paper were also written by Claude Code under the author's direction. A Japanese version is in Doc/20261020_WhitePaper_mmRISC-2_J.pdf.</p>
 
 </body>
 </html>

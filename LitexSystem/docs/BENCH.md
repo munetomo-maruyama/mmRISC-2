@@ -1175,3 +1175,248 @@ Against 23:
 - **What is left by function** (`profile`): the copy to user space (`fallback_scalar_usercopy_sum_enabled`)
   21.1 % of `sdread`, 6.6 % of `md5sum`, 3.6 % of `tftp`; `liteeth_start_xmit` 10.7 % of `tftp`; `memcpy` 4.2 % of
   `forkexec`. These are the next themes (W1 and W2 of `ROADMAP.md`).
+
+## 26. The page table walks, with the TLBs at other sizes (E3a, 2026-10-17, simulation)
+
+E3a of `ROADMAP.md`: three new events (decision 79 of `CPU_CORE_SPEC.md`: 27 / 28 the cycles the walker works
+for the DTLB / ITLB, 29 the cycles MR waits for the DTLB) and `make linux-tlb ITLB=.. DTLB=..` of SIM_BIOS,
+which boots Linux from the SD card model with the TLBs at other sizes and runs small versions of the user-mode
+loads of `workload.sh` under `perf stat` (`sim_tlb.sh`: `gunzip` of 256 KB of `Image`, `awk` over 20,000
+iterations, `md5sum` of 256 KB). Change of the cycles against the 8 entries of today:
+
+| Load | DTLB entries (ITLB 8) | Cycles | DTLB walks / 1000 instr. | MR waits for the DTLB |
+|---|---|---|---|---|
+| `gunzip` | 8 | 33.96 M | 7.62 | 8.5 % |
+| | 16 | **−9.8 %** | 0.34 | 0.7 % |
+| | 32 | −10.3 % | 0.11 | 0.3 % |
+| | 64 | −10.6 % | 0.06 | 0.2 % |
+| `awk` | 8 | 198.4 M | 15.49 | 14.4 % |
+| | 16 | **−14.2 %** | 3.18 | 4.2 % |
+| | 32 | **−17.7 %** | 0.16 | 0.9 % |
+| | 64 | −17.4 % | 0.04 | 0.7 % |
+| | 32, ITLB 32 too | **−20.0 %** | 0.15 | 0.3 % |
+
+- **The simulation sees the board's walks**: with 8 entries `gunzip` walks 7.6 times and `awk` 15.5 times per 1000
+  instructions, against 7.9 and 14.0 on the board (section 14).
+- **16 entries take 95 % of the walks of `gunzip` and 80 % of those of `awk`, 32 entries 98 to 99 %.** The cycles
+  saved are more than MR waited for the DTLB (8.5 % / 14.4 %): the reads of the walks also took lines of the D$
+  and of the L2. A walk took 11 cycles with 8 entries (its reads hit in the caches) and 20 to 25 with more (the
+  few walks left miss in them).
+- `awk` also gains from a larger ITLB (2.8 walks per 1000 instructions with 8 entries: −17.7 → −20.0 %).
+- `md5sum` (12 M cycles) is too short here: its instruction count moves between runs (7.6 to 8.2 M) and its walks
+  are few (2.1 per 1000 instructions with 8 entries).
+- These runs have no memory latency model (`+rlat` / `+blat`, section 22), so a walk that misses in the caches
+  costs less than on the board: the gains are a lower bound.
+- **For E3b**: a DTLB of 16 entries takes most of it for `gunzip`, `awk` wants 32 or a second level. The DTLB's
+  compare is on the worst path (TIMING 44), so a larger first level has to be checked in synthesis; a second
+  level of 64 entries keeps the compare as it is and costs a cycle or two on a miss of the first.
+
+### 26.1 On the board: a DTLB of 16 entries (2026-10-17)
+
+`workload.sh` (run 8, with the events 27 to 29) on the bitstream of TIMING 45: the DTLB of 16 entries
+(decision 80). Against 25 (Rev.01, 8 entries); the DTLB walks of 8 entries are those of section 14 (the table
+has not changed size since), `tftp`'s of section 25:
+
+| Load | CPI | Change | DTLB walks / 1000 instr. | MR waits for the DTLB | Walker for the DTLB / ITLB |
+|---|---|---|---|---|---|
+| `gunzip` | 1.245 → 1.108 | **−11.0 %** | 7.91 → 0.22 | 0.4 % | 0.4 / 0.0 % |
+| `md5sum` | 1.131 → 1.129 | −0.2 % | 0.48 → 0.34 | 0.6 % | 0.5 / 0.1 % |
+| `awk` | 1.598 → 1.363 | **−14.7 %** (*) | 14.03 → 3.41 | 4.1 % | 2.7 / 2.2 % |
+| `ls -lR` | 2.046 → 1.926 | **−5.9 %** | 11.40 → 4.28 | 4.2 % | 3.3 / 2.4 % |
+| `ext4read` | 2.361 → 2.275 | −3.6 % | 8.55 → 2.06 | 2.6 % | 2.0 / 0.3 % |
+| `sdread` | 2.646 → 2.566 | −3.0 % | 8.44 → 2.03 | 2.3 % | 1.8 / 0.2 % |
+| `forkexec` | 2.040 → 1.995 | −2.2 % | 5.37 → 1.90 | 2.2 % | 1.8 / 0.4 % |
+| `tftp` | 2.688 → 2.581 | −4.0 % | 10.0 → 4.55 | 4.1 % | 3.4 / 0.8 % |
+
+- **The simulation was right, and a little low**: `gunzip` −11.0 % on the board against −9.8 % in section 26,
+  `awk` −14.7 % against −14.2 % (its walks 3.41 against 3.18 per 1000 instructions, MR's waits 4.1 % against
+  4.2 %). The memory of the board is slower than the model, so a walk saved is worth more there.
+- (*) `awk` against its slower value of 25 (1.598); against the faster one (1.545) −11.8 %. The two values came
+  from the walks (13.5 / 14.0 per 1000 instructions, by where its pages land); with 16 entries there is only one
+  so far.
+- **The kernel loads gain 2 to 6 %**: their walks fell by 55 to 78 %. `md5sum` had few walks to begin with.
+- **What is left of the walks** (the upper bound of a larger TLB): MR waits for the DTLB 4.1 to 4.2 % of the
+  cycles of `awk`, `ls` and `tftp`, 2.2 to 2.6 % of the other kernel loads, under 1 % of `gunzip` and `md5sum`;
+  the walker works for the ITLB 2.2 to 2.4 % of `awk` and `ls`. A walk takes 11 to 12 cycles in `awk` (its page
+  tables stay in the caches) and 15 to 22 in the kernel loads.
+
+### 26.2 What a larger TLB would add to 16 entries (2026-10-17, simulation)
+
+`make linux-tlb` as in 26, against the DTLB of 16 and the ITLB of 8 of today (`md5sum` left out, as in 26):
+
+| ITLB / DTLB | `gunzip` | `awk` | `awk`: ITLB / DTLB walks per 1000 instr. | `awk`: MR waits for the DTLB |
+|---|---|---|---|---|
+| 8 / 16 (today) | 30.64 M | 170.3 M | 2.83 / 3.18 | 4.2 % |
+| 16 / 16 | 0 | −1.6 % | 0.72 / 3.37 | 3.9 % |
+| 8 / 32 | −0.5 % | −4.1 % | 2.83 / 0.16 | 0.9 % |
+| **16 / 32** | −0.5 % | **−6.0 %** | 0.72 / 0.16 | 0.4 % |
+| 32 / 32 | −0.5 % | −6.8 % | 0.00 / 0.16 | 0.3 % |
+
+- **`gunzip` has nothing left** (−0.5 % at most). The rest is `awk` and, by their MR waits on the board (26.1),
+  `ls -lR` and `tftp` (4 %), less the other kernel loads (2 to 2.6 %).
+- **ITLB 16 + DTLB 32 takes 88 % of what is left in `awk`**; 32 / 32 adds 0.8 %. On the board this would be
+  about −6 % for `awk` (the board has gained a little more than the simulation, 26.1) and, if the kernel loads
+  lose their MR waits as `awk` does, 2 to 4 % for them.
+- A second level (E3b) could not take more than this: what is left after 16 / 32 is under 0.5 % of the cycles.
+  The question is only whether the first levels of 16 / 32 entries fit the timing (TIMING 45: the DTLB's own path
+  has more than +0.83 ns) and the slices (87.9 %; the 8 entries of TIMING 45 took +274, so the 24 more about +800, to about 93 %).
+
+### 26.3 On the board: an ITLB of 16 and a DTLB of 32 entries (2026-10-17)
+
+`workload.sh` on the bitstream of TIMING 46 (decision 81). Against 26.1 (ITLB 8, DTLB 16) and 25 (Rev.01, 8 / 8):
+
+| Load | CPI | Change from 26.1 | From Rev.01 | ITLB / DTLB walks per 1000 instr. | MR waits for the DTLB |
+|---|---|---|---|---|---|
+| `gunzip` | 1.108 → 1.103 | −0.5 % | **−11.4 %** | 0.007 / 0.05 | 0.4 → 0.1 % |
+| `md5sum` | 1.129 → 1.120 | −0.8 % | −1.0 % | 0.006 / 0.03 | 0.6 → 0.1 % |
+| `awk` | 1.363 → 1.271 | **−6.7 %** | **−20.5 %** | 0.19 / 0.14 | 4.1 → 0.3 % |
+| `ls -lR` | 1.926 → 1.865 | **−3.2 %** | **−8.8 %** | 1.78 / 2.24 | 4.2 → 2.4 % |
+| `ext4read` | 2.275 → 2.227 | −2.1 % | −5.7 % | 0.74 / 0.57 | 2.6 → 1.1 % |
+| `sdread` | 2.566 → 2.521 | −1.8 % | −4.7 % | 0.72 / 0.65 | 2.3 → 1.1 % |
+| `forkexec` | 1.995 → 1.970 | −1.3 % | −3.4 % | 0.29 / 0.82 | 2.2 → 1.3 % |
+| `tftp` | 2.581 → 2.522 | −2.3 % | −6.2 % | 0.62 / 2.02 | 4.1 → 3.0 % |
+
+- **`awk` as the simulation said, a little better** (−6.7 % against −6.0 % in 26.2): its walks fell from 2.66 /
+  3.41 to 0.19 / 0.14 per 1000 instructions, MR's waits 4.1 → 0.3 %, and with them the D$ fills (2.78 → 1.66,
+  the walks' reads gone) and the back end full (11.3 → 7.1 %).
+- **The kernel loads gain 1.3 to 3.2 %**, `ls -lR` the most (its ITLB walks 3.68 → 1.78). What is left of the
+  TLBs is now 1 to 3 % of their cycles (`ls` and `tftp`: they touch many pages once, which no TLB keeps).
+- **E3 is done**: from Rev.01, `awk` −20.5 %, `gunzip` −11.4 %, the kernel loads −3.4 to −8.8 %, for parameters
+  only. The price is the timing margin (TIMING 46: +0.065 ns).
+
+## 27. Where the copies and the driver wait, by instruction (W1 / W2, 2026-10-18, board)
+
+The checks before W1 and W2 of `ROADMAP.md`, on the bitstream of TIMING 46. `sh workload.sh <server> ips`
+samples `md5sum`, `sdread`, `forkexec` and `tftp` every 20,000 events of `r1` (cycles), `r14` (MA waits for a
+store) and `r15` (MA waits while the D$ handles a miss) and counts the samples by instruction; they are read
+against the disassembly of the board's kernel (`vmlinux` of the same build as `Image`). `uclat` times
+uncached accesses through `/dev/mem`.
+
+**Where a sample lands**: an interrupt is attached to the instruction entering EX, and in both copy loops the
+samples of the source's misses (`r15`) sit on the fourth load of a line, three instructions after the first
+one, which waits. A sample is read as three instructions after the one that waits.
+
+**The copy to user space** (`fallback_scalar_usercopy_sum_enabled`: 8 `ld`, then 8 `sd`, 64 bytes a turn):
+
+| | Its loads (the source) | Its stores (the destination) |
+|---|---|---|
+| `sdread`, `r1` | about 10 % of the cycles (+0x3e / +0x42) | **about 10 %** (+0x56 to +0x76) |
+| `sdread`, `r14` | | 78 % of its store waits |
+| `sdread`, `r15` | 36 % of its miss waits | 19 % |
+| `md5sum`, `r1` | about 2.5 % | about 2.5 % |
+
+- In `sdread` a line of the copy takes about 170 cycles: about 85 waiting for the source (lines the SD card's
+  DMA has just written, read from memory: nothing to save there) and about 85 at the stores. Those are what W1
+  aims at: the destination's line read before it is overwritten (the 64 KB buffer of `dd`, from the L2) and the
+  two MSHRs held by it while the next store waits for one. The dirty lines would still be written back.
+- `memcpy` of `forkexec` (10 `ld` / 10 `sd`, 128 bytes a turn) shows the same split; its stores wait about
+  0.6 % of the cycles. `tftp` copies with the unaligned loop (+0x94 to +0xb0), about 3 % of its cycles in all.
+- **Upper bound of W1**: `sdread` 6 to 8 %, `md5sum` 1.5 to 2 %, `forkexec` and `tftp` under 1 %.
+
+**`liteeth_start_xmit`**: 6.2 % of the samples of `tftp` fall on one instruction (+0xee), three after a
+cacheable `sh` that follows the driver's three register writes. About 3,700 cycles per packet sent.
+
+| `uclat` (cycles of one, empty loop taken off) | |
+|---|---|
+| `sw` uncached (`ctrl_scratch`) | 13.1 |
+| `lw` uncached (`ctrl_scratch`) | 14.2 |
+| `lw` of LiteEth's TX ready | 14.0 |
+| `sw` uncached, then `sh` and `lw` cacheable | 20.1 |
+| `sh` and `lw` cacheable | 0.9 |
+
+- **An uncached store costs 13 cycles**, and the cacheable accesses behind it about 6 more. The driver's three
+  register writes and one read are about 60 cycles a packet, not 3,700: **W2 could save under 0.1 % of `tftp`**.
+  What the samples at +0xee stand for is not explained by these accesses; `r14` and `r15` count only a sixth of
+  them. `memcpy_toio` (an ACK of about 60 bytes, 8 uncached stores) is under 0.3 % of the samples.
+
+### 27.1 W1 tried in simulation, and left out (2026-10-18)
+
+W1 was built and verified, then measured before synthesis. **The D$ held the read of a line that a double word
+store missed on while more stores came, and made a line its stores covered from them** (the path of `cbo.zero`,
+`CPU_CACHE_SPEC.md` 4.3) instead of reading it. Verified in SIM_CACHE (a section 22 of 528 checks: whole lines,
+lines with a word left out, a load among the stores, a second miss, a pause, the DMA port reading and writing a
+held line, a bus error; the sweep of 21 configurations; 66 mutations, all detected).
+
+`make linux-tlb` of SIM_BIOS with the memory latency model (`+rlat=20 +blat=10`), the loads of section 26 plus the
+copy to user space alone (`copy`: 1 MB of `dd` from the page cache) and the kernel's `__clear_user` (`zero`:
+`dd` from `/dev/zero`); cycles against W1 off:
+
+| Load | Hold 3 cycles, double word stores | Hold 8 cycles, any store |
+|---|---|---|
+| `copy` | +0.1 % | +1.9 % |
+| `zero` | +0.2 % | +5.0 % |
+| `gunzip` | +0.3 % | +0.1 % (+0.4 % in a first run) |
+| `awk` | −0.2 % | +0.1 % (+0.3 %) |
+
+**No gain, and a loss with a longer hold.** Counters in the test bench showed why: during the copy about 33,000
+lines were opened by a double word store and only 8 were made from their stores; nearly every hold ran out.
+- **A store that misses keeps MA waiting for its answer**, and a store has side effects, so the next one leaves
+  MR only when MA commits (`CPU_CORE_SPEC.md` 5.4): the copy's stores reach the D$ 4 to 5 cycles apart, more
+  than the hold.
+- **And without W1 the read of the destination is already hidden** under that run of stores (an L2 hit of 10 to
+  20 cycles against 8 stores of 4 to 5). The 85 cycles a line the copy spends at its stores (section 27) are the
+  stores' own pace, not the read. What would shorten them is the core not waiting for the answer of an accepted
+  store (M1b of `ROADMAP.md`), a change of the pipeline, not of the D$.
+- A longer hold only delays the misses behind the held line: the loss of the 8-cycle column.
+
+W1 was taken out again: the RTL is that of section 26.3 (the trial is kept outside the published branches).
+
+## 28. Decision 82, and the numbers of the final version (Rev.02, 2026-10-19, board)
+
+**CoreMark had lost 0.3 %**. `bench.sh` had not run since section 17 (2026-10-09). On the bitstream of section 26.3
+(TIMING 46) it gave CoreMark 2.491 / 2.776 / 2.674 / **3.015** against 2.499 / 2.785 / 2.682 / 3.025, every build
+0.3 % lower, Dhrystone unchanged. The core alone was not slower (SIM_SYS: CoreMark's timed part 3,908,752 cycles
+against 3,908,920 in sections 18 to 20), so it was under Linux. `perf.sh` showed 0.58 DTLB walks per 1000
+instructions in CoreMark (0.06 in section 13).
+
+- **The TLBs were not the cause**: CoreMark under Linux in SIM_BIOS (`sim_tlb.sh`, now with CoreMark of `bench.sh`
+  for a fixed count) took 21.09 M cycles with the TLBs of 8 / 8 entries and 20.60 M with 16 / 32 (−2.4 %).
+- **`+walklog` of SIM_BIOS** (new: every fill of the DTLB, every walk of the data side with its privilege and
+  the PCs in MR and EX, every `SFENCE.VMA`): in CoreMark's steady state (90 iterations against 30, after 5 that
+  bring the binary into the page cache) nearly every walk went to **page 0**, from two loads of
+  `core_bench_list`: `ld a5,0(a5); beqz a5,...; ld t0,8(a5)`. At the end of a list `a5` is NULL; `beqz` on the
+  value just loaded is a late branch (decision 64), resolved in MR and guessed not taken, and the load behind
+  it, on the wrong path, missed the DTLB at address 8. The late branch threw that load away (`kill_ex`) but not
+  its wait for the DTLB (`mr_tlb_wait`, added by T2, decision 73, on 2026-10-11): the empty MR waited for a
+  walk to page 0 that faulted, about 180 times an iteration, 0.79 % of the cycles.
+- **Decision 82**: `kill_ex` clears the wait as `flush` does. In simulation CoreMark's steady state took 0.39 %
+  fewer cycles per instruction (MR's waits for the DTLB 0.79 → 0.01 %, no walk to page 0). `t14_mmu` 65 to 67
+  and mutation M385 keep it (SIM_CORE).
+
+**The final version** (bitstream of TIMING 47, `bench.sh` three times, the best of each):
+
+| | Section 17 (2026-10-09) | Before decision 82 | **Rev.02** |
+|---|---|---|---|
+| CoreMark/MHz, rv64gc `-O2` | 2.499 | 2.491 | **2.504** |
+| CoreMark/MHz, Zba / Zbb | 2.785 | 2.776 | **2.794** |
+| CoreMark/MHz, most optimization | 2.682 | 2.674 | **2.690** |
+| CoreMark/MHz, Zba / Zbb and most optimization | 3.025 | 3.015 | **3.034** (151.7 iterations/s) |
+| DMIPS/MHz, rv64gc / Zba and Zbb (`-O2`) | 1.490 / 1.501 | 1.495 / 1.500 | **1.495 / 1.501** |
+| DMIPS/MHz, most optimization | 1.536 / 1.542 | 1.541 / 1.545 | **1.541 / 1.545** |
+| DMIPS/MHz, `-O2 -flto` (outside the rules) | 1.555 / 1.561 | 1.559 / 1.567 | 1.558 / **1.567** |
+
+- The three runs of CoreMark are within 0.1 % of each other; decision 82 is +0.6 % (the simulation said +0.4 %).
+- `perf.sh` (CoreMark, Zba / Zbb): CPI 1.122 → **1.115**, DTLB walks 0.58 → **0.00** per 1000 instructions, back
+  end full 5.70 → 5.03 %.
+- `micro` (on the bitstream of TIMING 46; decision 82 does not touch it): the blocked dgemm in assembler **2.30**
+  cycles per multiply-add (43.6 MFLOPS; 2.42 in section 16), the 4×4 one 3.58 (4.01), the C one 16.2 (16.6), FIR
+  **1.50** (66.6 MFLOPS; 1.52), the dot product 3.65. Bandwidth in the D$ 157 / 261 / 101 MB/s (read / write /
+  copy), from DRAM 52.6 / 55.3 / 27.6 MB/s; a dependent load 3.1 cycles in the D$, 59.9 from DRAM; a misaligned
+  load about 1,060 cycles (OpenSBI).
+
+**`workload.sh` of the final version**, against Rev.01 (section 25):
+
+| Load | Rev.01 | Rev.02 | Change |
+|---|---|---|---|
+| `gunzip` | 1.245 | 1.103 | **−11.4 %** |
+| `md5sum` | 1.131 | 1.118 | −1.1 % |
+| `awk` | 1.598 | 1.271 | **−20.5 %** |
+| `ls -lR` | 2.046 | 1.868 | **−8.7 %** |
+| `ext4read` | 2.361 | 2.224 | −5.8 % |
+| `sdread` | 2.646 | 2.520 | −4.8 % |
+| `forkexec` | 2.040 | 1.968 | −3.5 % |
+| `tftp` | 2.688 | 2.529 | −5.9 % |
+
+Most of it is E3 (sections 26.1 and 26.3); decision 82 adds a little to the kernel loads (the DTLB walks of
+`ext4read` / `sdread` 0.58 / 0.46 → 0.32 / 0.37 per 1000 instructions: the kernel had wrong-path walks too). The
+120-minute stress test passed on this bitstream (round 19 of `BRINGUP.md`).

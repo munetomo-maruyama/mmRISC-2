@@ -12,6 +12,8 @@
 #                      (SD_MODEL.sv) with sdcard.img, made here like the card
 #   make linux-perf    the same with perf on the card, run on a few
 #                      commands before the shell (sim_perf.sh)
+#   make linux-tlb     user-mode loads under perf with the TLBs at other
+#                      sizes: ITLB=.. DTLB=.. (sim_tlb.sh, E3a)
 #   make pmu-sbi       OpenSBI with pmu_sbi/ in place of the kernel: the
 #                      calls of the SBI PMU extension Linux's perf makes
 #                (LINUX_ARGS adds plusargs, e.g. +pcmon=5000000)
@@ -73,7 +75,7 @@ VERILATOR_FLAGS := --binary --timing -j 0 --top-module $(TOP) \
 
 PLUSARGS ?=
 
-.PHONY: all run check trace linux linux-initrd linux-sd linux-perf pmu-sbi clean FORCE
+.PHONY: all run check trace linux linux-initrd linux-sd linux-perf linux-tlb pmu-sbi clean FORCE
 
 FW_BIN    := ../../LitexSystem/software/boot/fw_jump.bin
 IMAGE_BIN := ../../LitexSystem/software/boot/Image
@@ -200,6 +202,33 @@ pmu-sbi: obj_dir/V$(TOP) fw_jump.hex pmu_sbi/pmu_sbi.hex
 	    +maxcycles=80000000 $(LINUX_ARGS) | tee pmu_sbi.log
 	@grep -q "PMU_SBI RESULT : PASS" pmu_sbi.log
 
+# E3a: the TLBs at other sizes (make linux-tlb ITLB=8 DTLB=32), each build in
+# its own directory; sim_tlb.sh runs small versions of the user-mode loads of
+# workload.sh under perf stat before the shell, with an input cut from Image
+ITLB ?= 16
+DTLB ?= 32
+TLB_OBJ := obj_tlb_i$(ITLB)_d$(DTLB)
+$(TLB_OBJ)/V$(TOP): $(SRCS)
+	@mkdir -p $(TLB_OBJ)
+	$(VERILATOR) $(VERILATOR_FLAGS) -Mdir $(TLB_OBJ) -GITLB_ENTRIES=$(ITLB) -GDTLB_ENTRIES=$(DTLB) \
+	    $(SRCS) > $(TLB_OBJ)/build.log 2>&1 || (tail -30 $(TLB_OBJ)/build.log; exit 1)
+
+# CoreMark as bench.sh runs it on the board (Zba / Zbb, most optimization),
+# for a fixed count of iterations under perf in sim_tlb.sh
+TLB_CM := ../../LitexSystem/software/bench/out/coremark_zb_max
+sdcard_tlb.img: $(INITRD_BIN) $(shell find $(OVERLAY) -type f) sim_tlb.sh $(PERF_BIN) $(IMAGE_BIN) $(TLB_CM)
+	$(call SD_IMAGE,cp $(PERF_BIN) sd_work/rootfs/usr/bin/perf; \
+	    cp sim_tlb.sh sd_work/rootfs/root/; \
+	    cp $(TLB_CM) sd_work/rootfs/root/coremark; \
+	    head -c 262144 $(IMAGE_BIN) > sd_work/rootfs/root/wl.bin; \
+	    gzip -c sd_work/rootfs/root/wl.bin > sd_work/rootfs/root/wl.gz; \
+	    sed -i 's|^::respawn:|::sysinit:/bin/sh /root/sim_tlb.sh\n::respawn:|' sd_work/rootfs/etc/inittab,24)
+
+linux-tlb: $(TLB_OBJ)/V$(TOP) fw_jump.hex Image.hex sdcard_tlb.img
+	cp sdcard_tlb.img sdcard_tlb_i$(ITLB)_d$(DTLB).img
+	./$(TLB_OBJ)/V$(TOP) +linux +fw=fw_jump.hex +image=Image.hex \
+	    +sdimg=sdcard_tlb_i$(ITLB)_d$(DTLB).img $(LINUX_ARGS) | tee linux_tlb_i$(ITLB)_d$(DTLB).log
+
 linux-perf: obj_dir/V$(TOP) fw_jump.hex Image.hex sdcard_perf.img
 	cp sdcard_perf.img sdcard_run.img
 	./obj_dir/V$(TOP) +linux +fw=fw_jump.hex +image=Image.hex \
@@ -207,5 +236,5 @@ linux-perf: obj_dir/V$(TOP) fw_jump.hex Image.hex sdcard_perf.img
 
 clean:
 	rm -rf obj_dir bios.hex fw_jump.hex Image.hex fw_jump_initrd.hex initrd.hex sim_initrd.dts initrd_fw \
-	       sdcard.img sdcard_perf.img sdcard_run.img sd_work \
+	       sdcard.img sdcard_perf.img sdcard_run.img sd_work obj_tlb_* sdcard_tlb*.img \
 	       pmu_sbi/*.elf pmu_sbi/*.bin pmu_sbi/*.hex

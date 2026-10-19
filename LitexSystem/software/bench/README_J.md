@@ -12,6 +12,7 @@ CoreMark・Dhrystone・小さな測定(`micro`)を、静的リンクの Linux �
 | `Makefile` | `make` で `out/coremark`、`out/dhrystone`、`out/micro`、Zba / Zbb で作った `out/coremark_zb`、`out/dhrystone_zb`、最大の最適化で作った `out/coremark_max`、`out/dhrystone_max`、`out/coremark_zb_max`、`out/dhrystone_zb_max`、`out/dhrystone_lto`、`out/dhrystone_zb_lto`(下の「最大の最適化」)。`make tftp` で TFTP サーバへ(sudo) |
 | `bench.sh` | ボードで実行。3 つを TFTP で `/tmp` に取ってきて順に走らせ、MHz あたりの値を出す。サーバに `*_zb`(コアが Zba / Zbb を持つとき、`/proc/cpuinfo`)、`*_max`、`*_zb_max`、`dhrystone_*lto` があればそれも走らせる |
 | `micro.c` | 帯域(D$ に入る / 入らない)、依存ロードの遅延、不整列ロード、倍精度の積和(C と、`fpkern.S` のアセンブラ)。`micro 50 fp` で浮動小数点だけ |
+| `uclat.c` | キャッシュ無しのアクセスのコスト(ROADMAP_J.md の W2): `/dev/mem` を通した LiteX と LiteEth のレジスタへのストアとロード、キャッシュ無しのストアの後のキャッシュありのアクセス。root で `./uclat` |
 | `fpkern.S` / `fpkern.c` / `fpkern.h` | パイプライン化した FPU(`CPU_CORE_SPEC.md` 10.11)向けのアセンブラの核: 行列積(4×4 のブロック、そのままと D$ に合わせて切ったもの(`fpkern.c`、`../../docs/BENCH.md` 16 章))、FIR 8 タップ、内積。`fpkern.h` に同じ計算の C 版(答えの照合用)。シミュレーションでは `SIM/SIM_SYS/bench/fploop.c` が同じ核を走らせる |
 | `dhry_shim.c` | riscv-tests の Dhrystone が裸の環境に求めるもの(タイマ、表示)を Linux で |
 | `workload.sh` | ボードで実行。CoreMark の外の負荷(gunzip、md5sum、awk、ls、ext4 と SD の読み出し、fork + exec、TFTP)を PMU で数え、1 行 1 負荷の表にする(下の「workload.sh」) |
@@ -144,9 +145,10 @@ CoreMark はキャッシュに収まるので(`../../docs/BENCH.md` 13 章)、Li
 1〜4 回目でイベント 16 種を 4 つずつ、5 回目で L2 の読み出しとミス(`r12` / `r13`、2026-10-06 に
 追加。L2 の無いビットストリームでは 0)、6・7 回目で M0 のメモリの待ち(`r14`〜`r18`、2026-10-10 に追加、
 `../../docs/BENCH_J.md` 18 章。2 つ目の表: MA の待ちの全部、ストアの分、ミスの分、ダーティな追い出し行の写しの分、
-ライン読み込みが 1 本以上 / 2 本以上未完了)、0 回目でサイクルと命令のユーザ / カーネルの内訳を数える
-(各イベントは同じ回のサイクル・命令で割る)。約 14 分。ログは `/tmp/workload.log`、
-生の数は `/tmp/wl/*.csv`。イベント 20〜24 は 2026-10-10 以降のビットストリームが要る(古いものでは 0)。
+ライン読み込みが 1 本以上 / 2 本以上未完了)、8 回目でページテーブルの探索(`r1b` / `r1c` はウォーカが DTLB / ITLB の
+ために動いているサイクル、`r1d` は MR が DTLB を待つサイクル。2026-10-16 に E3a のため追加。3 つ目の表に 1 回の探索の
+サイクル)、0 回目でサイクルと命令のユーザ / カーネルの内訳を数える(各イベントは同じ回のサイクル・命令で割る)。約 16 分。ログは `/tmp/workload.log`、
+生の数は `/tmp/wl/*.csv`。イベント 20〜24 は 2026-10-10 以降、27〜29 は 2026-10-16 以降のビットストリームが要る(古いものでは 0)。
 
 ```bash
 make tftp
@@ -159,6 +161,12 @@ cd /tmp && tftp -g -r workload.sh 192.168.0.12 && sh workload.sh 192.168.0.12
 2 つ目の引数に `profile` を付けると(`sh workload.sh 192.168.0.12 profile`、4 分ほど)何も数えず、代わりに
 各負荷を `perf record` で 1 回ずつサンプルする: 負荷ごとの上位 15 関数と、各負荷で CRC とチェックサムの関数が
 占める割合(libelf つきの perf、ROADMAP_J.md の D2)。
+
+`ips` を付けると(`sh workload.sh 192.168.0.12 ips`、3 分ほど)`md5sum`、`sdread`、`forkexec`、`tftp` を命令ごとに
+サンプルする: `r1`(サイクル)、`r14`(MA がストアで待つ)、`r15`(D$ がミスを処理する間 MA が待つ)を 20000 回ごとに
+1 サンプル、それぞれ上位 15 個の `シンボル+オフセット`。ホストでカーネルの逆アセンブル(`objdump -d vmlinux`)と
+突き合わせて読む(ROADMAP_J.md の W1 / W2)。割り込みは EX に入る命令に付くので、サンプルは MA が待っている
+命令のおよそ 2 命令後に落ちる。`ips report` はサンプルせずに、前回のデータ(`/tmp/wl/*.data`)から同じ表を出す。
 
 最後の表の列: `Mcyc`(百万サイクル)、`CPI`、1000 命令あたりの I$ / D$ ミス(行の読み込み)・
 ITLB / DTLB ミス(ページテーブルを引いた回数)・例外、サイクルに対する D$ 待ち / フロントエンドが

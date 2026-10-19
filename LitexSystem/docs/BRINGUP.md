@@ -2,7 +2,7 @@
 
 [日本語](BRINGUP_J.md)
 
-Last updated: 2026-10-12 (round 18: Rev.01)
+Last updated: 2026-10-20 (round 20: Debian 13 on the board)
 
 ## What has been confirmed so far
 
@@ -19,8 +19,9 @@ board yet** are different things.
 | **The LiteX BIOS itself (with interrupts)** | **Confirmed**. `SIM/SIM_BIOS` (2026-09-24, added after the board stopped) |
 | Bitstream | **Works**. Timing closes at 50 MHz (`TIMING.md`) |
 | Does the BIOS come up on the board | **Confirmed** (2026-09-24) |
-| Does Linux boot on the board | **Confirmed** (2026-09-25, WNS 0.013 ns; with Ethernet 2026-09-26, WNS 0.131 ns, up to DHCP, ping and TFTP netboot; **Rev.01** 2026-10-12, WNS +0.664 ns). From the SD card's ext4 to the BusyBox prompt. `cat /proc/cpuinfo` and `uname -a` work. The WARNING of `kernel/bpf/memalloc.c:186` at the first boot was two D$ bugs, fixed in round 7 |
-| Long stress test (`stress.sh`, 120 minutes) | **PASS** four times: rounds 14, 16, 17 and 18 (Rev.01) |
+| Does Linux boot on the board | **Confirmed** (2026-09-25, WNS 0.013 ns; with Ethernet 2026-09-26, WNS 0.131 ns, up to DHCP, ping and TFTP netboot; **Rev.01** 2026-10-12, WNS +0.664 ns; **Rev.02** 2026-10-19, WNS +0.140 ns). From the SD card's ext4 to the BusyBox prompt. `cat /proc/cpuinfo` and `uname -a` work. The WARNING of `kernel/bpf/memalloc.c:186` at the first boot was two D$ bugs, fixed in round 7 |
+| Long stress test (`stress.sh`, 120 minutes) | **PASS** five times: rounds 14, 16, 17, 18 (Rev.01) and 19 (Rev.02) |
+| Debian 13 (riscv64) from the SD card, gcc on the board | **Confirmed** (2026-10-20, Rev.02; round 20, `DEBIAN.md`) |
 
 ## Why uncached fetch was dealt with first
 
@@ -622,3 +623,55 @@ The load average stayed around 3 and nothing went NG. In the same 120 minutes it
 (sections 18 to 25 of `BENCH.md`). The new write paths of the D$ (stores joining an outstanding fill, zero fills,
 DMA writes through lines being filled) were all exercised by the DMA of the SD card and Ethernet against the CPU
 for 2 hours without a mismatch.
+
+## Round 19: long stress test of Rev.02 (2026-10-19)
+
+The bitstream of section 47 of `TIMING.md` (WNS +0.140 ns), the final version **Rev.02**. Since round 18: the PMU
+events of the page table walks (27 to 29), the ITLB of 16 and the DTLB of 32 entries (E3, decisions 79 to 81) and
+decision 82 (a late branch that guessed wrong also clears MR's wait for the DTLB). The same `fw_jump.bin` and
+SD card as round 18.
+
+```
+=== stress result (iterations, ok, ng) ===
+mem 84 84 0
+net 45 45 0
+sd  502 502 0
+=== new kernel messages that look like trouble ===
+(none)
+=== PASS ===
+```
+
+The load average stayed around 3 and nothing went NG. Against round 18 (81 / 41 / 517): mem +4 %, net +10 %, sd
+−3 % (the SD card's own speed sets `sd`; the CPU's part of it is small). The larger TLBs, with more entries to
+invalidate on every `SFENCE.VMA` and more walks replaced by hits, ran under the DMA of the SD card and Ethernet
+for 2 hours without a mismatch.
+
+## Round 20: Debian 13 on the board, and gcc on it (2026-10-20)
+
+The Rev.02 bitstream and the same `fw_jump.bin` / `Image` as round 19; on the second partition, in place of
+BusyBox, a Debian 13 (trixie, riscv64) tree made on the host by `scripts/build_debian.sh` (mmdebstrap, rootless,
+sysvinit) and written by `scripts/sd_debian.sh`. The procedure for others is `DEBIAN.md`. Four things came up on
+the way, all fixed in `build_debian.sh`:
+
+| What was seen | Cause | Fix |
+|---|---|---|
+| `fsck: error 2 ... while executing fsck.ext4 for /dev/mmcblk0p2`, then a maintenance shell | trixie's minimal base no longer has `e2fsprogs`, and `/etc/fstab` asks for the root to be checked (pass 1) | `e2fsprogs` added to the packages |
+| About 2 minutes at `Configuring network interfaces...` after `Listening on LPF/eth0` | DHCP waits for the kernel's random number generator: `crng init done` came at 171 s (no hardware random source; entropy from interrupt timing) | None needed: it is the board. The login comes about 3 minutes after RESET (`DEBIAN.md` section 4) |
+| `date` said 2083 | `ntpdate` of ntpsec stepped the clock twice from 1970 (by 56 years each time); BusyBox's `ntpd` applet is not in Debian's `busybox` | chrony (`makestep 1 3` of Debian's `chrony.conf`): one step to the right time |
+| A long wait at the first boot | `/etc/rc.local` made the 512 MB swap file with `dd` | `fallocate` (the `dd` remains as a fallback) |
+
+With the final tarball the boot was clean (`rootfs: clean`, chrony on time within seconds of boot, 511 MB of
+swap), Debian 13.7 on `Linux 7.2.0`, 237 MB of memory. On the board:
+
+```
+root@mmrisc2:~# time gcc -O2 -o t t.c && ./t
+
+real    0m20.712s
+user    0m7.682s
+sys     0m6.799s
+build on mmRISC-2
+```
+
+`apt update` and `apt install` of three small packages (tree, chrony, e2fsprogs) took about 20 minutes together
+(the package lists of Debian are large for 50 MHz), and what they installed worked. gcc, `cc1`, `as`, `ld` and the dynamic linker of glibc, all from Debian's riscv64 archive, ran on
+mmRISC-2 without a fault: a test of the whole RV64GC user ISA by code the project did not write.

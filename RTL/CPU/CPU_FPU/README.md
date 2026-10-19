@@ -108,15 +108,15 @@ Smaller than the earlier flip-flop version (FF −4,096); the contents are not i
 In the earlier version (`CORE_FPU`) every operation occupied EX, and the multiply-add family ran at one
 instruction every 10 cycles.
 
-### 3.2 Measured on the board (Arty A7-100T, 50 MHz, Linux, `micro 50 fp`)
+### 3.2 Measured on the board (Arty A7-100T, 50 MHz, Linux, `micro 50 fp`; Rev.02, 2026-10-19)
 
 | Workload | Cycles per multiply-add | MFLOPS |
 |---|---|---|
-| FIR 8 taps × 1024, assembler | **1.53** | **65.6** |
-| Matrix multiply 64×64, assembler, cache blocking | **2.42** | **41.2** |
-| Matrix multiply 64×64, assembler, no blocking | 4.01 | 24.9 |
-| Dot product × 512, assembler | 3.66 | 27.3 |
-| Matrix multiply 64×64, C (`-O2`) | 16.6 | 6.04 |
+| FIR 8 taps × 1024, assembler | **1.50** | **66.6** |
+| Matrix multiply 64×64, assembler, cache blocking | **2.30** | **43.6** |
+| Matrix multiply 64×64, assembler, no blocking | 3.58 | 28.0 |
+| Dot product × 512, assembler | 3.65 | 27.4 |
+| Matrix multiply 64×64, C (`-O2`) | 16.2 | 6.17 |
 | For reference: earlier version, matrix multiply 64×64, C (`-O2`) | 17.6 | 5.69 |
 
 Compared with the same assembler kernels on the core with the earlier FPU (SIM_SYS, data sized to fit
@@ -127,7 +127,8 @@ in the D$): matrix multiply 11.19 → 2.18 (5.1×), FIR 10.10 → 1.45 (7.0×), 
   make 83 instructions ÷ 64 = 1.30, the lower bound of issue.
 - **The matrix multiply** does 8 FLDs and 16 FMADDs per k (about 1.7 for the kernel alone). The three
   64×64 matrices (96 KB) do not fit in the D$ (16 KB), so packing B into 64×16 panels (8 KB) kept in the
-  D$ (blocking) takes it from 4.01 to 2.42. What remains is D$ misses: MA waits for the answer of a
+  D$ (blocking) takes it from 3.58 to 2.30 (4.01 to 2.42 when the FPU was first pipelined, 2026-10-09; the
+  memory work since, M1 / M5 and the bus, took the rest). What remains is D$ misses: MA waits for the answer of a
   missing load, so the misses do not overlap with computation ("Overlap memory waits" in the ROADMAP).
 - **The dot product** needs 2 FLDs per multiply-add and is bound by the loads.
 - **Loops in C** hardly get faster. Code like `s += a[i] * b[i]` piles onto one sum, so the 9 cycles of
@@ -203,3 +204,4 @@ Of what the reference model and the tests found, the things hand-written tests w
 | 2026-10-09 | Stage 1: `FPU_PIPE` (verified and synthesized on its own) |
 | 2026-10-09 | Stage 2: integration into the core (pending bits, second write ports, LVT register files) |
 | 2026-10-09 | Board: FIR 1.52, matrix multiply 4.05; fixing the early issue of FSD takes the C matrix multiply 18.6 → 16.6; cache blocking takes the matrix multiply to 2.42 |
+| 2026-10-19 | Board, Rev.02 (the memory work of 2026-10-10 to 12 in between): FIR 1.50, matrix multiply with blocking 2.30, without 3.58 |

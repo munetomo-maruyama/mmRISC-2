@@ -33,7 +33,7 @@ The specification is in 12.3 and 12.4 of [`../../RTL/CPU/CPU_CORE/CPU_CORE_SPEC.
 | `make plic` | Drives the register port of `CPU_PLIC` directly (`tb_PLIC.sv`) |
 | `make riscv-tests` | The official riscv-tests (rv64ui / um / ua / uc / uf / ud / uzba / uzbb / uzbs / uzbc / uzicond / mi / si). `RVTESTS` gives the location of the repository |
 | `make riscv-tests-v` | The same tests in the virtual memory environment (`-v`, running under Sv39 while pages are allocated) |
-| `make bugs` / `./bug_inject.sh` | Bug injection, 339 mutations (judged both with and without back pressure. M211 to M231 are debug mode, M298 to M314 triggers, M320 to M340 performance counters, M341 to M358 the connection of the pipelined FPU and the register files, M361 to M370 and M384 T2 / T4 / T6 / T7 (decisions 73 to 75, 78), M371 to M376 Zicboz, M377 to M383 Zbs / Zbc, M240 and later the early issue from EX. Mutations of `CORE_MDU` are also judged with `tb_MDU`) |
+| `make bugs` / `./bug_inject.sh` | Bug injection, 340 mutations (judged both with and without back pressure. M211 to M231 are debug mode, M298 to M314 triggers, M320 to M340 performance counters, M341 to M358 the connection of the pipelined FPU and the register files, M361 to M370 and M384 T2 / T4 / T6 / T7 (decisions 73 to 75, 78), M371 to M376 Zicboz, M377 to M383 Zbs / Zbc, M385 decision 82, M240 and later the early issue from EX. Mutations of `CORE_MDU` are also judged with `tb_MDU`) |
 | `make lint` | Verilator lint |
 
 Plusargs:
@@ -79,7 +79,7 @@ cause, `mepc` and `mtval`.
 | `t11_fp` | `mstatus.FS`, NaN-boxing, `fcsr` / rounding modes, the data source of FP stores, hazards between the FPU and other units |
 | `t12_priv` | S / U modes, delegation, SRET. The path M → S → U and back, delegation of interrupts, TVM / TW / TSR of `mstatus` (the official rv64si does not go as far as U mode) |
 | `t13_pmp` | That PMP really stops accesses: lower numbered entries win, M passes through unlocked entries and obeys locked ones, R / W / X are told apart; an 8-byte NAPOT region (the mask kept beside `pmpaddr`, decision 74) |
-| `t14_mmu` | Sv39: three-level translation with hand-made page tables, permission bits, `SFENCE.VMA`; AMOs and a load that page-fault after a walk (T2), `cbo.zero` checked as a store (W and D, page faults, `menvcfg.CBZE`) |
+| `t14_mmu` | Sv39: three-level translation with hand-made page tables, permission bits, `SFENCE.VMA`; AMOs and a load that page-fault after a walk (T2), `cbo.zero` checked as a store (W and D, page faults, `menvcfg.CBZE`); a late branch that guessed wrong at the end of a list ending in an unmapped page, with MR not waiting for the walk of the load behind it (65 to 67, decision 82: the PMU's events 29 and 6) |
 | `t15_plic` | The PLIC from a program: raise a line → external interrupt → claim / complete in the handler → return |
 | `t16_bench` | For measurement (3 loops that exercise the front end). In bug injection it checks that the predictor works, through the cycle count of BENCH_LIMIT |
 | `t17_btb` | Wrong fetches of the branch predictor: the fetch unit gets back the instructions the prediction threw away |

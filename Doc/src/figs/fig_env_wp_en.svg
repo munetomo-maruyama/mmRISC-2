@@ -12,6 +12,8 @@
 <text x="50" y="284.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">   Linux, BusyBox and perf builds</text>
 <text x="50" y="315.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">● OpenOCD / gdb (JTAG, cJTAG)</text>
 <text x="50" y="346.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">● TFTP server (to the board)</text>
+<text x="50" y="377.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">● Eclipse + xPack GCC 15 (bare metal)</text>
+<text x="50" y="408.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">● mmdebstrap (Debian 13, riscv64)</text>
 <rect x="530" y="75" width="320" height="250" rx="8" fill="#FFF3D6" stroke="#F2A900" stroke-width="2"/>
 <text x="548" y="111" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="start" font-weight="bold" fill="#222222">Windows 11(arm64)</text>
 <text x="550" y="160.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="20" text-anchor="start" font-weight="normal" fill="#222222">● Vivado 2025.1</text>
@@ -40,7 +42,7 @@
 <text x="920" y="95.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">● mmRISC-2 (public, Apache-2.0)</text>
 <text x="920" y="122.55" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">   Claude Code commits</text>
 <text x="920" y="150.1" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">   and pushes by itself</text>
-<text x="920" y="177.64999999999998" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">● Tag Rev.01 on main,</text>
+<text x="920" y="177.64999999999998" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">● Tag Rev.02 on main,</text>
 <text x="920" y="205.2" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">   development on dev</text>
 <text x="920" y="232.75" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">● Kernel source in a release</text>
 <line x1="878.0" y1="150.0" x2="892.0" y2="150.0" stroke="#808080" stroke-width="3"/>

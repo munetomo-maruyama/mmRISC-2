@@ -16,53 +16,63 @@
 <line x1="80" y1="50" x2="80" y2="560" stroke="#808080" stroke-width="2"/>
 <line x1="80" y1="560" x2="1300" y2="560" stroke="#808080" stroke-width="2"/>
 <text x="80" y="36" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="start" font-weight="bold" fill="#222222">CPI (lower is faster)</text>
-<rect x="93.25" y="421.994" width="38" height="138.00599999999997" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
-<rect x="135.25" y="431.174" width="38" height="128.82600000000002" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
-<rect x="177.25" y="433.01" width="38" height="126.99000000000001" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<rect x="90.25" y="421.994" width="30" height="138.006" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
+<rect x="124.25" y="431.174" width="30" height="128.826" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<rect x="158.25" y="433.01" width="30" height="126.99" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<rect x="192.25" y="447.494" width="30" height="112.506" rx="2" fill="#F2A900" stroke="#F2A900" stroke-width="1"/>
 <text x="156.25" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="normal" fill="#222222">gunzip</text>
-<text x="156.25" y="409.994" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#808080">×1.09</text>
-<rect x="245.75" y="435.764" width="38" height="124.23599999999999" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
-<rect x="287.75" y="443.21" width="38" height="116.79000000000002" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
-<rect x="329.75" y="444.638" width="38" height="115.36200000000002" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="156.25" y="409.994" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#808080">×1.23</text>
+<rect x="242.75" y="435.764" width="30" height="124.236" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
+<rect x="276.75" y="443.21" width="30" height="116.79" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<rect x="310.75" y="444.638" width="30" height="115.362" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<rect x="344.75" y="445.964" width="30" height="114.036" rx="2" fill="#F2A900" stroke="#F2A900" stroke-width="1"/>
 <text x="308.75" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="normal" fill="#222222">md5sum</text>
-<text x="308.75" y="423.764" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#808080">×1.08</text>
-<rect x="398.25" y="389.558" width="38" height="170.442" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
-<rect x="440.25" y="395.98400000000004" width="38" height="164.01599999999996" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
-<rect x="482.25" y="397.004" width="38" height="162.99599999999998" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="308.75" y="423.764" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#808080">×1.09</text>
+<rect x="395.25" y="389.558" width="30" height="170.442" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
+<rect x="429.25" y="395.984" width="30" height="164.016" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<rect x="463.25" y="397.004" width="30" height="162.996" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<rect x="497.25" y="430.358" width="30" height="129.642" rx="2" fill="#F2A900" stroke="#F2A900" stroke-width="1"/>
 <text x="461.25" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="normal" fill="#222222">awk</text>
-<text x="461.25" y="377.558" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#808080">×1.05</text>
-<rect x="550.75" y="245.942" width="38" height="314.058" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
-<rect x="592.75" y="344.47400000000005" width="38" height="215.52599999999995" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
-<rect x="634.75" y="351.308" width="38" height="208.692" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="461.25" y="377.558" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#808080">×1.31</text>
+<rect x="547.75" y="245.942" width="30" height="314.058" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
+<rect x="581.75" y="344.474" width="30" height="215.526" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<rect x="615.75" y="351.308" width="30" height="208.692" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<rect x="649.75" y="369.464" width="30" height="190.536" rx="2" fill="#F2A900" stroke="#F2A900" stroke-width="1"/>
 <text x="613.75" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="bold" fill="#222222">ls -lR</text>
-<text x="613.75" y="233.942" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#B07800">×1.50</text>
-<rect x="703.25" y="148.226" width="38" height="411.774" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
-<rect x="745.25" y="295.41200000000003" width="38" height="264.58799999999997" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
-<rect x="787.25" y="319.178" width="38" height="240.822" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="613.75" y="233.942" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#B07800">×1.65</text>
+<rect x="700.25" y="148.226" width="30" height="411.774" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
+<rect x="734.25" y="295.412" width="30" height="264.588" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<rect x="768.25" y="319.178" width="30" height="240.822" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<rect x="802.25" y="333.152" width="30" height="226.848" rx="2" fill="#F2A900" stroke="#F2A900" stroke-width="1"/>
 <text x="766.25" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="bold" fill="#222222">ext4read</text>
-<text x="766.25" y="136.226" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#B07800">×1.71</text>
-<rect x="855.75" y="104.77399999999994" width="38" height="455.22600000000006" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
-<rect x="897.75" y="257.264" width="38" height="302.736" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
-<rect x="939.75" y="290.108" width="38" height="269.892" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="766.25" y="136.226" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#B07800">×1.82</text>
+<rect x="852.75" y="104.774" width="30" height="455.226" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
+<rect x="886.75" y="257.264" width="30" height="302.736" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<rect x="920.75" y="290.108" width="30" height="269.892" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<rect x="954.75" y="302.96" width="30" height="257.04" rx="2" fill="#F2A900" stroke="#F2A900" stroke-width="1"/>
 <text x="918.75" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="bold" fill="#222222">sdread</text>
-<text x="918.75" y="92.77399999999994" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#B07800">×1.69</text>
-<rect x="1008.25" y="280.826" width="38" height="279.174" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
-<rect x="1050.25" y="329.786" width="38" height="230.214" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
-<rect x="1092.25" y="351.91999999999996" width="38" height="208.08000000000004" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="918.75" y="92.774" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#B07800">×1.77</text>
+<rect x="1005.25" y="280.826" width="30" height="279.174" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
+<rect x="1039.25" y="329.786" width="30" height="230.214" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<rect x="1073.25" y="351.92" width="30" height="208.08" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<rect x="1107.25" y="359.264" width="30" height="200.736" rx="2" fill="#F2A900" stroke="#F2A900" stroke-width="1"/>
 <text x="1071.25" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="bold" fill="#222222">forkexec</text>
-<text x="1071.25" y="268.826" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#B07800">×1.34</text>
-<rect x="1160.75" y="70.70600000000002" width="38" height="489.294" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
-<rect x="1202.75" y="265.832" width="38" height="294.168" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
-<rect x="1244.75" y="285.82399999999996" width="38" height="274.17600000000004" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="1071.25" y="268.826" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#B07800">×1.39</text>
+<rect x="1157.75" y="70.706" width="30" height="489.294" rx="2" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
+<rect x="1191.75" y="265.832" width="30" height="294.168" rx="2" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<rect x="1225.75" y="285.824" width="30" height="274.176" rx="2" fill="#283272" stroke="#283272" stroke-width="1"/>
+<rect x="1259.75" y="302.042" width="30" height="257.958" rx="2" fill="#F2A900" stroke="#F2A900" stroke-width="1"/>
 <text x="1223.75" y="590" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="middle" font-weight="bold" fill="#222222">tftp</text>
-<text x="1223.75" y="58.70600000000002" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#B07800">×1.78</text>
+<text x="1223.75" y="58.706" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="bold" fill="#B07800">×1.90</text>
 <text x="308.75" y="618" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">user mode</text>
 <text x="918.75" y="618" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">kernel heavy (files, SD, fork, network)</text>
-<rect x="140" y="634" width="40" height="24" rx="3" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
-<text x="192" y="654" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">no L2 (10-06)</text>
-<rect x="500" y="634" width="40" height="24" rx="3" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
-<text x="552" y="654" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">L2 256 KB(10-07)</text>
-<rect x="860" y="634" width="40" height="24" rx="3" fill="#283272" stroke="#283272" stroke-width="1"/>
-<text x="912" y="654" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">Rev.01(10-12)</text>
-<text x="1300" y="700" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="end" font-weight="normal" fill="#808080">×: speed, no L2 → Rev.01. ls -lR also runs fewer instructions with Zbc. BENCH.md 14, 15, 25</text>
+<rect x="100" y="634" width="40" height="24" rx="3" fill="#B8BCD0" stroke="#B8BCD0" stroke-width="1"/>
+<text x="152" y="654" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">no L2 (10-06)</text>
+<rect x="400" y="634" width="40" height="24" rx="3" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<text x="452" y="654" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">L2 256 KB(10-07)</text>
+<rect x="720" y="634" width="40" height="24" rx="3" fill="#283272" stroke="#283272" stroke-width="1"/>
+<text x="772" y="654" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">Rev.01(10-12)</text>
+<rect x="1000" y="634" width="40" height="24" rx="3" fill="#F2A900" stroke="#F2A900" stroke-width="1"/>
+<text x="1052" y="654" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="19" text-anchor="start" font-weight="normal" fill="#222222">Rev.02(10-19)</text>
+<text x="1300" y="700" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="16" text-anchor="end" font-weight="normal" fill="#808080">×: speed, no L2 → Rev.02. ls -lR also runs fewer instructions with Zbc. BENCH.md 14, 15, 25, 28</text>
 </svg>

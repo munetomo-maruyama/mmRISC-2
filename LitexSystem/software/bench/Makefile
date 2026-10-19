@@ -58,7 +58,7 @@ DHRY_SRC := $(RVTESTS)/benchmarks/dhrystone
 .PHONY: all tftp clean
 all: out/coremark out/dhrystone out/micro out/coremark_zb out/dhrystone_zb \
      out/coremark_max out/dhrystone_max out/coremark_zb_max out/dhrystone_zb_max \
-     out/dhrystone_lto out/dhrystone_zb_lto
+     out/dhrystone_lto out/dhrystone_zb_lto out/uclat
 
 out:
 	mkdir -p out out/dhry
@@ -139,6 +139,10 @@ out/dhrystone_zb_lto: out/dhrystone
 out/micro: micro.c loops.h fpkern.S fpkern.c fpkern.h | out
 	$(CC) $(CFLAGS) -Wall -o $@ micro.c fpkern.c fpkern.S
 
+# the cost of uncached accesses (ROADMAP.md W2): root, through /dev/mem
+out/uclat: uclat.c | out
+	$(CC) $(CFLAGS) -Wall -o $@ uclat.c
+
 # the input of workload.sh's gunzip: the board's BusyBox has no gzip
 out/image2m.gz: ../boot/Image | out
 	head -c 2097152 $< | gzip -6 -n > $@
@@ -146,10 +150,10 @@ out/image2m.gz: ../boot/Image | out
 tftp: all out/image2m.gz
 	sudo cp out/coremark out/dhrystone out/micro out/coremark_zb out/dhrystone_zb \
 	    out/coremark_max out/dhrystone_max out/coremark_zb_max out/dhrystone_zb_max \
-	    out/dhrystone_lto out/dhrystone_zb_lto bench.sh $(TFTP_DIR)/
+	    out/dhrystone_lto out/dhrystone_zb_lto out/uclat bench.sh $(TFTP_DIR)/
 	cd $(TFTP_DIR) && sudo chmod 644 coremark dhrystone micro coremark_zb dhrystone_zb \
 	    coremark_max dhrystone_max coremark_zb_max dhrystone_zb_max \
-	    dhrystone_lto dhrystone_zb_lto bench.sh
+	    dhrystone_lto dhrystone_zb_lto uclat bench.sh
 	if [ -f out/perf ]; then \
 	    sudo cp out/perf perf.sh workload.sh out/image2m.gz $(TFTP_DIR)/ && \
 	    sudo chmod 644 $(TFTP_DIR)/perf $(TFTP_DIR)/perf.sh $(TFTP_DIR)/workload.sh \

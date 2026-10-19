@@ -4,14 +4,14 @@
 
 > **Claude Code による完全自動設計。** このリポジトリの仕様書、RTL、テストベンチと検証(参照モデル、バグ注入)、
 > スクリプト、日英の文書は、すべて Anthropic の AI コーディングエージェント [Claude Code](https://claude.com/claude-code)
-> が書いた(モデルは Claude Sonnet 5、Opus 5、Opus 5.5。Rev.01 まで 2026-09-13〜10-12)。作者は目標を決め、
+> が書いた(モデルは Claude Sonnet 5、Opus 5、Opus 5.5。Rev.01 まで 2026-09-13〜10-12、Rev.02 まで〜10-19)。作者は目標を決め、
 > Claude Code が出した案から選び、Vivado と実機を動かしてその結果を渡した。
 
 64bit RISC-V CPU を SystemVerilog で自作し、Digilent Arty A7-100T 上で Linux を動かすプロジェクト。周辺回路は LiteX から持ってくる。CPU が持つもの:
 
 - RV64GC(IMAFDC)+ Zba / Zbb / Zbs / Zbc / Zicond / Zicboz
 - M / S / U モード、PMP
-- Sv39 MMU(ITLB / DTLB、ハードウェアのページテーブルウォーカ)
+- Sv39 MMU(ITLB 16 / DTLB 32 エントリ、ハードウェアのページテーブルウォーカ)
 - 8 段のインオーダ・パイプライン
 - 分岐予測(BTB 256 エントリ、gshare、戻りアドレススタック)
 - FPU(単精度・倍精度)。加減算・乗算・積和・変換は毎サイクル 1 件のパイプライン
@@ -20,22 +20,27 @@
 - SoC の DMA も D$ を通し、キャッシュの一貫性をハードウェアで保つ
 - 内蔵の CLINT / PLIC、Sstc(S モードのタイマ)
 - JTAG / cJTAG のオンチップデバッグ(Debug Spec 1.0、ハードウェアトリガ 4 本)
+- **統合開発環境 Eclipse によるベアメタル開発**: C のプログラムをビルドし、JTAG / cJTAG でボード上でデバッグできる(Ubuntu と Windows)
+- **ボード上で Debian 13 が起動し、gcc でセルフコンパイルできる**: SD カードからフルの Debian(riscv64)を起動し、gcc、make、gdb、git、`apt` を mmRISC-2 そのものの上で使える
 - 性能カウンタ(Zihpm、Sscofpmf、Smcntrpmf。Linux の `perf` で関数名まで使える)
 
-## 現状(Rev.01、2026-10-12)
+## 現状(Rev.02、最終版、2026-10-20)
 
 Arty A7-100T の実機(50 MHz)で、LiteX BIOS → OpenSBI → **Linux 7.2** が SD カードの ext4
 から BusyBox のシェルまで起動し、Ethernet(DHCP、TFTP)も動く。120 分の負荷試験(メモリ・
-Ethernet・SD カードの同時照合)は Rev.01 でも PASS(`LitexSystem/docs/BRINGUP.md` 18 回目)。
+Ethernet・SD カードの同時照合)は Rev.02 でも PASS(`LitexSystem/docs/BRINGUP.md` 19 回目)。
+BusyBox の代わりに **Debian 13(riscv64)** も SD カードから起動し、**C のプログラムをボードの上の gcc で
+コンパイルできる**(20 回目)。
 
 | | |
 |---|---|
-| 性能(実機、Linux 上) | **2.786 CoreMark/MHz**(Zba/Zbb で作ったもの。rv64gc なら 2.498)、**1.496 DMIPS/MHz**。自作の始めの 1.584 / 0.823 から +76 % / +82 %。どちらも `-O2` での値で、速さを最大にするオプションで作ると **3.025 CoreMark/MHz**、1.542 DMIPS/MHz(`LitexSystem/docs/BENCH.md` 17 章)。浮動小数点は FIR 65.6 MFLOPS、行列積 41.2 MFLOPS(アセンブラ、50 MHz)。L2 キャッシュでカーネルが主の負荷(TFTP、SD の読み出し、`ls -lR`)が 1.5〜1.7 倍になり、その後のメモリまわりの作業(ストアのミスを待たない、`cbo.zero`、バスなど)でその CPI がさらに 7〜11 % 下がった(`BENCH.md` 18〜25 章) |
+| 性能(実機、Linux 上) | **2.794 CoreMark/MHz**(Zba/Zbb で作ったもの。rv64gc なら 2.504)、**1.501 DMIPS/MHz**。自作の始めの 1.584 / 0.823 から +76 % / +82 %。どちらも `-O2` での値で、速さを最大にするオプションで作ると **3.034 CoreMark/MHz**、1.545 DMIPS/MHz(`LitexSystem/docs/BENCH.md` 28 章)。浮動小数点は FIR 66.6 MFLOPS、行列積 43.6 MFLOPS(アセンブラ、50 MHz)。L2 キャッシュでカーネルが主の負荷(TFTP、SD の読み出し、`ls -lR`)が 1.5〜1.7 倍になり、その後のメモリまわりの作業(ストアのミスを待たない、`cbo.zero`、バスなど)でその CPI がさらに 7〜11 % 下がり、Rev.02 の大きくした TLB でユーザモードの負荷が 11〜20 %、カーネルの負荷が 3.5〜8.7 % 下がった(`BENCH.md` 18〜28 章) |
 | ISA | RV64IMAFDC、Zicsr、Zifencei、Zicntr、Zihpm、**Zba、Zbb、Zbs、Zbc、Zicond**、Zihintpause、Zihintntl、**Zicboz**、M / S / U、Sv39、PMP 8 エントリ |
 | 特権の拡張 | **Sstc**(S モードのタイマ)、**Sscofpmf**(性能カウンタのあふれ割り込み)、**Smcntrpmf**、**Sdtrig**(デバッグのトリガ 4 本)、特権仕様 1.12 |
-| 性能カウンタ | `hpmcounter3`〜`6`、イベント 26 種(キャッシュ・L2・TLB のミス、分岐予測ミス、停止の理由、メモリの待ちの内訳、I$ の先読み)。Linux の `perf stat` / `perf record`、関数ごとの `perf report` で使える |
+| 性能カウンタ | `hpmcounter3`〜`6`、イベント 29 種(キャッシュ・L2・TLB のミス、分岐予測ミス、停止の理由、ページテーブルの探索のサイクル、メモリの待ちの内訳、I$ の先読み)。Linux の `perf stat` / `perf record`、関数ごとの `perf report` で使える |
 | デバッグ | JTAG / cJTAG(Debug Spec 1.0)。OpenOCD / gdb で halt / step / レジスタ / メモリ、ソフトウェアとハードウェアのブレークポイント、ウォッチポイント(動いている Linux カーネルにも置ける) |
-| FPGA | 50 MHz で WNS +0.664 ns、LUT 46,928 / 63,400(74.0 %)、スライス 86.2 %、ブロック RAM 108.5 / 135 タイル(L2 を含む) |
+| ソフトウェア開発 | **統合開発環境 Eclipse によるベアメタルのプログラム開発**(Eclipse Embedded CDT、xPack RISC-V GCC): ビルド、JTAG / cJTAG での読み込み、C の 1 行ずつの実行、ブレークポイント、変数とレジスタの表示を Ubuntu と Windows で。UART への printf、タイマ、割り込みを備えた起動キットとサンプルのプロジェクト付き([`LitexSystem/docs/ECLIPSE.md`](LitexSystem/docs/ECLIPSE_J.md))。**Debian 13 でのセルフビルド**: 同じカーネルと OpenSBI で Debian(sysvinit)が SD カードから起動し、gcc 14、make、gdb 16、git がボードの上で動く。`apt` で Debian のパッケージを足せる(小さな C のファイルのコンパイルは 50 MHz で約 20 秒)。ルートファイルシステムは 2 つのスクリプトで作って書く(作るのに root は不要)([`LitexSystem/docs/DEBIAN.md`](LitexSystem/docs/DEBIAN_J.md)) |
+| FPGA | 50 MHz で WNS +0.140 ns、LUT 50,301 / 63,400(79.3 %)、スライス 92.9 %、ブロック RAM 108.5 / 135 タイル(L2 を含む) |
 
 **コアの構成**
 
@@ -55,17 +60,19 @@ Ethernet・SD カードの同時照合)は Rev.01 でも PASS(`LitexSystem/docs/
 - L2 のヒットで L1 のミス 1 回が 31 → 14 サイクルになり、カーネルの負荷で 85〜95 % 当たる([`BENCH.md`](LitexSystem/docs/BENCH_J.md) 15 章)
 
 立ち上げの経緯は [`LitexSystem/docs/BRINGUP.md`](LitexSystem/docs/BRINGUP_J.md)、性能の作業と
-実機の内訳は [`LitexSystem/docs/BENCH.md`](LitexSystem/docs/BENCH_J.md)、次のテーマは
-[`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md)。
+実機の内訳は [`LitexSystem/docs/BENCH.md`](LitexSystem/docs/BENCH_J.md)、済んだテーマ・試して取り込まなかった
+テーマ・この先に残すテーマは [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md)。
 
 ## 版とブランチ
 
 | 版 | 日付 | 内容 |
 |---|---|---|
-| **Rev.01**(タグ `Rev.01`) | 2026-10-12 | この README が説明している版: RV64GC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz、L1・L2 キャッシュ、Arty A7-100T の 50 MHz で Linux 7.2(WNS +0.664 ns)、120 分の負荷試験 PASS |
+| **Rev.02**(タグ `Rev.02`) | 2026-10-20 | この README が説明している版で、最後の版: Rev.01 に、ITLB 16・DTLB 32 エントリとページテーブル探索の PMU イベント(決定 79〜81)、決定 82 を加えたもの(CoreMark 3.034 /MHz)。WNS +0.140 ns、120 分の負荷試験 PASS。Eclipse による JTAG / cJTAG でのベアメタル開発と、ボード上の Debian 13 と gcc |
+| **Rev.01**(タグ `Rev.01`) | 2026-10-12 | 最初の公開版: RV64GC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz、L1・L2 キャッシュ、Arty A7-100T の 50 MHz で Linux 7.2(WNS +0.664 ns)、120 分の負荷試験 PASS |
 
-`main` は外部の方が参照する最新の版を保ち、次のメジャーな版まで更新しない。開発は `dev` ブランチで進める(次の
-テーマ: [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md))。
+`main` は外部の方が参照する最新の版を保つ。**mmRISC-2 は Rev.02 で閉じる**: 残るテーマは見積もりで 1〜2 % 以下で、
+そのうち 2 つ(W1、W2)は実機とシミュレーションで確かめたうえで取り込まなかった
+([`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md) 3・4 章)。
 
 ## 文書
 
@@ -73,7 +80,7 @@ Ethernet・SD カードの同時照合)は Rev.01 でも PASS(`LitexSystem/docs/
 
 | 文書 | 内容 |
 |---|---|
-| [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC_J.md) | CPU コア(命令セット、パイプライン、MMU、CSR、デバッグ、決定事項 1〜78) |
+| [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC_J.md) | CPU コア(命令セット、パイプライン、MMU、CSR、デバッグ、決定事項 1〜82) |
 | [`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`](RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC_J.md) | L1 キャッシュ(パラメータ、インタフェース、動作、検証結果) |
 | [`RTL/CPU/CPU_L2/CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC_J.md) | L2 キャッシュ(方式、動作、資源、検証、実機の効果) |
 | [`RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`](RTL/CPU/CPU_DBG/CPU_DBG_SPEC_J.md) | デバッグ論理(JTAG/cJTAG DTM、DM、認証) |
@@ -83,10 +90,12 @@ Ethernet・SD カードの同時照合)は Rev.01 でも PASS(`LitexSystem/docs/
 | [`LitexSystem/docs/BENCH.md`](LitexSystem/docs/BENCH_J.md) | 性能測定(シミュレーションと実機、PMU で見たサイクルの行き先、版ごとの推移) |
 | [`LitexSystem/docs/TIMING.md`](LitexSystem/docs/TIMING_J.md) | 50 MHz のタイミング収束の記録 |
 | [`LitexSystem/docs/JTAG.md`](LitexSystem/docs/JTAG_J.md) | JTAG / cJTAG デバッグ(ピン、スイッチ、OpenOCD) |
-| [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md) | 次の設計テーマ |
+| [`LitexSystem/docs/ECLIPSE.md`](LitexSystem/docs/ECLIPSE_J.md) | Eclipse によるベアメタルのプログラム開発: ツール、設定、ビルド、JTAG / cJTAG でのデバッグ |
+| [`LitexSystem/docs/DEBIAN.md`](LitexSystem/docs/DEBIAN_J.md) | ボード上の Debian 13: ルートファイルシステムの作成、SD カード、起動、ボードの上での gcc によるコンパイル |
+| [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md) | 設計テーマ: 済んだもの、試して取り込まなかったもの、この先に残すもの |
 | [`LitexSystem/software/boot/README.md`](LitexSystem/software/boot/README_J.md) | SD カードの作り方、Ethernet、TFTP ネットブート、負荷試験、配布しているバイナリ |
 | [`LitexSystem/software/bench/README.md`](LitexSystem/software/bench/README_J.md) | 実機のベンチマークと `perf` |
-| [`Doc/20261015_WhitePaper_mmRISC-2_J.pdf`](Doc/20261015_WhitePaper_mmRISC-2_J.pdf) | ホワイトペーパー(A4): Claude Code による設計の進め方、仕様、経緯、手戻りと検証、AI による自動設計の評価。英語版は [`Doc/20261015_WhitePaper_mmRISC-2.pdf`](Doc/20261015_WhitePaper_mmRISC-2.pdf)。原稿は `Doc/src/` |
+| [`Doc/20261020_WhitePaper_mmRISC-2_J.pdf`](Doc/20261020_WhitePaper_mmRISC-2_J.pdf) | ホワイトペーパー(A4): Claude Code による設計の進め方、仕様、経緯、手戻りと検証、ソフトウェア開発環境(Eclipse、Debian)、AI による自動設計の評価(Rev.02)。英語版は [`Doc/20261020_WhitePaper_mmRISC-2.pdf`](Doc/20261020_WhitePaper_mmRISC-2.pdf)。原稿は `Doc/src/` |
 | [`SIM/SIM_CORE/README.md`](SIM/SIM_CORE/README_J.md) | コアの検証環境(自作試験 34 本、riscv-tests、バグ注入) |
 
 ## ディレクトリ構成
@@ -176,10 +185,10 @@ LitexRocket/        Rocket 構成の LiteX 一式(ワークスペース、OpenSB
 | `cd SIM/SIM_CORE && make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / uzba / uzbb / uzbs / uzbc / uzicond / mi / si) | 178 PASS、既知の不合格 4(未実装機能を要求する試験) |
 | `cd SIM/SIM_CORE && make riscv-tests-v` | 同じ試験を仮想記憶(Sv39)の環境で | 154 PASS、既知の不合格 4 |
 | `cd SIM/SIM_CORE && make mdu / clint / plic` | 乗除算器(参照モデル 20 万演算)、CLINT(4 ハート)、PLIC | PASS |
-| `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 339 種(背圧あり/なしの両方) | 全て検出 |
+| `cd SIM/SIM_CORE && ./bug_inject.sh` | バグ注入 340 種(背圧あり/なしの両方) | 全て検出 |
 | `cd SIM/SIM_SYS && make` | コア + 本物の L1 / L2 キャッシュ + AXI + DMA ポート(自作試験 27 本、DMA・PMU などのプログラム 4 本)。`PARAMS=-GL2_SIZE=0` で L2 なし | 全 PASS(L2 あり / なし) |
 | `cd SIM/SIM_SYS && make riscv-tests` | riscv-tests を本物のキャッシュ越しに | 133 PASS、既知の不合格 4 |
-| `cd SIM/SIM_SYS && ./bug_inject.sh` | バグ注入 23 種(浮動小数点の核のサイクルの上限 `bench/fploop` と M0 のメモリの待ちのイベントを含む) | 全て検出 |
+| `cd SIM/SIM_SYS && ./bug_inject.sh` | バグ注入 26 種(浮動小数点の核のサイクルの上限 `bench/fploop`、M0 のメモリの待ちのイベント、E3a の探索のイベントを含む) | 全て検出 |
 | `cd SIM/SIM_CACHE && make` | L1 キャッシュ全試験(CPU と DMA ポートを同じラインで同時にランダムに、取り消しを含む) | PASS 64,914 チェック |
 | `cd SIM/SIM_CACHE && ./bug_inject.sh` | バグ注入 59 種 | 全て検出 |
 | `cd SIM/SIM_L2 && make` / `./sweep.sh` / `./bug_inject.sh` | L2 キャッシュ(256 KB・4 ウェイ)/ 容量・ウェイ・置き換えの 11 構成 / バグ注入 31 種 | PASS 約 150 万チェック / 全 PASS / 全て検出 |
@@ -242,9 +251,9 @@ vivado -mode batch -source build.tcl
 | CPU コア | RV64GC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz、M / S / U、8 段パイプライン、分岐予測(gshare) |
 | MMU (Sv39) と PMP | 完了 |
 | LiteX SoC 上の Linux | 実機で SD カードの ext4 から BusyBox まで。Ethernet、TFTP ネットブート。負荷試験 120 分 PASS |
-| 性能 | 2.786 CoreMark/MHz、1.496 DMIPS/MHz(実機、Linux 上、`-O2`。最大の最適化で 3.025 / 1.542)。性能カウンタと `perf` で実機の内訳を測れる |
+| 性能 | 2.794 CoreMark/MHz、1.501 DMIPS/MHz(実機、Linux 上、`-O2`。最大の最適化で 3.034 / 1.545)。性能カウンタと `perf` で実機の内訳を測れる |
 | L2 キャッシュ | 完了(256 KB、[`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC_J.md))。実機でカーネルの負荷が 1.2〜1.7 倍 |
-| 次のテーマ | 2 段目の TLB(ユーザモードの負荷)、読まずに書くライン全体の書き込みとキャッシュ無しのストアを待たないこと(カーネルのコピーとドライバ)([`ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md)) |
+| 完了 | Rev.02 が最終版。試して取り込まなかったテーマと、この先に残すテーマ: [`ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md) |
 
 ## ライセンス
 

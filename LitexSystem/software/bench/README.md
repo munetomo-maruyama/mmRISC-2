@@ -12,6 +12,7 @@ analysis: `../../docs/BENCH.md`.
 | `Makefile` | `make` builds `out/coremark`, `out/dhrystone`, `out/micro`, the Zba / Zbb builds `out/coremark_zb` and `out/dhrystone_zb`, and the builds with the most optimization `out/coremark_max`, `out/dhrystone_max`, `out/coremark_zb_max`, `out/dhrystone_zb_max`, `out/dhrystone_lto`, `out/dhrystone_zb_lto` ("Most optimization" below). `make tftp` copies them to the TFTP server (sudo) |
 | `bench.sh` | Run on the board. Fetches the 3 programs by TFTP into `/tmp`, runs them one after the other and prints the values per MHz. Also runs `*_zb` (when the core has Zba / Zbb, `/proc/cpuinfo`), `*_max`, `*_zb_max` and `dhrystone_*lto` if the server has them |
 | `micro.c` | Bandwidth (fits in the D$ / does not), latency of dependent loads, misaligned loads, double precision multiply-add (in C and in the assembler of `fpkern.S`). `micro 50 fp` runs only the floating point part |
+| `uclat.c` | The cost of uncached accesses (ROADMAP.md W2): stores and loads to a register of LiteX and LiteEth through `/dev/mem`, and an uncached store followed by cacheable ones. `./uclat` as root |
 | `fpkern.S` / `fpkern.c` / `fpkern.h` | Assembler kernels for the pipelined FPU (`CPU_CORE_SPEC.md` 10.11): matrix multiply (4×4 blocks, as it is and cut to fit the D$ (`fpkern.c`, section 16 of `../../docs/BENCH.md`)), 8-tap FIR, dot product. `fpkern.h` has C versions of the same sums (to check the answers). In simulation `SIM/SIM_SYS/bench/fploop.c` runs the same kernels |
 | `dhry_shim.c` | What the Dhrystone of riscv-tests expects from its bare environment (timer, printing), under Linux |
 | `workload.sh` | Run on the board. Counts loads other than CoreMark (gunzip, md5sum, awk, ls, reading ext4 and the SD card, fork + exec, TFTP) with the PMU, one row per load ("workload.sh" below) |
@@ -144,10 +145,12 @@ run once first to check that it succeeds; one that fails shows as FAILED in the 
 Runs 1 to 4 count the 16 events four at a time, run 5 counts L2 reads and misses (`r12` / `r13`, added
 2026-10-06; 0 with a bitstream without the L2), runs 6 and 7 the memory waits of M0 (`r14` to `r18`, added
 2026-10-10, `../../docs/BENCH.md` 18; a second table: MA's waits in all, as stores, on misses, on the copy of
-a dirty victim, and one / two or more line fills outstanding), run 0 splits cycles and instructions into
-user and kernel (each event is divided by the cycles and instructions of the same run). About 14 minutes.
+a dirty victim, and one / two or more line fills outstanding), run 8 the page table walks (`r1b` / `r1c` the
+cycles the walker works for the DTLB / ITLB, `r1d` the cycles MR waits for the DTLB, added 2026-10-16 for
+E3a; a third table with the cycles per walk), run 0 splits cycles and instructions into user and kernel
+(each event is divided by the cycles and instructions of the same run). About 16 minutes.
 The log is `/tmp/workload.log`, the raw counts `/tmp/wl/*.csv`. Events 20 to 24 need a bitstream from
-2026-10-10 on; on an older one they count 0.
+2026-10-10 on, events 27 to 29 one from 2026-10-16 on; on an older one they count 0.
 
 ```bash
 make tftp
@@ -160,6 +163,13 @@ cd /tmp && tftp -g -r workload.sh 192.168.0.12 && sh workload.sh 192.168.0.12
 With `profile` as a second argument (`sh workload.sh 192.168.0.12 profile`, about 4 minutes) it counts
 nothing and samples each load once with `perf record` instead: its first 15 functions, then the share of
 the CRC and checksum functions in each load (perf with libelf, ROADMAP.md D2).
+
+With `ips` (`sh workload.sh 192.168.0.12 ips`, about 3 minutes) it samples `md5sum`, `sdread`, `forkexec`
+and `tftp` by instruction: `r1` (cycles), `r14` (MA waits for a store) and `r15` (MA waits while the D$
+handles a miss), one sample every 20000 events, the first 15 `symbol+offset` of each. Read them against
+the kernel's disassembly on the host (`objdump -d vmlinux`; ROADMAP.md W1 / W2). An interrupt is attached
+to the instruction entering EX, so a sample lands about two instructions after the one MA waits for. `ips report` lists the same again from
+the data of the last run (`/tmp/wl/*.data`) without sampling.
 
 Columns of the final table: `Mcyc` (millions of cycles), `CPI`, I$ / D$ misses (line fills), ITLB /
 DTLB misses (page table walks) and exceptions per 1000 instructions, the shares of the cycles spent

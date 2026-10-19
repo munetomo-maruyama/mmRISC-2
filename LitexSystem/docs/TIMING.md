@@ -1760,3 +1760,69 @@ decision 78).
   the IFU's prefetch queue through the address, the misaligned check and the redirect (+0.759 ns). This is the
   design's own load-to-use path: shortening it means a cycle more of load use, not worth it while the core has
   0.6 ns.
+
+## 45. E3a, a DTLB of 16 entries: +0.514 ns (2026-10-17)
+
+The PMU events 27 to 29 (decision 79 of `CPU_CORE_SPEC.md`) and the DTLB from 8 to 16 entries (decision 80, a
+parameter only).
+
+| | Section 44 | This version |
+|---|---|---|
+| WNS | +0.664 ns | **+0.514 ns** |
+| WHS | +0.053 ns | +0.051 ns |
+| LUT | 46,928 (74.0 %) | 47,509 (74.9 %) |
+| FF | 26,516 (20.9 %) | 27,297 (21.5 %) |
+| Slices | 86.2 % (13,658) | 87.9 % (13,932) |
+
+- The eight more entries cost LUT +581 and FF +781 (the entries are flip-flops: tag, PPN and flags), slices
+  +274.
+- **The DTLB's own path is not among the 40 worst any more** (the load's value through EX's address add and the
+  DTLB's compare into `mr_paddr`, +0.664 ns in 44; now above +0.834 ns).
+- **The worst paths are the data side's PMP**: 30 of the 40 start at `mr_paddr`, go through the range compares
+  of the PMP (`u_pmp_d`, 7 CARRY4 on a TOR entry) to `mr_pmp_fail`, MR's exception, `lsu_e_go`, the cancel of the
+  early request in the D$ (`dc_req_cancel` / `s1_kill`) and end in the D$'s ROB (`rob_done` / `rob_data` CE) or
+  its dirty bits (26 levels, 76 % routing, +0.514 ns). This is T4 (second step) of `ROADMAP.md`: the compares
+  registered or done in EX would take it off. Not needed at +0.5 ns.
+
+## 46. E3b, an ITLB of 16 and a DTLB of 32 entries: +0.065 ns (2026-10-17)
+
+Decision 81 of `CPU_CORE_SPEC.md`: the ITLB from 8 to 16 entries, the DTLB from 16 to 32 (parameters only).
+
+| | Section 45 | This version |
+|---|---|---|
+| WNS | +0.514 ns | **+0.065 ns** |
+| WHS | +0.051 ns | +0.024 ns |
+| LUT | 47,509 (74.9 %) | 49,700 (78.4 %) |
+| FF | 27,297 (21.5 %) | 29,485 (23.3 %) |
+| Slices | 87.9 % (13,932) | 89.6 % (14,204) |
+
+- The 24 more entries cost LUT +2,191 and FF +2,188, but only slices +272 (the slices were already well
+  filled; about 1,650 are left).
+- **The DTLB's path is back on top, as expected**: the load's value forwarded from MA (`ma_is_load`), EX's
+  address add (`mr_vaddr`), the compare and select of the 32 entries, and the fault of the translation
+  (`mr_tr_fault`, +0.065 ns, 35 levels, 65 % routing) or the physical address (`mr_paddr`, +0.209 ns, 33
+  levels). The IFU's prefetch queue into decode follows (+0.394 ns); the PMP path of 45 is below +0.5 ns.
+- **Met, with little to spare**. If a later theme needs the margin, the DTLB's permission check can move a
+  cycle later: register the one-hot hit and the entry's flags at the end of EX and check them in MR (the fault
+  is raised in MR since decision 75 anyway). This is T8 of `ROADMAP.md`; DTLB 16 (+0.514 ns) is the fallback.
+
+## 47. Decision 82, the final version: +0.140 ns (2026-10-19)
+
+W1 (write-validate, `ROADMAP.md`) was tried and left out, so the RTL went back to that of section 46, synthesized
+again: the same +0.065 ns. Then decision 82 of `CPU_CORE_SPEC.md` (a late branch that guessed wrong also clears
+MR's wait for the DTLB; two flip-flops get one more clear).
+
+| | Section 46 | This version |
+|---|---|---|
+| WNS | +0.065 ns | **+0.140 ns** |
+| WHS | +0.024 ns | +0.018 ns |
+| LUT | 49,700 (78.4 %) | 50,301 (79.3 %) |
+| FF | 29,485 (23.3 %) | 29,473 (23.2 %) |
+| Slices | 89.6 % (14,204) | 92.9 % (14,720) |
+
+- The change itself is two flip-flops; LUT +601 and slices +516 are a different packing of the same design
+  (about 1,130 slices are left).
+- **The worst paths are still the DTLB's**: the load's value forwarded from MA (`ma_size`) through EX's address
+  add and the compare of the 32 entries into `mr_paddr` (+0.140 ns, 27 levels) and `mr_tr_fault` (+0.354 ns),
+  then the load into the IFU's prefetch queue and the uncached address (+0.75 to +0.85 ns).
+- This is the bitstream of **Rev.02** (round 19 of `BRINGUP.md`, sections 28 of `BENCH.md`).

@@ -4,6 +4,8 @@
 #
 #   tftp -g -r workload.sh 192.168.0.12 && sh workload.sh 192.168.0.12
 #   ... && sh workload.sh 192.168.0.12 profile     (by function instead)
+#   ... && sh workload.sh 192.168.0.12 ips         (by instruction, W1 / W2)
+#   ... && sh workload.sh 192.168.0.12 ips report  (the same, from the last data)
 #
 # CoreMark fits in the caches (BENCH.md 13). This runs ordinary work that
 # does not, each one five times under perf stat. Only applets the BusyBox of
@@ -33,7 +35,9 @@
 # store, r15 MA waits while the D$ handles a miss, r16 / r17 one / two or
 # more line fills outstanding, r18 MA waits while a dirty victim is copied
 # out, with rb (all of MA's waits) again, r19 / r1a the prefetches of the I$
-# and the misses served by them (M3). Run 0 splits cycles and
+# and the misses served by them (M3), run 8 the page table walks (E3a): r1b /
+# r1c the cycles the walker works for the DTLB / ITLB, r1d the cycles MR waits
+# for the DTLB, with ra (DTLB walks) again. Run 0 splits cycles and
 # instructions into user and kernel mode. rN is event N of the core, in hex
 # (CPU_CORE_SPEC.md decision 69). Each event is divided by the cycles or
 # instructions of its own run. The log is /tmp/workload.log, the raw counts
@@ -44,8 +48,16 @@
 # functions, then the share of the CRC and checksum functions in each load
 # (it judged Zbc, ROADMAP.md F3: BENCH.md 24 and 25). Needs perf with libelf (D2).
 #
+# With "ips" it samples md5sum, sdread, forkexec and tftp three times each
+# (perf record every 20000 events of r1 cycles, r14 MA waits for a store, r15
+# MA waits while the D$ handles a miss) and counts the samples by instruction
+# (symbol+offset), the first 15 of each, to be read against the kernel's
+# disassembly on the host (ROADMAP.md W1 / W2). An interrupt is attached to
+# the instruction entering EX, so a sample lands about two instructions after
+# the one MA waits for.
+#
 # Needs the PMU (bitstream, fw_jump.bin, Image with perf; perf.sh works).
-# About 14 minutes (profile: about 4).
+# About 16 minutes (profile: about 4, ips: about 3).
 #---------------------------------------------------------------------------
 SERVER=${1:?usage: sh workload.sh <tftp server>}
 DIR=${WL_DIR:-/tmp/wl}
@@ -89,10 +101,35 @@ cmd() {
     esac
 }
 
-EVSETS="r7,r8,r9,ra rb,rc,r11,rd r5,r6,r3,r4 re,rf,r10,r1 r12,r13 r14,r15,r16,r17 r18,rb,r19,r1a"
+EVSETS="r7,r8,r9,ra rb,rc,r11,rd r5,r6,r3,r4 re,rf,r10,r1 r12,r13 r14,r15,r16,r17 r18,rb,r19,r1a r1b,r1c,r1d,ra"
 WORKLOADS="gunzip md5sum awk ls ext4read sdread forkexec tftp"
 
 cold() { case $1 in ext4read|sdread) drop ;; esac; }
+
+if [ "$2" = ips ]; then
+    for w in md5sum sdread forkexec tftp; do
+        c=$(cmd $w)
+        for ev in r1 r14 r15; do
+            if [ "$3" != report ]; then
+                cold $w
+                ./perf record -e $ev -c 20000 -o "$w.$ev.data" sh -c "$c" > /dev/null 2>> "$LOG"
+            fi
+            # the first 15 by count (BusyBox has no sort)
+            ./perf script -i "$w.$ev.data" -F ip,sym,symoff 2>/dev/null |
+                awk -v w="$w" -v ev="$ev" '{ k = ($2 == "") ? $1 : $2; n[k]++; t++ }
+                    END { printf "=== %s %s: %d samples\n", w, ev, t
+                          for (i = 0; i < 15; i++) {
+                              m = 0
+                              for (k in n) if (n[k] > m) { m = n[k]; b = k }
+                              if (m == 0) break
+                              printf "%6.2f %5d %s\n", 100 * m / t, m, b
+                              delete n[b]
+                          } }' | tee -a "$LOG"
+        done
+    done
+    rm -f "$SDFILE"
+    exit 0
+fi
 
 if [ "$2" = profile ]; then
     for w in $WORKLOADS; do
@@ -188,6 +225,29 @@ for w in $WORKLOADS; do
             use = (val["r19"] > 0) ? 100 * val["r1a"] / val["r19"] : 0
             printf "%-9s %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %7.2f %7.1f\n",
                    w, p("rb"), p("r14"), p("r15"), p("r18"), p("r16"), p("r17"), k("r19"), use
+        }'
+done | tee -a "$LOG"
+echo "" | tee -a "$LOG"
+echo "=== the page table walks (E3a), % of cycles: the walker works for the DTLB / ITLB, MR waits for" | tee -a "$LOG"
+echo "    the DTLB; cycles per walk of each side (the ITLB walks counted in run 1)" | tee -a "$LOG"
+printf "%-9s %7s %7s %7s %7s %7s %7s\n" workload 'DTLB' 'Dwalk%' 'Iwalk%' 'MRw%' 'cyc/Dw' 'cyc/Iw' | tee -a "$LOG"
+for w in $WORKLOADS; do
+    [ -f "$w.8.csv" ] || continue
+    for g in 1 8; do
+        grep -v "^#\|^$" "$w.$g.csv" | sed "s/^/$g,/"
+    done | awk -F, -v w="$w" '
+        { g = $1; v = $2 + 0; e = $4
+          if (e == "cycles")            cyc[g] = v
+          else if (e == "instructions") ins[g] = v
+          else                          val[g, e] = v }
+        END {
+            dw = val[8, "ra"]; iw = (ins[1] > 0) ? val[1, "r9"] * ins[8] / ins[1] : 0
+            printf "%-9s %7.2f %7.2f %7.2f %7.2f %7.1f %7.1f\n", w,
+                   (ins[8] > 0) ? 1000 * dw / ins[8] : 0,
+                   (cyc[8] > 0) ? 100 * val[8, "r1b"] / cyc[8] : 0,
+                   (cyc[8] > 0) ? 100 * val[8, "r1c"] / cyc[8] : 0,
+                   (cyc[8] > 0) ? 100 * val[8, "r1d"] / cyc[8] : 0,
+                   (dw > 0) ? val[8, "r1b"] / dw : 0, (iw > 0) ? val[8, "r1c"] / iw : 0
         }'
 done | tee -a "$LOG"
 echo "" | tee -a "$LOG"

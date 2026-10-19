@@ -1,77 +1,92 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="26.4cm" height="14.6cm" viewBox="0 0 1320 730">
-<rect x="0" y="0" width="1320" height="730" fill="#FFFFFF"/>
-<rect x="330.0" y="70" width="31.29032258064516" height="610" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="26.4cm" height="16.56cm" viewBox="0 0 1320 823">
+<rect x="0" y="0" width="1320" height="823" fill="#FFFFFF"/>
+<rect x="1169.8981324278438" y="70" width="24.70288624787776" height="698" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0"/>
+<rect x="1194.6010186757217" y="70" width="24.70288624787776" height="698" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0"/>
+<rect x="330.0" y="70" width="24.702886247877757" height="698" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0.0"/>
 <text x="330.0" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">9/13</text>
-<line x1="330.0" y1="66" x2="330.0" y2="680" stroke="#E0E0E0" stroke-width="1"/>
-<text x="423.8709677419355" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">9/16</text>
-<line x1="423.8709677419355" y1="66" x2="423.8709677419355" y2="680" stroke="#E0E0E0" stroke-width="1"/>
-<rect x="517.741935483871" y="70" width="31.29032258064516" height="610" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0"/>
-<text x="517.741935483871" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">9/19</text>
-<line x1="517.741935483871" y1="66" x2="517.741935483871" y2="680" stroke="#E0E0E0" stroke-width="1"/>
-<rect x="549.0322580645161" y="70" width="31.29032258064516" height="610" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0"/>
-<text x="611.6129032258065" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">9/22</text>
-<line x1="611.6129032258065" y1="66" x2="611.6129032258065" y2="680" stroke="#E0E0E0" stroke-width="1"/>
-<text x="705.483870967742" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">9/25</text>
-<line x1="705.483870967742" y1="66" x2="705.483870967742" y2="680" stroke="#E0E0E0" stroke-width="1"/>
-<rect x="736.7741935483871" y="70" width="31.29032258064516" height="610" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0"/>
-<rect x="768.0645161290322" y="70" width="31.29032258064516" height="610" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0"/>
-<text x="799.3548387096774" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">9/28</text>
-<line x1="799.3548387096774" y1="66" x2="799.3548387096774" y2="680" stroke="#E0E0E0" stroke-width="1"/>
-<text x="893.2258064516129" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">10/1</text>
-<line x1="893.2258064516129" y1="66" x2="893.2258064516129" y2="680" stroke="#E0E0E0" stroke-width="1"/>
-<rect x="955.8064516129032" y="70" width="31.29032258064516" height="610" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0"/>
-<rect x="987.0967741935484" y="70" width="31.29032258064516" height="610" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0"/>
-<text x="987.0967741935484" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">10/4</text>
-<line x1="987.0967741935484" y1="66" x2="987.0967741935484" y2="680" stroke="#E0E0E0" stroke-width="1"/>
-<text x="1080.967741935484" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">10/7</text>
-<line x1="1080.967741935484" y1="66" x2="1080.967741935484" y2="680" stroke="#E0E0E0" stroke-width="1"/>
-<rect x="1174.8387096774195" y="70" width="31.29032258064516" height="610" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0"/>
-<text x="1174.8387096774195" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">10/10</text>
-<line x1="1174.8387096774195" y1="66" x2="1174.8387096774195" y2="680" stroke="#E0E0E0" stroke-width="1"/>
-<rect x="1206.1290322580644" y="70" width="31.29032258064516" height="610" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0"/>
-<text x="1268.7096774193549" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">10/13</text>
-<line x1="1268.7096774193549" y1="66" x2="1268.7096774193549" y2="680" stroke="#E0E0E0" stroke-width="1"/>
+<line x1="330.0" y1="66" x2="330.0" y2="768" stroke="#E0E0E0" stroke-width="0.7894736842105263"/>
+<text x="404.10865874363327" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">9/16</text>
+<line x1="404.10865874363327" y1="66" x2="404.10865874363327" y2="768" stroke="#E0E0E0" stroke-width="0.7894736842105263"/>
+<rect x="478.21731748726654" y="70" width="24.702886247877757" height="698" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0.0"/>
+<text x="478.21731748726654" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">9/19</text>
+<line x1="478.21731748726654" y1="66" x2="478.21731748726654" y2="768" stroke="#E0E0E0" stroke-width="0.7894736842105263"/>
+<rect x="502.9202037351443" y="70" width="24.702886247877757" height="698" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0.0"/>
+<text x="552.3259762308999" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">9/22</text>
+<line x1="552.3259762308999" y1="66" x2="552.3259762308999" y2="768" stroke="#E0E0E0" stroke-width="0.7894736842105263"/>
+<text x="626.4346349745331" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">9/25</text>
+<line x1="626.4346349745331" y1="66" x2="626.4346349745331" y2="768" stroke="#E0E0E0" stroke-width="0.7894736842105263"/>
+<rect x="651.1375212224109" y="70" width="24.702886247877757" height="698" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0.0"/>
+<rect x="675.8404074702886" y="70" width="24.702886247877757" height="698" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0.0"/>
+<text x="700.5432937181664" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">9/28</text>
+<line x1="700.5432937181664" y1="66" x2="700.5432937181664" y2="768" stroke="#E0E0E0" stroke-width="0.7894736842105263"/>
+<text x="774.6519524617997" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">10/1</text>
+<line x1="774.6519524617997" y1="66" x2="774.6519524617997" y2="768" stroke="#E0E0E0" stroke-width="0.7894736842105263"/>
+<rect x="824.0577249575551" y="70" width="24.702886247877757" height="698" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0.0"/>
+<rect x="848.760611205433" y="70" width="24.702886247877757" height="698" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0.0"/>
+<text x="848.760611205433" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">10/4</text>
+<line x1="848.760611205433" y1="66" x2="848.760611205433" y2="768" stroke="#E0E0E0" stroke-width="0.7894736842105263"/>
+<text x="922.8692699490663" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">10/7</text>
+<line x1="922.8692699490663" y1="66" x2="922.8692699490663" y2="768" stroke="#E0E0E0" stroke-width="0.7894736842105263"/>
+<rect x="996.9779286926996" y="70" width="24.702886247877757" height="698" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0.0"/>
+<text x="996.9779286926996" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">10/10</text>
+<line x1="996.9779286926996" y1="66" x2="996.9779286926996" y2="768" stroke="#E0E0E0" stroke-width="0.7894736842105263"/>
+<rect x="1021.6808149405772" y="70" width="24.702886247877757" height="698" rx="0" fill="#F6F6F6" stroke="none" stroke-width="0.0"/>
+<text x="1071.0865874363328" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">10/13</text>
+<line x1="1071.0865874363328" y1="66" x2="1071.0865874363328" y2="768" stroke="#E0E0E0" stroke-width="0.7894736842105263"/>
 <text x="318" y="112" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">Linux on LiteX + Rocket</text>
-<rect x="331.0" y="91" width="29.29032258064518" height="30" rx="5" fill="#808080" stroke="#808080" stroke-width="1"/>
+<rect x="330.7894736842105" y="91" width="23.123938879456723" height="30" rx="5" fill="#808080" stroke="#808080" stroke-width="0.7894736842105263"/>
 <text x="318" y="156" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">Bus and BFM checks</text>
-<rect x="393.5806451612903" y="135" width="60.58064516129036" height="30" rx="5" fill="#283272" stroke="#283272" stroke-width="1"/>
+<rect x="380.19524617996603" y="135" width="47.826825127334494" height="30" rx="5" fill="#283272" stroke="#283272" stroke-width="0.7894736842105263"/>
 <text x="318" y="200" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">JTAG / cJTAG debugger</text>
-<rect x="424.8709677419355" y="179" width="60.580645161290306" height="30" rx="5" fill="#2E8B57" stroke="#2E8B57" stroke-width="1"/>
-<rect x="862.9354838709677" y="179" width="60.58064516129036" height="30" rx="5" fill="#2E8B57" stroke="#2E8B57" stroke-width="1"/>
+<rect x="404.8981324278438" y="179" width="47.82682512733445" height="30" rx="5" fill="#2E8B57" stroke="#2E8B57" stroke-width="0.7894736842105263"/>
+<rect x="750.7385398981323" y="179" width="47.826825127334494" height="30" rx="5" fill="#2E8B57" stroke="#2E8B57" stroke-width="0.7894736842105263"/>
 <text x="318" y="244" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">L1 caches</text>
-<rect x="487.4516129032258" y="223" width="91.87096774193543" height="30" rx="5" fill="#283272" stroke="#283272" stroke-width="1"/>
+<rect x="454.3039049235993" y="223" width="72.52971137521219" height="30" rx="5" fill="#283272" stroke="#283272" stroke-width="0.7894736842105263"/>
 <text x="318" y="288" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">CPU core M1 to M7</text>
-<rect x="550.0322580645161" y="267" width="60.58064516129025" height="30" rx="5" fill="#283272" stroke="#283272" stroke-width="1"/>
+<rect x="503.7096774193548" y="267" width="47.82682512733441" height="30" rx="5" fill="#283272" stroke="#283272" stroke-width="0.7894736842105263"/>
 <text x="318" y="332" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">Timing at 50 MHz</text>
-<rect x="612.6129032258065" y="311" width="91.87096774193549" height="30" rx="5" fill="#C0392B" stroke="#C0392B" stroke-width="1"/>
+<rect x="553.1154499151104" y="311" width="72.52971137521223" height="30" rx="5" fill="#C0392B" stroke="#C0392B" stroke-width="0.7894736842105263"/>
 <text x="318" y="376" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">Board: BIOS → Linux</text>
-<rect x="675.1935483870968" y="355" width="60.58064516129025" height="30" rx="5" fill="#F2A900" stroke="#F2A900" stroke-width="1"/>
+<rect x="602.5212224108659" y="355" width="47.82682512733441" height="30" rx="5" fill="#F2A900" stroke="#F2A900" stroke-width="0.7894736842105263"/>
 <text x="318" y="420" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">Ethernet, stress test, SD</text>
-<rect x="737.7741935483871" y="399" width="123.16129032258061" height="30" rx="5" fill="#F2A900" stroke="#F2A900" stroke-width="1"/>
+<rect x="651.9269949066213" y="399" width="97.23259762308996" height="30" rx="5" fill="#F2A900" stroke="#F2A900" stroke-width="0.7894736842105263"/>
 <text x="318" y="464" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">Speed: D$, branches, mul/div, ISA</text>
-<rect x="894.2258064516129" y="443" width="154.45161290322585" height="30" rx="5" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<rect x="775.4414261460101" y="443" width="121.93548387096777" height="30" rx="5" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="0.7894736842105263"/>
 <text x="318" y="508" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">Linux loads measured, L2</text>
-<rect x="1050.6774193548385" y="487" width="60.58064516129048" height="30" rx="5" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<rect x="898.9558573853989" y="487" width="47.82682512733459" height="30" rx="5" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="0.7894736842105263"/>
 <text x="318" y="552" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">FPU pipeline, docs in EN / JA</text>
-<rect x="1144.5483870967741" y="531" width="29.290322580645125" height="30" rx="5" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<rect x="973.0645161290322" y="531" width="23.123938879456677" height="30" rx="5" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="0.7894736842105263"/>
 <text x="318" y="596" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17.1" text-anchor="end" font-weight="normal" fill="#222222">Memory waits, timing, Zicboz / Zbc</text>
-<rect x="1175.8387096774195" y="575" width="91.87096774193537" height="30" rx="5" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
-<polygon points="345.64516129032256,672 354.64516129032256,681 345.64516129032256,690 336.64516129032256,681" fill="#C0392B" stroke="none" stroke-width="0"/>
-<text x="345.64516129032256" y="704" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#C0392B">Linux on Rocket</text>
-<polygon points="689.8387096774194,672 698.8387096774194,681 689.8387096774194,690 680.8387096774194,681" fill="#C0392B" stroke="none" stroke-width="0"/>
-<text x="689.8387096774194" y="729" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#C0392B">50 MHz met, BIOS</text>
-<polygon points="721.1290322580645,672 730.1290322580645,681 721.1290322580645,690 712.1290322580645,681" fill="#C0392B" stroke="none" stroke-width="0"/>
-<text x="721.1290322580645" y="704" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#C0392B">Linux on own CPU</text>
-<polygon points="1159.1935483870968,672 1168.1935483870968,681 1159.1935483870968,690 1150.1935483870968,681" fill="#C0392B" stroke="none" stroke-width="0"/>
-<text x="1159.1935483870968" y="729" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#C0392B">CoreMark 3.025</text>
-<polygon points="1253.0645161290324,672 1262.0645161290324,681 1253.0645161290324,690 1244.0645161290324,681" fill="#C0392B" stroke="none" stroke-width="0"/>
-<text x="1253.0645161290324" y="704" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#C0392B">Rev.01</text>
-<rect x="331.0" y="8" width="60.58064516129036" height="28" rx="5" fill="#9AA3D0" stroke="#9AA3D0" stroke-width="1"/>
-<text x="361.2903225806452" y="29" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="13" text-anchor="middle" font-weight="bold" fill="#FFFFFF">Sonnet 5</text>
-<rect x="393.5806451612903" y="8" width="248.32258064516128" height="28" rx="5" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
-<text x="517.741935483871" y="29" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#FFFFFF">Opus 5</text>
-<rect x="643.9032258064516" y="8" width="623.8064516129033" height="28" rx="5" fill="#283272" stroke="#283272" stroke-width="1"/>
-<text x="955.8064516129032" y="29" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="13" text-anchor="middle" font-weight="bold" fill="#FFFFFF">Opus 5.5</text>
+<rect x="997.7674023769101" y="575" width="72.52971137521214" height="30" rx="5" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="0.7894736842105263"/>
+<polygon points="342.35144312393885,760.0 349.4567062818336,769.0 342.35144312393885,778.0 335.2461799660441,769.0" fill="#C0392B" stroke="none" stroke-width="0"/>
+<text x="342.35144312393885" y="792" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#C0392B">Linux on Rocket</text>
+<polygon points="614.0831918505942,760.0 621.188455008489,769.0 614.0831918505942,778.0 606.9779286926995,769.0" fill="#C0392B" stroke="none" stroke-width="0"/>
+<text x="614.0831918505942" y="817" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#C0392B">50 MHz met, BIOS</text>
+<polygon points="638.786078098472,760.0 645.8913412563668,769.0 638.786078098472,778.0 631.6808149405772,769.0" fill="#C0392B" stroke="none" stroke-width="0"/>
+<text x="638.786078098472" y="792" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#C0392B">Linux on own CPU</text>
+<polygon points="984.6264855687607,760.0 991.7317487266554,769.0 984.6264855687607,778.0 977.5212224108659,769.0" fill="#C0392B" stroke="none" stroke-width="0"/>
+<text x="984.6264855687607" y="817" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#C0392B">CoreMark 3.025</text>
+<polygon points="1058.735144312394,760.0 1065.840407470289,769.0 1058.735144312394,778.0 1051.6298811544993,769.0" fill="#C0392B" stroke="none" stroke-width="0"/>
+<text x="1058.735144312394" y="792" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#C0392B">Rev.01</text>
+<rect x="330.7894736842105" y="8" width="47.826825127334494" height="28" rx="5" fill="#9AA3D0" stroke="#9AA3D0" stroke-width="0.7894736842105263"/>
+<text x="354.70288624787776" y="29" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="10.5" text-anchor="middle" font-weight="bold" fill="#FFFFFF">Sonnet 5</text>
+<rect x="380.19524617996603" y="8" width="196.04414261460101" height="28" rx="5" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="0.7894736842105263"/>
+<text x="478.21731748726654" y="29" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#FFFFFF">Opus 5</text>
+<rect x="577.8183361629881" y="8" width="689.8913412563668" height="28" rx="5" fill="#283272" stroke="#283272" stroke-width="0.7894736842105263"/>
+<text x="922.7640067911715" y="29" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#FFFFFF">Opus 5.5</text>
 <text x="318" y="29" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="bold" fill="#283272">Model</text>
+
+<text x="1145.195246179966" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">10/16</text>
+<line x1="1145.195246179966" y1="66" x2="1145.195246179966" y2="768" stroke="#E0E0E0" stroke-width="1"/>
+<text x="1219.3039049235995" y="60" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#808080">10/19</text>
+<line x1="1219.3039049235995" y1="66" x2="1219.3039049235995" y2="768" stroke="#E0E0E0" stroke-width="1"/>
+<text x="318" y="640" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">Larger TLBs, W1 / W2, decision 82</text>
+<rect x="1072.0865874363328" y="619" width="170.92020373514433" height="30" rx="5" fill="#5B6BB5" stroke="#5B6BB5" stroke-width="1"/>
+<text x="318" y="684" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="end" font-weight="normal" fill="#222222">Eclipse and Debian environments</text>
+<rect x="1220.3039049235995" y="663" width="47.40577249575552" height="30" rx="5" fill="#2E8B57" stroke="#2E8B57" stroke-width="1"/>
+<polygon points="1231.6553480475384,760 1240.6553480475384,769 1231.6553480475384,778 1222.6553480475384,769" fill="#C0392B" stroke="none" stroke-width="0"/>
+<text x="1231.6553480475384" y="792" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#C0392B">Rev.02</text>
+<polygon points="1256.3582342954162,760 1265.3582342954162,769 1256.3582342954162,778 1247.3582342954162,769" fill="#C0392B" stroke="none" stroke-width="0"/>
+<text x="1256.3582342954162" y="817" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="bold" fill="#C0392B">gcc on Debian</text>
 </svg>
