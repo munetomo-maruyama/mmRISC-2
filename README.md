@@ -5,7 +5,7 @@
 > **Designed entirely by Claude Code.** Everything in this repository (the specifications, the RTL, the
 > testbenches and the verification with reference models and bug injection, the scripts, and the documents in
 > two languages) was written by [Claude Code](https://claude.com/claude-code), Anthropic's AI coding agent
-> (Claude Sonnet 5, Opus 5 and Opus 5.5; 2026-09-13 to 10-12 up to Rev.01). The author set the goals, chose
+> (Claude Sonnet 5, Opus 5 and Opus 5.5; 2026-09-13 to 10-12 up to Rev.01, to 10-19 up to Rev.02). The author set the goals, chose
 > among the options it proposed, and ran Vivado and the board, passing the results back to it.
 
 A home-made 64-bit RISC-V CPU written in SystemVerilog that runs Linux on a Digilent Arty A7-100T. The
@@ -13,7 +13,7 @@ peripherals come from LiteX. The CPU has:
 
 - RV64GC (IMAFDC) + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz
 - M / S / U modes, PMP
-- Sv39 MMU (ITLB / DTLB, hardware page table walker)
+- Sv39 MMU (ITLB 16 / DTLB 32 entries, hardware page table walker)
 - An 8-stage in-order pipeline
 - Branch prediction (256-entry BTB, gshare, return address stack)
 - FPU (single and double precision). Add / subtract, multiply, multiply-add and conversions in a pipeline that takes one operation every cycle
@@ -24,20 +24,20 @@ peripherals come from LiteX. The CPU has:
 - JTAG / cJTAG on-chip debug (Debug Spec 1.0, 4 hardware triggers)
 - Performance counters (Zihpm, Sscofpmf, Smcntrpmf; usable with Linux's `perf`, down to function names)
 
-## Status (Rev.01, 2026-10-12)
+## Status (Rev.02, the final version, 2026-10-19)
 
 On the Arty A7-100T board (50 MHz), LiteX BIOS → OpenSBI → **Linux 7.2** boots from the ext4 of the SD
 card to the BusyBox shell, and Ethernet (DHCP, TFTP) works. The 120-minute stress test (memory, Ethernet
-and SD card checked at the same time) passes on Rev.01 (round 18 of `LitexSystem/docs/BRINGUP.md`).
+and SD card checked at the same time) passes on Rev.02 (round 19 of `LitexSystem/docs/BRINGUP.md`).
 
 | | |
 |---|---|
-| Performance (board, under Linux) | **2.786 CoreMark/MHz** (built with Zba/Zbb; 2.498 for rv64gc), **1.496 DMIPS/MHz**. +76 % / +82 % from the 1.584 / 0.823 of the first home-made version. Both are `-O2` values; built with the options that make it fastest, **3.025 CoreMark/MHz** and 1.542 DMIPS/MHz (section 17 of `LitexSystem/docs/BENCH.md`). Floating point: FIR 65.6 MFLOPS, matrix multiply 41.2 MFLOPS (assembler, 50 MHz). The L2 cache makes kernel-heavy loads (TFTP, SD reads, `ls -lR`) 1.5 to 1.7 times faster, and the memory work since (store misses not waited for, `cbo.zero`, the bus and more) took another 7 to 11 % off their CPI (sections 18 to 25 of `BENCH.md`) |
+| Performance (board, under Linux) | **2.794 CoreMark/MHz** (built with Zba/Zbb; 2.504 for rv64gc), **1.501 DMIPS/MHz**. +76 % / +82 % from the 1.584 / 0.823 of the first home-made version. Both are `-O2` values; built with the options that make it fastest, **3.034 CoreMark/MHz** and 1.545 DMIPS/MHz (section 28 of `LitexSystem/docs/BENCH.md`). Floating point: FIR 66.6 MFLOPS, matrix multiply 43.6 MFLOPS (assembler, 50 MHz). The L2 cache makes kernel-heavy loads (TFTP, SD reads, `ls -lR`) 1.5 to 1.7 times faster, the memory work since (store misses not waited for, `cbo.zero`, the bus and more) took another 7 to 11 % off their CPI, and the larger TLBs of Rev.02 11 to 20 % off the user-mode loads and 3.5 to 8.7 % off the kernel loads (sections 18 to 28 of `BENCH.md`) |
 | ISA | RV64IMAFDC, Zicsr, Zifencei, Zicntr, Zihpm, **Zba, Zbb, Zbs, Zbc, Zicond**, Zihintpause, Zihintntl, **Zicboz**, M / S / U, Sv39, PMP 8 entries |
 | Privileged extensions | **Sstc** (S-mode timer), **Sscofpmf** (overflow interrupts of the performance counters), **Smcntrpmf**, **Sdtrig** (4 debug triggers), privileged spec 1.12 |
 | Performance counters | `hpmcounter3` to `6`, 29 events (cache, L2 and TLB misses, branch mispredictions, reasons for stalls, what the memory waits are made of, I$ prefetches, the cycles of page table walks). Usable with Linux's `perf stat` / `perf record`, and `perf report` by function |
 | Debug | JTAG / cJTAG (Debug Spec 1.0). Halt / step / registers / memory, software and hardware breakpoints and watchpoints with OpenOCD / gdb (they can be put on a running Linux kernel too) |
-| FPGA | WNS +0.664 ns at 50 MHz, LUT 46,928 / 63,400 (74.0 %), slices 86.2 %, block RAM 108.5 / 135 tiles (L2 included) |
+| FPGA | WNS +0.140 ns at 50 MHz, LUT 50,301 / 63,400 (79.3 %), slices 92.9 %, block RAM 108.5 / 135 tiles (L2 included) |
 
 **The core**
 
@@ -58,17 +58,19 @@ and SD card checked at the same time) passes on Rev.01 (round 18 of `LitexSystem
 
 The story of the bring-up is in [`LitexSystem/docs/BRINGUP.md`](LitexSystem/docs/BRINGUP.md), the
 performance work and the breakdown on the board in
-[`LitexSystem/docs/BENCH.md`](LitexSystem/docs/BENCH.md), the next themes in
-[`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP.md).
+[`LitexSystem/docs/BENCH.md`](LitexSystem/docs/BENCH.md), the themes done, those tried and not taken, and those
+left for the future in [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP.md).
 
 ## Revisions and branches
 
 | Revision | Date | Contents |
 |---|---|---|
-| **Rev.01** (tag `Rev.01`) | 2026-10-12 | The version this README describes: RV64GC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz, L1 and L2 caches, Linux 7.2 on the Arty A7-100T at 50 MHz (WNS +0.664 ns), the 120-minute stress test PASS |
+| **Rev.02** (tag `Rev.02`) | 2026-10-19 | The version this README describes, and the last: Rev.01 plus the ITLB of 16 and the DTLB of 32 entries with the PMU events of the page table walks (decisions 79 to 81) and decision 82 (CoreMark 3.034 /MHz). WNS +0.140 ns, the 120-minute stress test PASS |
+| **Rev.01** (tag `Rev.01`) | 2026-10-12 | The first release: RV64GC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz, L1 and L2 caches, Linux 7.2 on the Arty A7-100T at 50 MHz (WNS +0.664 ns), the 120-minute stress test PASS |
 
-`main` holds the latest revision for readers outside and stays there until the next major revision. Development
-goes on in the `dev` branch (next themes: [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP.md)).
+`main` holds the latest revision for readers outside. **mmRISC-2 closes with Rev.02**: the themes left had
+estimated gains of 1 to 2 % or less, and two of them (W1, W2) were checked on the board and in simulation and not
+taken ([`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP.md), sections 3 and 4).
 
 ## Documents
 
@@ -76,7 +78,7 @@ Every document has a Japanese version next to it (`XXXX.md` is English, `XXXX_J.
 
 | Document | Contents |
 |---|---|
-| [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md) | CPU core (instruction set, pipeline, MMU, CSRs, debug, decisions 1 to 81) |
+| [`RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md`](RTL/CPU/CPU_CORE/CPU_CORE_SPEC.md) | CPU core (instruction set, pipeline, MMU, CSRs, debug, decisions 1 to 82) |
 | [`RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md`](RTL/CPU/CPU_CACHE/CPU_CACHE_SPEC.md) | L1 caches (parameters, interfaces, behavior, verification results) |
 | [`RTL/CPU/CPU_L2/CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md) | L2 cache (design, behavior, resources, verification, effect on the board) |
 | [`RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`](RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md) | Debug logic (JTAG/cJTAG DTM, DM, authentication) |
@@ -86,7 +88,7 @@ Every document has a Japanese version next to it (`XXXX.md` is English, `XXXX_J.
 | [`LitexSystem/docs/BENCH.md`](LitexSystem/docs/BENCH.md) | Performance measurements (simulation and board, where cycles go as seen by the PMU, version by version) |
 | [`LitexSystem/docs/TIMING.md`](LitexSystem/docs/TIMING.md) | Record of timing closure at 50 MHz |
 | [`LitexSystem/docs/JTAG.md`](LitexSystem/docs/JTAG.md) | JTAG / cJTAG debugging (pins, switches, OpenOCD) |
-| [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP.md) | Next design themes |
+| [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP.md) | Design themes: done, tried and not taken, left for the future |
 | [`LitexSystem/software/boot/README.md`](LitexSystem/software/boot/README.md) | Making the SD card, Ethernet, TFTP netboot, stress test, distributed binaries |
 | [`LitexSystem/software/bench/README.md`](LitexSystem/software/bench/README.md) | Benchmarks on the board and `perf` |
 | [`Doc/20261015_WhitePaper_mmRISC-2.pdf`](Doc/20261015_WhitePaper_mmRISC-2.pdf) | White paper (A4): how Claude Code designed mmRISC-2, the specification, the history, the rework and verification, and an evaluation of AI-driven design. Japanese version: [`Doc/20261015_WhitePaper_mmRISC-2_J.pdf`](Doc/20261015_WhitePaper_mmRISC-2_J.pdf). Source in `Doc/src/` |
@@ -179,7 +181,7 @@ official tests, down to confirming that the tests find deliberately broken RTL (
 | `cd SIM/SIM_CORE && make riscv-tests` | The official riscv-tests (rv64ui / um / ua / uc / uf / ud / uzba / uzbb / uzbs / uzbc / uzicond / mi / si) | 178 PASS, 4 known failures (tests that need unimplemented features) |
 | `cd SIM/SIM_CORE && make riscv-tests-v` | The same tests in the virtual memory (Sv39) environment | 154 PASS, 4 known failures |
 | `cd SIM/SIM_CORE && make mdu / clint / plic` | Multiply / divide (reference model, 200,000 operations), CLINT (4 harts), PLIC | PASS |
-| `cd SIM/SIM_CORE && ./bug_inject.sh` | 339 bug injections (with and without back pressure) | All detected |
+| `cd SIM/SIM_CORE && ./bug_inject.sh` | 340 bug injections (with and without back pressure) | All detected |
 | `cd SIM/SIM_SYS && make` | Core + real L1 / L2 caches + AXI + DMA port (27 home-made tests, 4 programs for DMA, PMU and others). `PARAMS=-GL2_SIZE=0` for no L2 | All PASS (with / without L2) |
 | `cd SIM/SIM_SYS && make riscv-tests` | riscv-tests through the real caches | 133 PASS, 4 known failures |
 | `cd SIM/SIM_SYS && ./bug_inject.sh` | 26 bug injections (including the cycle bounds of the floating point kernels, `bench/fploop`, the memory wait events of M0 and the walk events of E3a) | All detected |
@@ -243,9 +245,9 @@ The bitstream and reports go to `output/`. The OpenOCD configuration is in `open
 | CPU core | RV64GC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz, M / S / U, 8-stage pipeline, branch prediction (gshare) |
 | MMU (Sv39) and PMP | Done |
 | Linux on the LiteX SoC | On the board from the SD card's ext4 to BusyBox. Ethernet, TFTP netboot. 120-minute stress test PASS |
-| Performance | 2.786 CoreMark/MHz, 1.496 DMIPS/MHz (board, under Linux, `-O2`; 3.025 / 1.542 with the most optimization). The breakdown on the board can be measured with the performance counters and `perf` |
+| Performance | 2.794 CoreMark/MHz, 1.501 DMIPS/MHz (board, under Linux, `-O2`; 3.034 / 1.545 with the most optimization). The breakdown on the board can be measured with the performance counters and `perf` |
 | L2 cache | Done (256 KB, [`CPU_L2_SPEC.md`](RTL/CPU/CPU_L2/CPU_L2_SPEC.md)). Kernel loads 1.2 to 1.7 times faster on the board |
-| Next themes | On `dev` the TLBs are done (ITLB 16 / DTLB 32: `awk` −20 %, `gunzip` −11 %, the kernel loads −3 to −9 %); next, whole-line writes without the read and posted uncached stores (the kernel's copies and drivers) ([`ROADMAP.md`](LitexSystem/docs/ROADMAP.md)) |
+| Closed | Rev.02 is the final version. Themes tried and not taken, and those left for the future: [`ROADMAP.md`](LitexSystem/docs/ROADMAP.md) |
 
 ## License
 

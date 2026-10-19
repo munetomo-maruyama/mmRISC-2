@@ -33,7 +33,7 @@
 | `make plic` | `CPU_PLIC` のレジスタポートを直接叩く(`tb_PLIC.sv`) |
 | `make riscv-tests` | 公式 riscv-tests(rv64ui / um / ua / uc / uf / ud / uzba / uzbb / uzbs / uzbc / uzicond / mi / si)。`RVTESTS` でリポジトリの場所を指定 |
 | `make riscv-tests-v` | 同じ試験を仮想記憶の環境(`-v`、Sv39 でページを割り当てながら走る)で |
-| `make bugs` / `./bug_inject.sh` | バグ注入 339 種(背圧あり/なしの両方で判定。M211〜M231 はデバッグモード、M298〜M314 はトリガ、M320〜M340 は性能カウンタ、M341〜M358 はパイプライン化した FPU の接続とレジスタファイル、M361〜M370 と M384 は T2 / T4 / T6 / T7(決定 73〜75、78)、M371〜M376 は Zicboz、M377〜M383 は Zbs / Zbc、M240 以降は EX からの早出し。`CORE_MDU` の変異は `tb_MDU` でも判定) |
+| `make bugs` / `./bug_inject.sh` | バグ注入 340 種(背圧あり/なしの両方で判定。M211〜M231 はデバッグモード、M298〜M314 はトリガ、M320〜M340 は性能カウンタ、M341〜M358 はパイプライン化した FPU の接続とレジスタファイル、M361〜M370 と M384 は T2 / T4 / T6 / T7(決定 73〜75、78)、M371〜M376 は Zicboz、M377〜M383 は Zbs / Zbc、M385 は決定 82、M240 以降は EX からの早出し。`CORE_MDU` の変異は `tb_MDU` でも判定) |
 | `make lint` | Verilator lint |
 
 プラスアーグ:
@@ -80,7 +80,7 @@ x10〜x30 だけを使うこと。`TEST_INIT` が既定のトラップハンド�
 | `t11_fp` | `mstatus.FS`、NaN-boxing、`fcsr`/丸めモード、FP ストアのデータ源、FPU と他ユニットのハザード |
 | `t12_priv` | S / U モード、委譲、SRET。M → S → U と戻る経路、割り込みの委譲、`mstatus` の TVM / TW / TSR(公式の rv64si は U モードまで行かない) |
 | `t13_pmp` | PMP が実際にアクセスを止めること: 番号の小さいエントリが優先、M はロックされていないエントリを素通りしロックされたものには従う、R / W / X の区別。8 バイトの NAPOT 領域(`pmpaddr` の横に持つマスク、決定 74) |
-| `t14_mmu` | Sv39: 手で作ったページテーブルで 3 段の変換、権限ビット、`SFENCE.VMA`。探索の後でページフォールトになる AMO とロード(T2)、ストアとして検査される `cbo.zero`(W と D、ページフォールト、`menvcfg.CBZE`) |
+| `t14_mmu` | Sv39: 手で作ったページテーブルで 3 段の変換、権限ビット、`SFENCE.VMA`。探索の後でページフォールトになる AMO とロード(T2)、ストアとして検査される `cbo.zero`(W と D、ページフォールト、`menvcfg.CBZE`)。マップされていないページで終わるリストの終わりで外れる late branch と、その後ろのロードの探索を MR が待たないこと(65〜67、決定 82: PMU のイベント 29 と 6) |
 | `t15_plic` | PLIC をプログラムから: 線を上げる → 外部割り込み → ハンドラで claim / complete → 戻る |
 | `t16_bench` | 計測用(前端に効くループ 3 種)。バグ注入では予測器が働いていることを BENCH_LIMIT のサイクル数で確かめる |
 | `t17_btb` | 分岐予測の誤フェッチ: 予測で捨てた命令をフェッチ部が取り戻すこと |

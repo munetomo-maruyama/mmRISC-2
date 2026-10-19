@@ -2,7 +2,7 @@
 
 [日本語](BRINGUP_J.md)
 
-Last updated: 2026-10-12 (round 18: Rev.01)
+Last updated: 2026-10-19 (round 19: Rev.02)
 
 ## What has been confirmed so far
 
@@ -19,8 +19,8 @@ board yet** are different things.
 | **The LiteX BIOS itself (with interrupts)** | **Confirmed**. `SIM/SIM_BIOS` (2026-09-24, added after the board stopped) |
 | Bitstream | **Works**. Timing closes at 50 MHz (`TIMING.md`) |
 | Does the BIOS come up on the board | **Confirmed** (2026-09-24) |
-| Does Linux boot on the board | **Confirmed** (2026-09-25, WNS 0.013 ns; with Ethernet 2026-09-26, WNS 0.131 ns, up to DHCP, ping and TFTP netboot; **Rev.01** 2026-10-12, WNS +0.664 ns). From the SD card's ext4 to the BusyBox prompt. `cat /proc/cpuinfo` and `uname -a` work. The WARNING of `kernel/bpf/memalloc.c:186` at the first boot was two D$ bugs, fixed in round 7 |
-| Long stress test (`stress.sh`, 120 minutes) | **PASS** four times: rounds 14, 16, 17 and 18 (Rev.01) |
+| Does Linux boot on the board | **Confirmed** (2026-09-25, WNS 0.013 ns; with Ethernet 2026-09-26, WNS 0.131 ns, up to DHCP, ping and TFTP netboot; **Rev.01** 2026-10-12, WNS +0.664 ns; **Rev.02** 2026-10-19, WNS +0.140 ns). From the SD card's ext4 to the BusyBox prompt. `cat /proc/cpuinfo` and `uname -a` work. The WARNING of `kernel/bpf/memalloc.c:186` at the first boot was two D$ bugs, fixed in round 7 |
+| Long stress test (`stress.sh`, 120 minutes) | **PASS** five times: rounds 14, 16, 17, 18 (Rev.01) and 19 (Rev.02) |
 
 ## Why uncached fetch was dealt with first
 
@@ -621,4 +621,26 @@ The load average stayed around 3 and nothing went NG. In the same 120 minutes it
 (77 / 37 / 503): mem +5 %, net +11 %, sd +3 %, in line with what `workload.sh` showed for the kernel loads
 (sections 18 to 25 of `BENCH.md`). The new write paths of the D$ (stores joining an outstanding fill, zero fills,
 DMA writes through lines being filled) were all exercised by the DMA of the SD card and Ethernet against the CPU
+for 2 hours without a mismatch.
+
+## Round 19: long stress test of Rev.02 (2026-10-19)
+
+The bitstream of section 47 of `TIMING.md` (WNS +0.140 ns), the final version **Rev.02**. Since round 18: the PMU
+events of the page table walks (27 to 29), the ITLB of 16 and the DTLB of 32 entries (E3, decisions 79 to 81) and
+decision 82 (a late branch that guessed wrong also clears MR's wait for the DTLB). The same `fw_jump.bin` and
+SD card as round 18.
+
+```
+=== stress result (iterations, ok, ng) ===
+mem 84 84 0
+net 45 45 0
+sd  502 502 0
+=== new kernel messages that look like trouble ===
+(none)
+=== PASS ===
+```
+
+The load average stayed around 3 and nothing went NG. Against round 18 (81 / 41 / 517): mem +4 %, net +10 %, sd
+−3 % (the SD card's own speed sets `sd`; the CPU's part of it is small). The larger TLBs, with more entries to
+invalidate on every `SFENCE.VMA` and more walks replaced by hits, ran under the DMA of the SD card and Ethernet
 for 2 hours without a mismatch.

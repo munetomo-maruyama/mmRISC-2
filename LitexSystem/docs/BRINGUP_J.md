@@ -2,7 +2,7 @@
 
 [English](BRINGUP.md)
 
-最終更新: 2026-10-12(18 回目: Rev.01)
+最終更新: 2026-10-19(19 回目: Rev.02)
 
 ## 今どこまで確認できているか
 
@@ -19,8 +19,8 @@
 | **LiteX BIOS そのもの(割り込み込み)** | **確認済**。`SIM/SIM_BIOS`(2026-09-24、実機で止まったのを受けて追加) |
 | ビットストリーム | **通る**。50MHz でタイミング収束(`TIMING.md`) |
 | 実機で BIOS が出るか | **確認済**(2026-09-24) |
-| 実機で Linux が起動するか | **確認済**(2026-09-25、WNS 0.013ns。Ethernet 入りは 2026-09-26、WNS 0.131ns、DHCP・ping・TFTP ネットブートまで。**Rev.01** は 2026-10-12、WNS +0.664 ns)。SD カードの ext4 から BusyBox のプロンプトまで。`cat /proc/cpuinfo` と `uname -a` も動く。最初の起動で出た `kernel/bpf/memalloc.c:186` の WARNING は D$ の 2 つの不具合で、7 回目で直した |
-| 長時間の負荷試験(`stress.sh`、120 分) | **PASS** 4 回: 14・16・17・18 回目(Rev.01) |
+| 実機で Linux が起動するか | **確認済**(2026-09-25、WNS 0.013ns。Ethernet 入りは 2026-09-26、WNS 0.131ns、DHCP・ping・TFTP ネットブートまで。**Rev.01** は 2026-10-12、WNS +0.664 ns。**Rev.02** は 2026-10-19、WNS +0.140 ns)。SD カードの ext4 から BusyBox のプロンプトまで。`cat /proc/cpuinfo` と `uname -a` も動く。最初の起動で出た `kernel/bpf/memalloc.c:186` の WARNING は D$ の 2 つの不具合で、7 回目で直した |
+| 長時間の負荷試験(`stress.sh`、120 分) | **PASS** 5 回: 14・16・17・18 回目(Rev.01)・19 回目(Rev.02) |
 
 ## キャッシュ外フェッチを先に潰した理由
 
@@ -647,3 +647,23 @@ sd  517 517 0
 net +11 %、sd +3 % 多く、`workload.sh` で見たカーネルの負荷の改善(`BENCH.md` 18〜25 章)と合っている。D$ の
 新しい書き込みの経路(読み込み中のラインに合流するストア、ゼロの fill、読み込み中のラインを通る DMA の書き込み)
 は、SD カードと Ethernet の DMA と CPU とで 2 時間使われ、食い違いは出ていない。
+
+## 19 回目: Rev.02 の長時間負荷試験(2026-10-19)
+
+`TIMING.md` 47 章のビットストリーム(WNS +0.140 ns)、最終版 **Rev.02**。18 回目からの変更: ページテーブル探索の
+PMU イベント(27〜29)、ITLB 16・DTLB 32 エントリ(E3、決定 79〜81)、決定 82(外れた late branch は MR の DTLB
+待ちも消す)。`fw_jump.bin` と SD カードは 18 回目と同じ。
+
+```
+=== stress result (iterations, ok, ng) ===
+mem 84 84 0
+net 45 45 0
+sd  502 502 0
+=== new kernel messages that look like trouble ===
+(none)
+=== PASS ===
+```
+
+ロードアベレージは 3 前後のままで、NG は無し。18 回目(81 / 41 / 517)と比べて mem +4 %、net +10 %、sd −3 %
+(`sd` は SD カードそのものの速さで決まり、CPU の分は小さい)。大きくなった TLB(`SFENCE.VMA` のたびに消す
+エントリが増え、探索の多くがヒットに置き換わる)は、SD カードと Ethernet の DMA の下で 2 時間、食い違いなく動いた。

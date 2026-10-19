@@ -1805,3 +1805,24 @@ Decision 81 of `CPU_CORE_SPEC.md`: the ITLB from 8 to 16 entries, the DTLB from 
 - **Met, with little to spare**. If a later theme needs the margin, the DTLB's permission check can move a
   cycle later: register the one-hot hit and the entry's flags at the end of EX and check them in MR (the fault
   is raised in MR since decision 75 anyway). This is T8 of `ROADMAP.md`; DTLB 16 (+0.514 ns) is the fallback.
+
+## 47. Decision 82, the final version: +0.140 ns (2026-10-19)
+
+W1 (write-validate, `ROADMAP.md`) was tried and left out, so the RTL went back to that of section 46, synthesized
+again: the same +0.065 ns. Then decision 82 of `CPU_CORE_SPEC.md` (a late branch that guessed wrong also clears
+MR's wait for the DTLB; two flip-flops get one more clear).
+
+| | Section 46 | This version |
+|---|---|---|
+| WNS | +0.065 ns | **+0.140 ns** |
+| WHS | +0.024 ns | +0.018 ns |
+| LUT | 49,700 (78.4 %) | 50,301 (79.3 %) |
+| FF | 29,485 (23.3 %) | 29,473 (23.2 %) |
+| Slices | 89.6 % (14,204) | 92.9 % (14,720) |
+
+- The change itself is two flip-flops; LUT +601 and slices +516 are a different packing of the same design
+  (about 1,130 slices are left).
+- **The worst paths are still the DTLB's**: the load's value forwarded from MA (`ma_size`) through EX's address
+  add and the compare of the 32 entries into `mr_paddr` (+0.140 ns, 27 levels) and `mr_tr_fault` (+0.354 ns),
+  then the load into the IFU's prefetch queue and the uncached address (+0.75 to +0.85 ns).
+- This is the bitstream of **Rev.02** (round 19 of `BRINGUP.md`, sections 28 of `BENCH.md`).

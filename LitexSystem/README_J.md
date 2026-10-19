@@ -21,11 +21,11 @@ Linux を起動するための一式。
 | 性能 | **2.785 CoreMark/MHz**(Zba/Zbb で作ったもの。rv64gc なら 2.499)、**1.501 DMIPS/MHz**(`-O2`)。いちばん速くなるオプションで 3.025 / 1.542(`docs/BENCH.md` 17 章)。Linux の負荷の関数ごとの内訳: `docs/BENCH.md` 24・25 章 |
 | ISA(デバイスツリーの `riscv,isa`) | `rv64imafdc_zicboz_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zba_zbb_zbc_zbs_smcntrpmf_sscofpmf_sstc`、デバッグのトリガ 4 本(Sdtrig) |
 | 性能カウンタ | `hpmcounter3`〜`6`、イベント 29 種(20〜24 はメモリの待ち、25・26 は I$ の先読み、27〜29 はページテーブルの探索。`software/bench/workload.sh`)。Linux の `perf stat` / `perf record`、関数ごとの `perf report` で使える(`software/bench/perf.sh`) |
-| タイミング | 50 MHz で WNS +0.065 ns(MET、`docs/TIMING.md` 46 章。Rev.01 は +0.664 ns、44 章) |
+| タイミング | 50 MHz で WNS +0.140 ns(MET、`docs/TIMING.md` 47 章、Rev.02。Rev.01 は +0.664 ns、44 章) |
 | 資源 | LUT 46,928 / 63,400(74.0 %)、スライス 86.2 %、ブロック RAM 108.5 / 135 タイル(CPU の L2 を含む) |
 
 途中で見つかった問題と修正は `docs/BRINGUP.md`、タイミングは `docs/TIMING.md`、性能は
-`docs/BENCH.md`、次のテーマは `docs/ROADMAP.md`。JTAG / cJTAG のデバッグポートを PMOD JA に
+`docs/BENCH.md`、設計テーマ(済み・取り込まず・この先)は `docs/ROADMAP.md`。JTAG / cJTAG のデバッグポートを PMOD JA に
 出してある。OpenOCD と gdb でハードウェアブレークポイント・ウォッチポイントも使える
 (動いている Linux カーネルで確認済み。`docs/JTAG.md`。ピン配置は `FPGA/ARTY_A7_100T` と同じ)。
 
@@ -82,7 +82,7 @@ LitexSystem/
 │   ├── TIMING.md        タイミング収束の記録
 │   ├── JTAG.md          JTAG / cJTAG デバッグ(ピン、スイッチ、OpenOCD)
 │   ├── BENCH.md         性能測定(シミュレーションと実機、どこでサイクルを失うか)
-│   ├── ROADMAP.md       次の設計テーマ
+│   ├── ROADMAP.md       設計テーマ(最終)
 │   └── TFTP_SERVER.md   Parallels 上の Ubuntu を TFTP サーバにする手順
 └── build/               生成物(git 管理外)
 ```

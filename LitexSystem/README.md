@@ -20,11 +20,11 @@ BusyBox shell, and Ethernet works (DHCP, ping, TFTP netboot from the BIOS). The 
 | Performance | **2.785 CoreMark/MHz** (built with Zba/Zbb; 2.499 for rv64gc), **1.501 DMIPS/MHz** (`-O2`); 3.025 / 1.542 with the options that make it fastest (`docs/BENCH.md` 17). Linux loads by function: `docs/BENCH.md` 24 and 25 |
 | ISA (`riscv,isa` of the device tree) | `rv64imafdc_zicboz_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zba_zbb_zbc_zbs_smcntrpmf_sscofpmf_sstc`, 4 debug triggers (Sdtrig) |
 | Performance counters | `hpmcounter3` to `6`, 29 events (20 to 24 for the memory waits, 25 and 26 for the I$'s prefetch, 27 to 29 for the page table walks; `software/bench/workload.sh`). Usable with Linux's `perf stat` / `perf record`, `perf report` by function (`software/bench/perf.sh`) |
-| Timing | WNS +0.065 ns at 50 MHz (MET, `docs/TIMING.md` 46; Rev.01 +0.664 ns, 44) |
+| Timing | WNS +0.140 ns at 50 MHz (MET, `docs/TIMING.md` 47, Rev.02; Rev.01 +0.664 ns, 44) |
 | Resources | LUT 46,928 / 63,400 (74.0 %), slices 86.2 %, block RAM 108.5 / 135 tiles (the CPU's L2 included) |
 
 The problems found on the way and their fixes are in `docs/BRINGUP.md`, timing in `docs/TIMING.md`,
-performance in `docs/BENCH.md`, the next themes in `docs/ROADMAP.md`. The JTAG / cJTAG debug port is
+performance in `docs/BENCH.md`, the design themes (done, not taken, left for the future) in `docs/ROADMAP.md`. The JTAG / cJTAG debug port is
 brought out on PMOD JA. Hardware breakpoints and watchpoints work with OpenOCD and gdb (checked on a
 running Linux kernel; `docs/JTAG.md`; the pinout is the same as `FPGA/ARTY_A7_100T`).
 
@@ -81,7 +81,7 @@ LitexSystem/
 │   ├── TIMING.md        record of timing closure
 │   ├── JTAG.md          JTAG / cJTAG debugging (pins, switches, OpenOCD)
 │   ├── BENCH.md         performance measurements (simulation and board, where cycles are lost)
-│   ├── ROADMAP.md       next design themes
+│   ├── ROADMAP.md       design themes (final)
 │   └── TFTP_SERVER.md   making Ubuntu on Parallels a TFTP server
 └── build/               generated files (not under git)
 ```
