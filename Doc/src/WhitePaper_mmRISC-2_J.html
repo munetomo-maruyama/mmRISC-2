@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>mmRISC-2 White Paper</title>
 <!--
-  WhitePaper_mmRISC-2_J.html : the source of Doc/20261015_WhitePaper_mmRISC-2_J.pdf (Japanese)
+  WhitePaper_mmRISC-2_J.html : the source of Doc/20261020_WhitePaper_mmRISC-2_J.pdf (Japanese)
   ./make_pdf.sh prints it to PDF with headless Chrome (A4 portrait).
   The figures in figs/ are the SVGs of the talk at RISC-V Day Tokyo 2026 Autumn.
 -->
@@ -82,13 +82,13 @@
   <div class="rule"></div>
   <div class="meta">
     圓山 宗智 (本名：山崎 尊永)<br>
-    2026 年 10 月 15 日(対象: mmRISC-2 Rev.01)<br>
+    2026 年 10 月 20 日(対象: mmRISC-2 Rev.02、最終版)<br>
     <span class="muted">https://github.com/munetomo-maruyama/mmRISC-2</span>
   </div>
   <div class="abstract box">
     <p style="margin-bottom:1.5mm"><strong>要旨</strong></p>
     <p>本書は、Anthropic の AI コーディングエージェント <strong>Claude Code</strong> に 64-bit RISC-V CPU(RV64GC)を設計させ、FPGA ボード Digilent Arty A7-100T の上で Linux を起動させた <strong>mmRISC-2</strong> プロジェクトの記録である。仕様書、RTL、テストベンチと検証、スクリプト、日英の文書はすべて Claude Code が書き、筆者は目標の設定、提案からの選択、Vivado と実機の操作を受け持った。</p>
-    <p>着手から <strong>12 日</strong>で自作 CPU 上の Linux が SD カードから BusyBox まで起動し、<strong>30 日</strong>で Rev.01(L2 キャッシュ、パイプライン化した FPU、Zba / Zbb / Zbs / Zbc / Zicond / Zicboz、CoreMark 3.025 /MHz、120 分の負荷試験 PASS)に至った。本書では、進め方、仕様、開発の経緯、手戻りと検証の改善、AI による自動設計の利点と課題、そして人の役割をまとめる。</p>
+    <p>着手から <strong>12 日</strong>で自作 CPU 上の Linux が SD カードから BusyBox まで起動し、<strong>30 日</strong>で Rev.01(L2 キャッシュ、パイプライン化した FPU、Zba / Zbb / Zbs / Zbc / Zicond / Zicboz、CoreMark 3.025 /MHz、120 分の負荷試験 PASS)に至った。着手から <strong>38 日</strong>の最終版 <strong>Rev.02</strong> では、TLB を大きくし(Linux の負荷で最大 20 % 速く)、CoreMark 3.034 /MHz とし、ソフトウェア開発環境を整えた: <strong>統合開発環境 Eclipse によるベアメタルの C のプログラム開発</strong>(JTAG / cJTAG でボード上をデバッグ)と、<strong>ボード上で起動する Debian 13</strong>(mmRISC-2 そのものの上で gcc がプログラムをコンパイルする)である。本書では、進め方、仕様、開発の経緯、手戻りと検証の改善、AI による自動設計の利点と課題、そして人の役割をまとめる。</p>
   </div>
 </section>
 
@@ -97,7 +97,7 @@
 <div class="toc">
   <div>1. はじめに</div>
   <div>2. 進め方</div>
-  <div>3. 仕様(Rev.01)</div>
+  <div>3. 仕様(Rev.02)</div>
   <div>4. 開発の経緯</div>
   <div>5. 手戻りと検証</div>
   <div>6. Claude Code による自動設計の評価</div>
@@ -106,14 +106,14 @@
   <div>付録 B. 参考資料</div>
 </div>
 
-<h3>数字で見る mmRISC-2 Rev.01</h3>
+<h3>数字で見る mmRISC-2 Rev.02</h3>
 <div class="nums">
   <div><b>12 日</b><span>着手から自作 CPU で Linux 起動<br>(2026-09-13 → 09-25)</span></div>
-  <div><b>30 日</b><span>Rev.01 まで、189 コミット<br>(→ 2026-10-12)</span></div>
-  <div><b>22,084 行</b><span>RTL(SystemVerilog、46 ファイル)<br>仕様・検証・文書も Claude Code</span></div>
-  <div><b>Linux 7.2</b><span>SD カードの ext4 から BusyBox まで<br>Ethernet、perf も動作</span></div>
-  <div><b>3.025 /MHz</b><span>CoreMark(最大最適化、Zba/Zbb)<br>-O2 で 2.785、DMIPS 1.542</span></div>
-  <div><b>550 種</b><span>バグ注入をすべて検出<br>(テストが壊れた RTL を見つけるか)</span></div>
+  <div><b>38 日</b><span>最終版 Rev.02 まで、212 コミット<br>(Rev.01 は 30 日。→ 2026-10-20)</span></div>
+  <div><b>22,100 行</b><span>RTL(SystemVerilog、46 ファイル)<br>仕様・検証・文書も Claude Code</span></div>
+  <div><b>Debian 13</b><span>SD カードから Linux 7.2、BusyBox か Debian<br>ボードの上で gcc がコンパイル</span></div>
+  <div><b>3.034 /MHz</b><span>CoreMark(最大最適化、Zba/Zbb)<br>-O2 で 2.794、DMIPS 1.545</span></div>
+  <div><b>554 種</b><span>バグ注入をすべて検出<br>(テストが壊れた RTL を見つけるか)</span></div>
 </div>
 
 <!-- ======================================================================= 1 -->
@@ -152,14 +152,15 @@
 <p class="caption-t">表 2 筆者と Claude Code の分担</p>
 <table>
   <tr><th style="width:50%">筆者</th><th>Claude Code</th></tr>
-  <tr><td>目標・制約・優先順位を決める</td><td>仕様書を書き、設計判断を記録する(78 件)</td></tr>
-  <tr><td>案を出させて、どれを採るか決める</td><td>RTL をすべて書く(SystemVerilog 22,084 行)</td></tr>
+  <tr><td>目標・制約・優先順位を決める</td><td>仕様書を書き、設計判断を記録する(82 件)</td></tr>
+  <tr><td>案を出させて、どれを採るか決める</td><td>RTL をすべて書く(SystemVerilog 22,100 行)</td></tr>
   <tr><td>仕様書の PDF を用意する(Debug Spec、特権仕様ほか)</td><td>テストベンチ・参照モデル・バグ注入を作って回す</td></tr>
   <tr><td>Vivado で合成し、ボードに書き込む</td><td>LiteX への組み込み、OpenSBI、デバイスツリー、Linux まわりのビルド</td></tr>
   <tr><td>SD カードを作り、実機を動かし、ログと数字を渡す</td><td>タイミングレポートと実機の数字を読み、原因と次の手を出す</td></tr>
+  <tr><td>ソフトウェア開発環境(Eclipse、Debian)を実機で試す</td><td>ベアメタルの起動キット、Eclipse のプロジェクト、Debian のルートファイルシステムを作り、再現の手順を書く</td></tr>
   <tr><td>結果を見て、おかしいところを指摘する</td><td>文書(日英)を書き、GitHub へ自律的にコミット・push する</td></tr>
 </table>
-<p>RTL・テストベンチ・文書は Claude Code が書いた。筆者の入力は、約 350 回の日本語の指示と実機の結果である。</p>
+<p>RTL・テストベンチ・文書は Claude Code が書いた。筆者の入力は、約 400 回の日本語の指示と実機の結果である。</p>
 
 <h3>2.3 開発環境</h3>
 <figure><img src="figs/fig_env_wp.svg" alt=""><figcaption>図 1 開発環境とツール、使ったモデルの変遷</figcaption></figure>
@@ -173,8 +174,8 @@
 <div class="two">
 <div>
 <ul>
-  <li><strong>仕様書を先に書き、実装に合わせて直す</strong>(CPU_CORE_SPEC の決定事項 78 件、理由つき)。</li>
-  <li><strong>実機の記録を章ごとに残す</strong>(BRINGUP 18 回、TIMING 44 章、BENCH 25 章)。</li>
+  <li><strong>仕様書を先に書き、実装に合わせて直す</strong>(CPU_CORE_SPEC の決定事項 82 件、理由つき)。</li>
+  <li><strong>実機の記録を章ごとに残す</strong>(BRINGUP 20 回、TIMING 47 章、BENCH 28 章)。</li>
   <li><strong>ROADMAP でテーマを管理</strong>し、済んだら印を付ける。</li>
   <li><strong>文書は日英 2 か国語</strong>(XXXX.md / XXXX_J.md)。</li>
   <li><strong>教訓は Claude Code のメモに残す</strong>(例: 共有フォルダでは make の時刻判定が効かない、バグ注入のログは全行を見る)。</li>
@@ -184,17 +185,17 @@
 <div>
 <table style="margin-top:0">
   <tr><th>規模</th><th>数</th></tr>
-  <tr><td>期間</td><td>2026-09-13〜10-12(30 日)</td></tr>
-  <tr><td>コミット</td><td>189(git は 09-19 から)</td></tr>
-  <tr><td>筆者の指示</td><td>約 350 回</td></tr>
-  <tr><td>RTL</td><td>46 ファイル、22,084 行</td></tr>
-  <tr><td>検証</td><td>テスト・スクリプト 28,926 行</td></tr>
-  <tr><td>文書</td><td>英 9,777 行 + 日 9,505 行</td></tr>
-  <tr><td>設計判断</td><td>78 件</td></tr>
-  <tr><td>バグ注入</td><td>550 種、すべて検出</td></tr>
-  <tr><td>API 呼び出し</td><td>約 6,400 回</td></tr>
-  <tr><td>入力トークン</td><td>約 29 億(98 % はキャッシュ)</td></tr>
-  <tr><td>出力トークン</td><td>約 760 万(思考などを含む)</td></tr>
+  <tr><td>期間</td><td>2026-09-13〜10-20(38 日)</td></tr>
+  <tr><td>コミット</td><td>212(git は 09-19 から)</td></tr>
+  <tr><td>筆者の指示</td><td>約 400 回</td></tr>
+  <tr><td>RTL</td><td>46 ファイル、22,100 行</td></tr>
+  <tr><td>検証</td><td>テスト・スクリプト 約 29,500 行</td></tr>
+  <tr><td>文書</td><td>英 10,600 行 + 日 10,300 行</td></tr>
+  <tr><td>設計判断</td><td>82 件</td></tr>
+  <tr><td>バグ注入</td><td>554 種、すべて検出</td></tr>
+  <tr><td>API 呼び出し</td><td>約 7,100 回</td></tr>
+  <tr><td>入力トークン</td><td>約 33 億(98 % はキャッシュ)</td></tr>
+  <tr><td>出力トークン</td><td>約 830 万(思考などを含む)</td></tr>
   <tr><td>契約プラン</td><td>Claude Pro</td></tr>
 </table>
 </div>
@@ -202,7 +203,7 @@
 <p class="small muted">トークン量は Claude Code の会話記録から集計した概算である。最初の相談のセッションと会話の要約の分は含まない。入力の大半は、呼び出しのたびに会話の履歴をキャッシュから読み直す分である。</p>
 
 <!-- ======================================================================= 3 -->
-<h2>3. 仕様(Rev.01)</h2>
+<h2>3. 仕様(Rev.02)</h2>
 <h3>3.1 CPU コア</h3>
 <figure><img src="figs/fig_core.svg" alt=""><figcaption>図 3 CPU コアのブロック図</figcaption></figure>
 <p class="caption-t">表 3 CPU の主な仕様</p>
@@ -213,18 +214,47 @@
   <tr><td>分岐予測</td><td>BTB 256、gshare(PHT 8192)、リターンアドレススタック 8、ロードの値による分岐は MR で解決</td></tr>
   <tr><td>乗除算</td><td>乗算 1〜2 サイクル、除算は早期終了、キャリーなし乗算 5 サイクル</td></tr>
   <tr><td>浮動小数点</td><td>F / D、9 段のパイプラインで毎サイクル 1 演算(FMA)、除算・平方根は反復</td></tr>
-  <tr><td>MMU・保護</td><td>Sv39、ITLB / DTLB 各 8 エントリ、ハードウェアのページウォーカ、PMP 8</td></tr>
+  <tr><td>MMU・保護</td><td>Sv39、ITLB 16・DTLB 32 エントリ、ハードウェアのページウォーカ、PMP 8</td></tr>
   <tr><td>キャッシュ</td><td>L1 I$ / D$ 各 16 KB(4 ウェイ、64 B)、D$ はノンブロッキング・ライトバック、L2 256 KB</td></tr>
   <tr><td>割り込み・特権</td><td>CLINT、PLIC(M / S)、Sstc、特権仕様 1.12</td></tr>
   <tr><td>デバッグ</td><td>JTAG / cJTAG(Debug Spec 1.0)、トリガ 4 本(Sdtrig)、認証</td></tr>
-  <tr><td>性能カウンタ</td><td>4 本、26 イベント、Sscofpmf、Smcntrpmf(Linux の perf で使える)</td></tr>
-  <tr><td>FPGA</td><td>Arty A7-100T、50 MHz、WNS +0.664 ns、LUT 74 %、スライス 86 %、BRAM 108.5 / 135</td></tr>
+  <tr><td>性能カウンタ</td><td>4 本、29 イベント、Sscofpmf、Smcntrpmf(Linux の perf で使える)</td></tr>
+  <tr><td>FPGA</td><td>Arty A7-100T、50 MHz、WNS +0.140 ns、LUT 79 %、スライス 93 %、BRAM 108.5 / 135</td></tr>
 </table>
 <p>ロード・ストアは EX から D$ へ早出しし、ヒットは 2 サイクルで毎サイクル 1 アクセスを流す。SoC の DMA も D$ を通すので、Linux が前提とするキャッシュの一貫性をハードウェアで保つ。外部とのインタフェースは、メモリの AXI4、周辺の AXI-Lite、DMA 入力、JTAG / cJTAG である。Linux に必要な機能に加えて、性能のための拡張(Zba / Zbb / Zbc、Zicboz)と、計測のための PMU を後から足した。</p>
 
 <h3>3.2 Linux システム</h3>
 <figure><img src="figs/fig_soc.svg" alt=""><figcaption>図 4 Linux システムの構成</figcaption></figure>
-<p>LiteX が生成する SoC の CPU を mmRISC-2 に差し替えた。最初は Rocket 構成とメモリマップを 1 バイト単位で合わせ、デバイスツリーは CPU のノードだけを書き換えた。その後、LiteX の L2 を外して CPU 内の L2 を使い、DMA を D$ 経由にし、Ethernet を足した。ソフトウェアは LiteX BIOS → OpenSBI v1.9 → Linux 7.2 → BusyBox の順に起動する。</p>
+<p>LiteX が生成する SoC の CPU を mmRISC-2 に差し替えた。最初は Rocket 構成とメモリマップを 1 バイト単位で合わせ、デバイスツリーは CPU のノードだけを書き換えた。その後、LiteX の L2 を外して CPU 内の L2 を使い、DMA を D$ 経由にし、Ethernet を足した。ソフトウェアは LiteX BIOS → OpenSBI v1.9 → Linux 7.2 → BusyBox(または Debian 13、3.3 節)の順に起動する。</p>
+
+<h3>3.3 ソフトウェア開発: Eclipse と Debian</h3>
+<p>Rev.02 の前に、mmRISC-2 のソフトウェアを書く方法を 2 つ加えた。どちらも、はじめての人が再現できる手順を書いてある(LitexSystem/docs/ECLIPSE.md と DEBIAN.md)。</p>
+<div class="two">
+<div class="box" style="margin-top:0">
+<p><strong>統合開発環境 Eclipse によるベアメタル開発(クロス開発)</strong></p>
+<ul class="small">
+  <li>Eclipse Embedded CDT と xPack RISC-V GCC。Ubuntu でも Windows でも。</li>
+  <li>起動キット(crt0、リンカスクリプト、UART への printf、タイマと割り込み)とサンプルのプロジェクト。複製から新しいプロジェクトを作るスクリプト付き。</li>
+  <li>ボタン 1 つでビルドし、LiteX BIOS が DRAM を整えた後に <strong>JTAG か cJTAG</strong>(OpenOCD)で DRAM に読み込み、<code>main</code> で止まる。</li>
+  <li>C の 1 行ずつの実行、ブレークポイント、変数・レジスタ・メモリの表示。4.1 節のオンチップデバッガを使う。</li>
+</ul>
+</div>
+<div class="box y" style="margin-top:0">
+<p><strong>ボード上の Debian 13(セルフビルド)</strong></p>
+<ul class="small">
+  <li>SD カードの第 2 パーティションに BusyBox の代わりに <strong>Debian 13</strong>(riscv64、sysvinit)を置く。カーネル、OpenSBI、ビットストリームはそのまま。</li>
+  <li>ボードの上に <strong>gcc 14、make、gdb 16、git</strong>。<code>apt</code> で Debian のパッケージを足せる。</li>
+  <li>ルートファイルシステムはホストで root なしに 1 つのスクリプトで作り(mmdebstrap と qemu-user)、もう 1 つでカードに書く。</li>
+  <li>小さな C のファイルのコンパイルは 50 MHz で約 20 秒。ログインはリセットから約 3 分。</li>
+</ul>
+</div>
+</div>
+<div class="term">Debian GNU/Linux 13 mmrisc2 ttyLXU0
+
+root@mmrisc2:~# time gcc -O2 -o t t.c &amp;&amp; ./t
+real    0m20.712s
+build on mmRISC-2</div>
+<p>どの RV64GC の機械にも向けて他人が作った Debian の gcc、binutils、glibc が、mmRISC-2 でそのまま動く。このプロジェクトが書いたのではないコードによる、ユーザ ISA の広い確認になる。2 つの環境も Claude Code が作った。Eclipse のプロジェクトファイル(ツール名から Eclipse が導く識別子を含む)を生成し、Ubuntu で Debian 13 の鍵を得るための署名確認の連鎖を見つけ、実機で見えたこと(<code>fsck.ext4</code> が無い、時計が 2 回進められて 2083 年になる)を直した。</p>
 
 <!-- ======================================================================= 4 -->
 <h2>4. 開発の経緯</h2>
@@ -234,7 +264,7 @@
 
 <h3>4.2 日程の実績</h3>
 <figure><img src="figs/fig_timeline_wp.svg" alt=""><figcaption>図 6 開発日程の実績と主な出来事</figcaption></figure>
-<p>09-20〜21 の 2 日で CPU コア(パイプラインの骨格から LiteX への組み込みまで)を作り、09-22〜24 の 3 日をタイミングに使った。09-24 に実機で BIOS、09-25 に Linux が起動した。10 月に入ってからは性能と計測、10-10〜12 はメモリ待ちとタイミングの残りに取り組んだ。</p>
+<p>09-20〜21 の 2 日で CPU コア(パイプラインの骨格から LiteX への組み込みまで)を作り、09-22〜24 の 3 日をタイミングに使った。09-24 に実機で BIOS、09-25 に Linux が起動した。10 月に入ってからは性能と計測、10-10〜12 はメモリ待ちとタイミングの残りに取り組んだ(Rev.01)。10-13〜19 は TLB を大きくし、W1 と W2 を確かめ、決定 82 を入れた(Rev.02 のハードウェア)。10-19〜20 に Eclipse と Debian の環境を整えた。</p>
 
 <h3>4.3 主な判断と仕様変更</h3>
 <p class="caption-t">表 4 主な判断と仕様変更</p>
@@ -250,18 +280,22 @@
   <tr><td>10-09</td><td>FPU を<strong>パイプライン化</strong></td><td>毎サイクル 1 演算、資源はむしろ減った</td></tr>
   <tr><td>10-11</td><td>I$ のプリフェッチを作ったが<strong>切る</strong></td><td>実機で 0〜4 % 遅くなった(5.2 節)</td></tr>
   <tr><td>10-12</td><td>バスの 2 本目の読み出しは作らず<strong>先に測る</strong></td><td>効果は 0.26 % と分かり、1 サイクル早い許可(FAST_READ)へ</td></tr>
+  <tr><td>10-17</td><td><strong>ITLB 16・DTLB 32 エントリ</strong>(8 / 8 から)</td><td>ユーザモードの負荷でページテーブルの探索が 10〜13 %。awk −20.5 %、gunzip −11.4 %</td></tr>
+  <tr><td>10-18</td><td>write-validate(W1)を作って検証し、<strong>取り込まず</strong>。posted store(W2)は作らず</td><td>W1 はシミュレーションでコピーが +0.1 %、W2 は測って tftp の 0.1 % 未満(5.2 節)</td></tr>
+  <tr><td>10-19</td><td>決定 82: 外れた経路のロードが MR に DTLB を待たせない</td><td>CoreMark 3.015 → 3.034 /MHz(5.4 節)</td></tr>
+  <tr><td>10-20</td><td><strong>Eclipse</strong> のベアメタル開発キット、ボード上の gcc 入り <strong>Debian 13</strong></td><td>2 通りのソフトウェア開発(3.3 節)。Rev.02</td></tr>
 </table>
 <p>判断は筆者が最終的に選んだが、案と根拠の多くは Claude Code が出した。後半は「作る前に測る」が定着した。</p>
 
 <h3>4.4 性能の推移</h3>
 <figure><img src="figs/fig_perf.svg" alt=""><figcaption>図 7 CoreMark と Dhrystone の推移(実機、Linux 上、50 MHz)</figcaption></figure>
-<p>初版(10-01)の 1.584 CoreMark/MHz から、D$ のヒットを 2 サイクルに、ロード・ストアを EX から早出し、乗算を 1 サイクルに、gshare、ロードの値による分岐を MR で解決、Zba / Zbb、L2、最後にコンパイラのオプション、と積み上げて、CoreMark は +91 %、Dhrystone は +87 % になった。</p>
+<p>初版(10-01)の 1.584 CoreMark/MHz から、D$ のヒットを 2 サイクルに、ロード・ストアを EX から早出し、乗算を 1 サイクルに、gshare、ロードの値による分岐を MR で解決、Zba / Zbb、L2、コンパイラのオプション、Rev.02 の決定 82 と積み上げて、CoreMark は +92 %、Dhrystone は +88 % になった。</p>
 <figure><img src="figs/fig_workload.svg" alt=""><figcaption>図 8 Linux の実負荷の CPI(PMU で計測、小さいほど速い)</figcaption></figure>
-<p>CoreMark はキャッシュに収まるため、Linux の実際の負荷を 8 つ選び、PMU で数えた(workload.sh)。カーネルが主の負荷ではキャッシュ待ちがサイクルの 50〜70 % を占めていたので、L2 を入れて 1.2〜1.7 倍にした。その後、ストアのミスを待たない、汚れた追い出しより先に読み込む、cbo.zero、バスの改善で、さらに 7〜11 % 下げた。関数ごとの内訳(perf)を見て、Zbc による CRC の高速化も確かめた。</p>
+<p>CoreMark はキャッシュに収まるため、Linux の実際の負荷を 8 つ選び、PMU で数えた(workload.sh)。カーネルが主の負荷ではキャッシュ待ちがサイクルの 50〜70 % を占めていたので、L2 を入れて 1.2〜1.7 倍にした。その後、ストアのミスを待たない、汚れた追い出しより先に読み込む、cbo.zero、バスの改善で、さらに 7〜11 % 下げ、Rev.02 の大きな TLB で awk と gunzip が 11〜20 %、カーネルの負荷が 3.5〜8.7 % 下がった。関数ごとの内訳(perf)を見て、Zbc による CRC の高速化も確かめた。</p>
 
 <h3>4.5 FPGA のタイミング(WNS)の推移</h3>
 <figure><img src="figs/fig_wns.svg" alt=""><figcaption>図 9 WNS の推移(配置配線後、50 MHz)</figcaption></figure>
-<p>最初の合成は −20.4 ns(約 25 MHz 相当)だった。原因を配線の混雑ではなく論理の段数と見て、経路を読んで切っていった。途中の段階 2 は逆に悪化してやり直し、最後はステージ MR を足して 09-24 に 50 MHz を満たした。その後も機能を足すたびに WNS は 0 付近に戻り、そのたびに最悪経路を読んで直した(T1〜T7)。Rev.01 では +0.664 ns である。</p>
+<p>最初の合成は −20.4 ns(約 25 MHz 相当)だった。原因を配線の混雑ではなく論理の段数と見て、経路を読んで切っていった。途中の段階 2 は逆に悪化してやり直し、最後はステージ MR を足して 09-24 に 50 MHz を満たした。その後も機能を足すたびに WNS は 0 付近に戻り、そのたびに最悪経路を読んで直した(T1〜T7)。Rev.01 は +0.664 ns、TLB を大きくして +0.065 ns まで下がり、Rev.02 は +0.140 ns で閉じた。</p>
 
 <!-- ======================================================================= 5 -->
 <h2>5. 手戻りと検証</h2>
@@ -295,7 +329,7 @@
 </div>
 <div style="flex:0 0 72mm"><figure style="margin-top:0"><img src="figs/fig_prefetch.svg" alt=""><figcaption>図 10 プリフェッチを入れたときの CPI の変化</figcaption></figure></div>
 </div>
-<p>プリフェッチは切り、以後は<strong>作る前に測る</strong>ようにした。例えば、バスに 2 本目の読み出しを受けさせる改造は、効果が 0.26 % しかないと先に分かったので作らなかった。AI はシミュレーションの前提(メモリが即答)を疑わずに「速くなった」と報告した。<strong>実機の数字が、前提の誤りを教えた</strong>。</p>
+<p>プリフェッチは切り、以後は<strong>作る前に測る</strong>ようにした。例えば、バスに 2 本目の読み出しを受けさせる改造は、効果が 0.26 % しかないと先に分かったので作らなかった。Rev.02 の前には、SD の読み出しで最大 6〜8 % と見積もった write-validate(W1)を作って検証したが、遅延モデル入りのシミュレーションでは 0.1 % だった。コピーのストアがもともと別の理由で遅く、省こうとした読み込みはすでにその陰に隠れていた。これは外した。AI はシミュレーションの前提(メモリが即答)を疑わずに「速くなった」と報告した。<strong>実機の数字が、前提の誤りを教えた</strong>。</p>
 
 <h3>5.3 手戻り③: AI の報告の誤りと、環境の罠</h3>
 <div class="two">
@@ -318,11 +352,19 @@
 </div>
 <p>AI の誤りは「もっともらしい要約」に出る。生のログを見る規則で防げる。環境の罠は人の手元にあり、AI は記録から原因を推理できる。</p>
 
-<h3>5.4 検証方法の進化</h3>
+<h3>5.4 手戻り 4: CoreMark の最後の 0.3 %(10-19)</h3>
+<ul>
+  <li>最終の測定で、CoreMark がどのビルドでも <strong>Rev.01 より 0.3 % 低かった</strong>(3.015 と 3.025)。ベンチマークは 10-09 以来走らせておらず、コア単体のシミュレーションでは遅くなっていなかった。</li>
+  <li><strong>見つけたもの</strong>: SIM_BIOS に足した、TLB の書き込みとページテーブルの探索をすべて記録するログ。CoreMark の探索のほとんどが<strong>ページ 0</strong> だった: リストの終わりで、予測の外れた分岐の後ろ(外れた経路)のロードがアドレス 8 で DTLB にミスしていた。分岐はそのロードを捨てたが、DTLB を待つ状態は捨てなかった。この待ちは 10-11 にタイミングのために足したもの(T2)。</li>
+  <li><strong>修正</strong>(決定 82): 同じフラッシュでその待ちも消す。CoreMark 3.034 /MHz。試験とミューテーションで守る。</li>
+</ul>
+<p>損失はサイクルの 0.79 % で、タイミングのための変更の陰に隠れていた。筆者が「CoreMark は少しでも下げたくない」と求めたので見つかり、Claude Code が 2 つの命令まで突き止めた。</p>
+
+<h3>5.5 検証方法の進化</h3>
 <figure><img src="figs/fig_verif.svg" alt=""><figcaption>図 11 検証方法の進化(黄色は実機で問題が出てから足した方法)</figcaption></figure>
 <p>実機で止まるたびに、それを再現できるシミュレーションを先に作ってから直した。実機が、検証の穴を教えてくれる。</p>
 
-<h3>5.5 最終の検証結果(Rev.01)</h3>
+<h3>5.6 最終の検証結果(Rev.02)</h3>
 <p class="caption-t">表 5 最終の検証結果</p>
 <table>
   <tr><th style="width:17%">環境</th><th>内容</th><th style="width:22%">結果</th></tr>
@@ -333,12 +375,12 @@
   <tr><td>SIM_L2 / MMU / FPU</td><td>L2 約 150 万、PMP 20 万、FPU(SoftFloat と比較)約 130 万</td><td>PASS</td></tr>
   <tr><td>SIM_BIOS</td><td>本物の LiteX BIOS、SD カードモデルから Linux 起動、perf</td><td>プロンプトまで</td></tr>
   <tr><td>SIM_OCD</td><td>OpenOCD との協調シミュレーション(ブレーク、ウォッチ)</td><td>PASS</td></tr>
-  <tr><td>バグ注入</td><td>CORE 339、CACHE 59、SYS 23、L2 31、MMU 21、FPU 62、DBG 15</td><td><strong>550 種すべて検出</strong></td></tr>
-  <tr><td>実機</td><td>Linux 起動、Ethernet、120 分の負荷試験(メモリ・ネット・SD を同時に照合)</td><td>PASS</td></tr>
+  <tr><td>バグ注入</td><td>CORE 340、CACHE 59、SYS 26、L2 31、MMU 21、FPU 62、DBG 15</td><td><strong>554 種すべて検出</strong></td></tr>
+  <tr><td>実機</td><td>Linux 起動、Ethernet、120 分の負荷試験(メモリ・ネット・SD を同時に照合)、Debian 13 と gcc</td><td>PASS</td></tr>
 </table>
 <p class="small muted">riscv-tests の失敗 4 本は、実装していない機能(ハードウェアのミスアラインアクセス、Zacas)を求めるものである。</p>
 
-<h3>5.6 実機の動作</h3>
+<h3>5.7 実機の動作</h3>
 <div class="two">
 <div>
 <div class="term">        __   _ __      _  __
@@ -362,7 +404,8 @@ udhcpc: lease of 192.168.0.9 obtained
 <ul class="small">
   <li>カーネルの起動から 3.4 秒で init、DHCP、TFTP</li>
   <li>perf(関数名つき)、gdb で実行中のカーネルにハードウェアブレーク</li>
-  <li>120 分の負荷試験 PASS(Rev.01: mem 81、net 41、sd 517、NG 0)</li>
+  <li>120 分の負荷試験 PASS(Rev.02: mem 84、net 45、sd 502、NG 0)</li>
+  <li>同じカードの構成で Debian 13、ボードの上で gcc</li>
 </ul>
 </div>
 <div style="flex:0 0 66mm"><figure style="margin-top:2mm"><img src="figs/fpga_board.jpg" alt=""><figcaption>図 12 Arty A7-100T と JTAG デバッガ(上の緑の基板)</figcaption></figure></div>
@@ -375,11 +418,12 @@ udhcpc: lease of 192.168.0.9 obtained
   <tr><th style="width:50%">利点(Pros)</th><th>課題(Cons)</th></tr>
   <tr><td><strong>速い</strong>: 12 日で自作 CPU に Linux、30 日で性能 +91 %</td><td><strong>実機は人が要る</strong>: Vivado、ボード、SD カード、観察</td></tr>
   <tr><td>仕様・RTL・検証・文書を<strong>一貫して書き、保ち続ける</strong>(日英)</td><td><strong>前提が違っても、もっともらしく進む</strong>(即答するメモリで「速くなった」)</td></tr>
-  <tr><td><strong>検証が厚い</strong>: 参照モデル、ランダム、掃引、バグ注入 550 種を自分で作って回す</td><td><strong>報告を誤ることがある</strong>(56 / 59 を 59 / 59 と報告)</td></tr>
+  <tr><td><strong>検証が厚い</strong>: 参照モデル、ランダム、掃引、バグ注入 554 種を自分で作って回す</td><td><strong>報告を誤ることがある</strong>(56 / 59 を 59 / 59 と報告)</td></tr>
   <tr><td><strong>実機の数字を読む</strong>: タイミングレポートや PMU から原因と次の手を出す</td><td><strong>環境の罠に弱い</strong>(共有フォルダの時刻、Mac のマウント)</td></tr>
   <tr><td>公開の仕様書(PDF)を読んで実装する</td><td>長い会話は縮約される: 文書とメモに残すことが前提</td></tr>
   <tr><td>夜中でも回し続け、記録を残す</td><td>何を作るか、どこで止めるかは人が決める</td></tr>
   <tr><td><strong>GitHub へ自律的にコミット・push</strong> → 確実に履歴が残る</td><td></td></tr>
+  <tr><td><strong>ソフトウェア開発環境も作る</strong>: Eclipse のプロジェクト、Debian のルートファイルシステム、他の人のための手順</td><td></td></tr>
 </table>
 <p>課題の多くは、人が実機で確かめ、AI に生の数字を渡すことで補える。</p>
 
@@ -405,16 +449,18 @@ udhcpc: lease of 192.168.0.9 obtained
 <ul>
   <li>Claude Code で RV64GC の CPU を設計し、<strong>12 日で Arty A7-100T の Linux を起動</strong>した。</li>
   <li>30 日で <strong>Rev.01</strong>: L2、FPU パイプライン、Zbc / Zicboz、CoreMark 3.0 /MHz、WNS +0.664 ns、120 分の負荷試験 PASS。</li>
+  <li>38 日で最終版 <strong>Rev.02</strong>: ITLB 16・DTLB 32、決定 82、<strong>CoreMark 3.034 /MHz</strong>、WNS +0.140 ns、負荷試験 PASS。<strong>Eclipse によるベアメタル開発</strong>(JTAG / cJTAG)と、<strong>ボード上の Debian 13 と gcc</strong>。</li>
   <li>人の役割は、<strong>目標と判断、実機、そして AI の報告を確かめること</strong>である。</li>
 </ul>
 
-<h3>7.2 次のテーマ(ROADMAP)</h3>
-<p>Rev.01 のタグは main に置き、開発は dev ブランチで続ける。実機の負荷を関数ごとに測った結果から、次の順で進める。</p>
+<h3>7.2 mmRISC-2 の区切りと残すもの(ROADMAP)</h3>
+<p><strong>mmRISC-2 は Rev.02 で閉じる</strong>(main に Rev.02 のタグ)。効果が頭打ちになり始めたときに決めた基準: 見積もりの上限が数 % に満たないテーマは落とし、残りが 1〜2 % になったら閉じる。Rev.01 の後に予定した 3 つのテーマは次のように終わった。</p>
 <ul>
-  <li><strong>2 段目の TLB</strong>: ユーザモードの負荷では、ページテーブルの探索がサイクルの 10〜13 % を占める。</li>
-  <li><strong>ライン全体を書くときは読まない</strong>(write-validate): カーネルのユーザ空間へのコピーで、コピー先のラインの読み込みを省く。</li>
-  <li><strong>キャッシュ無しのストアを待たない</strong>(posted store): ドライバの書き込み(例: Ethernet の送信)。</li>
+  <li><strong>TLB の拡大</strong>(済み): ユーザモードの負荷でページテーブルの探索が 10〜13 % から 0.3 % 未満になり、2 段目の TLB は要らなくなった。</li>
+  <li><strong>write-validate</strong>(W1、作ったが取り込まず): +0.1 %。分かったことは先に残す: コアはミスしたストアのすべての応答を待っている(M1b)。</li>
+  <li><strong>posted store</strong>(W2、作らず): キャッシュ無しのストアは 13 サイクル。tftp の 0.1 % 未満。</li>
 </ul>
+<p>ROADMAP には、SD カードの DMA の書き込みを L2 に置く、ソフトウェアのプリフェッチ、タイミングのための DTLB の検査の 1 サイクル後ろ倒し、そして下の大きなテーマも残してある。</p>
 
 <h3>7.3 次の構想: mmRISC-3(仮称)</h3>
 <p>同じ Arty A7-100T で、<strong>RV64GC の dual-issue / out-of-order</strong> コアに Linux を載せられるかを机上で検討している(まだ設計はしない)。</p>
@@ -422,7 +468,7 @@ udhcpc: lease of 192.168.0.9 obtained
 <div class="box" style="margin-top:0">
 <p><strong>見通し</strong></p>
 <ul class="small">
-  <li><strong>資源の再配分の設計になる</strong>: スライスはすでに 86 %。L2 を縮め、LUT から BRAM・LUTRAM・DSP へ移す。</li>
+  <li><strong>資源の再配分の設計になる</strong>: スライスはすでに 93 %。L2 を縮め、LUT から BRAM・LUTRAM・DSP へ移す。</li>
   <li>目安: FPGA 向け OoO の NaxRiscv RV64 は、コアで約 18k LUT(FPU・Zb 系なし)。</li>
   <li><strong>50 MHz に据え置き</strong>、段数を減らして資源を節約する。</li>
   <li>最大の分かれ目は <strong>FPU の扱い</strong>(専用リネーム / 整数と統合 / 縮小)。</li>
@@ -478,8 +524,10 @@ udhcpc: lease of 192.168.0.9 obtained
   <li>OpenSBI: https://github.com/riscv-software-src/opensbi 、riscv-tests: https://github.com/riscv-software-src/riscv-tests</li>
   <li>Arty A7 Reference Manual: https://digilent.com/reference/programmable-logic/arty-a7/start</li>
   <li>NaxRiscv: https://github.com/SpinalHDL/NaxRiscv</li>
+  <li>Eclipse Embedded CDT: https://eclipse-embed-cdt.github.io、xPack RISC-V GCC / OpenOCD: https://xpack-dev-tools.github.io</li>
+  <li>Debian riscv64: https://wiki.debian.org/RISC-V、mmdebstrap: https://gitlab.mister-muffin.de/josch/mmdebstrap</li>
 </ul>
-<p class="small muted" style="margin-top:6mm">本書の数値は 2026-10-12 時点の mmRISC-2 Rev.01 のものである。本書の文章と図も、筆者の指示のもとで Claude Code が作成した。英語版は Doc/20261015_WhitePaper_mmRISC-2.pdf にある。</p>
+<p class="small muted" style="margin-top:6mm">本書の数値は 2026-10-20 時点の mmRISC-2 Rev.02 のものである。本書の文章と図も、筆者の指示のもとで Claude Code が作成した。英語版は Doc/20261020_WhitePaper_mmRISC-2.pdf にある。</p>
 
 </body>
 </html>

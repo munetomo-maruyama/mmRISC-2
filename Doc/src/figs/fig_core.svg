@@ -68,11 +68,11 @@
 <rect x="472" y="318" width="200" height="140" rx="8" fill="#FFF3D6" stroke="#F2A900" stroke-width="2"/>
 <text x="572.0" y="362.55" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#222222">CSR</text>
 <text x="572.0" y="387.25" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">M / S / U、Sstc</text>
-<text x="572.0" y="409.34999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">PMU 26 イベント</text>
+<text x="572.0" y="409.34999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">PMU 29 イベント</text>
 <text x="572.0" y="431.45" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">Sdtrig 4 本</text>
 <rect x="686" y="318" width="200" height="140" rx="8" fill="#FFF3D6" stroke="#F2A900" stroke-width="2"/>
 <text x="786.0" y="362.55" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#222222">MMU</text>
-<text x="786.0" y="387.25" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">Sv39、TLB 8+8</text>
+<text x="786.0" y="387.25" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">Sv39、TLB 16+32</text>
 <text x="786.0" y="409.34999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">ページウォーカ</text>
 <text x="786.0" y="431.45" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">PMP 8</text>
 <rect x="930" y="58" width="366" height="300" rx="10" fill="#FAFBFE" stroke="#283272" stroke-width="2"/>

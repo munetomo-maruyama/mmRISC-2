@@ -48,7 +48,7 @@
 <text x="735" y="658" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">USB-UART</text>
 <text x="890" y="42" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="24" text-anchor="start" font-weight="bold" fill="#222222">ソフトウェア(既存のものを使う)</text>
 <rect x="890" y="65" width="410" height="105" rx="8" fill="#FFF3D6" stroke="#F2A900" stroke-width="2"/>
-<text x="1095.0" y="114.15" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#222222">BusyBox 1.36(シェル)</text>
+<text x="1095.0" y="114.15" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#222222">BusyBox 1.36 か Debian 13</text>
 <text x="1095.0" y="138.85000000000002" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="17" text-anchor="middle" font-weight="normal" fill="#222222">SD カードの ext4</text>
 <rect x="890" y="185" width="410" height="105" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="2"/>
 <text x="1095.0" y="234.14999999999998" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">Linux 7.2(litex-hub)</text>
