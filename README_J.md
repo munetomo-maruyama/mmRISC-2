@@ -24,7 +24,7 @@
 - **ボード上で Debian 13 が起動し、gcc でセルフコンパイルできる**: SD カードからフルの Debian(riscv64)を起動し、gcc、make、gdb、git、`apt` を mmRISC-2 そのものの上で使える
 - 性能カウンタ(Zihpm、Sscofpmf、Smcntrpmf。Linux の `perf` で関数名まで使える)
 
-## 現状(Rev.02、最終版、2026-10-19)
+## 現状(Rev.02、最終版、2026-10-20)
 
 Arty A7-100T の実機(50 MHz)で、LiteX BIOS → OpenSBI → **Linux 7.2** が SD カードの ext4
 から BusyBox のシェルまで起動し、Ethernet(DHCP、TFTP)も動く。120 分の負荷試験(メモリ・
@@ -67,7 +67,7 @@ BusyBox の代わりに **Debian 13(riscv64)** も SD カードから起動し�
 
 | 版 | 日付 | 内容 |
 |---|---|---|
-| **Rev.02**(タグ `Rev.02`) | 2026-10-19 | この README が説明している版で、最後の版: Rev.01 に、ITLB 16・DTLB 32 エントリとページテーブル探索の PMU イベント(決定 79〜81)、決定 82 を加えたもの(CoreMark 3.034 /MHz)。WNS +0.140 ns、120 分の負荷試験 PASS |
+| **Rev.02**(タグ `Rev.02`) | 2026-10-20 | この README が説明している版で、最後の版: Rev.01 に、ITLB 16・DTLB 32 エントリとページテーブル探索の PMU イベント(決定 79〜81)、決定 82 を加えたもの(CoreMark 3.034 /MHz)。WNS +0.140 ns、120 分の負荷試験 PASS。Eclipse による JTAG / cJTAG でのベアメタル開発と、ボード上の Debian 13 と gcc |
 | **Rev.01**(タグ `Rev.01`) | 2026-10-12 | 最初の公開版: RV64GC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz、L1・L2 キャッシュ、Arty A7-100T の 50 MHz で Linux 7.2(WNS +0.664 ns)、120 分の負荷試験 PASS |
 
 `main` は外部の方が参照する最新の版を保つ。**mmRISC-2 は Rev.02 で閉じる**: 残るテーマは見積もりで 1〜2 % 以下で、

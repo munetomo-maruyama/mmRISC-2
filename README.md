@@ -26,7 +26,7 @@ peripherals come from LiteX. The CPU has:
 - **Debian 13 boots on the board, and gcc compiles on it**: a full Debian (riscv64) from the SD card, with gcc, make, gdb, git and `apt` on mmRISC-2 itself (self-hosted builds)
 - Performance counters (Zihpm, Sscofpmf, Smcntrpmf; usable with Linux's `perf`, down to function names)
 
-## Status (Rev.02, the final version, 2026-10-19)
+## Status (Rev.02, the final version, 2026-10-20)
 
 On the Arty A7-100T board (50 MHz), LiteX BIOS → OpenSBI → **Linux 7.2** boots from the ext4 of the SD
 card to the BusyBox shell, and Ethernet (DHCP, TFTP) works. The 120-minute stress test (memory, Ethernet
@@ -70,7 +70,7 @@ left for the future in [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP.
 
 | Revision | Date | Contents |
 |---|---|---|
-| **Rev.02** (tag `Rev.02`) | 2026-10-19 | The version this README describes, and the last: Rev.01 plus the ITLB of 16 and the DTLB of 32 entries with the PMU events of the page table walks (decisions 79 to 81) and decision 82 (CoreMark 3.034 /MHz). WNS +0.140 ns, the 120-minute stress test PASS |
+| **Rev.02** (tag `Rev.02`) | 2026-10-20 | The version this README describes, and the last: Rev.01 plus the ITLB of 16 and the DTLB of 32 entries with the PMU events of the page table walks (decisions 79 to 81) and decision 82 (CoreMark 3.034 /MHz). WNS +0.140 ns, the 120-minute stress test PASS. Bare-metal development in Eclipse over JTAG / cJTAG, and Debian 13 with gcc on the board |
 | **Rev.01** (tag `Rev.01`) | 2026-10-12 | The first release: RV64GC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz, L1 and L2 caches, Linux 7.2 on the Arty A7-100T at 50 MHz (WNS +0.664 ns), the 120-minute stress test PASS |
 
 `main` holds the latest revision for readers outside. **mmRISC-2 closes with Rev.02**: the themes left had
