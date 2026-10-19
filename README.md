@@ -22,6 +22,7 @@ peripherals come from LiteX. The CPU has:
 - The SoC's DMA also goes through the D$, and cache coherence is kept by hardware
 - Built-in CLINT / PLIC, Sstc (S-mode timer)
 - JTAG / cJTAG on-chip debug (Debug Spec 1.0, 4 hardware triggers)
+- **Bare-metal development in the Eclipse IDE**: build C programs and debug them on the board over JTAG / cJTAG (Ubuntu and Windows)
 - Performance counters (Zihpm, Sscofpmf, Smcntrpmf; usable with Linux's `perf`, down to function names)
 
 ## Status (Rev.02, the final version, 2026-10-19)
@@ -37,6 +38,7 @@ and SD card checked at the same time) passes on Rev.02 (round 19 of `LitexSystem
 | Privileged extensions | **Sstc** (S-mode timer), **Sscofpmf** (overflow interrupts of the performance counters), **Smcntrpmf**, **Sdtrig** (4 debug triggers), privileged spec 1.12 |
 | Performance counters | `hpmcounter3` to `6`, 29 events (cache, L2 and TLB misses, branch mispredictions, reasons for stalls, what the memory waits are made of, I$ prefetches, the cycles of page table walks). Usable with Linux's `perf stat` / `perf record`, and `perf report` by function |
 | Debug | JTAG / cJTAG (Debug Spec 1.0). Halt / step / registers / memory, software and hardware breakpoints and watchpoints with OpenOCD / gdb (they can be put on a running Linux kernel too) |
+| Software development | **Bare-metal programs in the Eclipse IDE** (Eclipse Embedded CDT, xPack RISC-V GCC): build, load over JTAG / cJTAG, step through C, breakpoints, variables and registers, on Ubuntu and Windows. A start-up kit with printf on the UART, the timer and interrupts, and example projects ([`LitexSystem/docs/ECLIPSE.md`](LitexSystem/docs/ECLIPSE.md)) |
 | FPGA | WNS +0.140 ns at 50 MHz, LUT 50,301 / 63,400 (79.3 %), slices 92.9 %, block RAM 108.5 / 135 tiles (L2 included) |
 
 **The core**
@@ -88,6 +90,7 @@ Every document has a Japanese version next to it (`XXXX.md` is English, `XXXX_J.
 | [`LitexSystem/docs/BENCH.md`](LitexSystem/docs/BENCH.md) | Performance measurements (simulation and board, where cycles go as seen by the PMU, version by version) |
 | [`LitexSystem/docs/TIMING.md`](LitexSystem/docs/TIMING.md) | Record of timing closure at 50 MHz |
 | [`LitexSystem/docs/JTAG.md`](LitexSystem/docs/JTAG.md) | JTAG / cJTAG debugging (pins, switches, OpenOCD) |
+| [`LitexSystem/docs/ECLIPSE.md`](LitexSystem/docs/ECLIPSE.md) | Bare-metal programs with Eclipse: tools, setup, building and debugging over JTAG / cJTAG |
 | [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP.md) | Design themes: done, tried and not taken, left for the future |
 | [`LitexSystem/software/boot/README.md`](LitexSystem/software/boot/README.md) | Making the SD card, Ethernet, TFTP netboot, stress test, distributed binaries |
 | [`LitexSystem/software/bench/README.md`](LitexSystem/software/bench/README.md) | Benchmarks on the board and `perf` |

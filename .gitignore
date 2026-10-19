@@ -63,3 +63,8 @@ FPGA/L2_OOC/clockInfo.txt
 FPGA/L2_OOC/dfx_runtime.txt
 FPGA/FPU_OOC/clockInfo.txt
 FPGA/FPU_OOC/dfx_runtime.txt
+# bare-metal programs: the Makefile's out/, Eclipse's build folders and settings
+LitexSystem/software/baremetal/*/out/
+LitexSystem/software/baremetal/*/Debug/
+LitexSystem/software/baremetal/*/Release/
+LitexSystem/software/baremetal/*/.settings/

@@ -75,11 +75,13 @@ LitexSystem/
 │   │                    boot.json), the kernel configuration, the OpenSBI patches and procedure
 │   ├── rootfs/          what is added to the root file system (inittab, udhcpc script,
 │                        stress test stress.sh)
-│   └── bench/           benchmarks (CoreMark, Dhrystone, micro), perf.sh and workload.sh; to the board by TFTP
+│   ├── bench/           benchmarks (CoreMark, Dhrystone, micro), perf.sh and workload.sh; to the board by TFTP
+│   └── baremetal/       bare-metal programs: start-up kit, examples, Eclipse projects (docs/ECLIPSE.md)
 ├── docs/
 │   ├── BRINGUP.md       bring-up record and procedure
 │   ├── TIMING.md        record of timing closure
 │   ├── JTAG.md          JTAG / cJTAG debugging (pins, switches, OpenOCD)
+│   ├── ECLIPSE.md       bare-metal programs with Eclipse over JTAG / cJTAG
 │   ├── BENCH.md         performance measurements (simulation and board, where cycles are lost)
 │   ├── ROADMAP.md       design themes (final)
 │   └── TFTP_SERVER.md   making Ubuntu on Parallels a TFTP server

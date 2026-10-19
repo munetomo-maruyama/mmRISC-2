@@ -76,11 +76,13 @@ LitexSystem/
 │   │                    boot.json)、カーネルの設定、OpenSBI のパッチと手順
 │   ├── rootfs/          ルートファイルシステムに足すもの(inittab、udhcpc のスクリプト、
 │                        負荷試験 stress.sh)
-│   └── bench/           ベンチマーク(CoreMark、Dhrystone、micro)、perf.sh と workload.sh。TFTP でボードへ
+│   ├── bench/           ベンチマーク(CoreMark、Dhrystone、micro)、perf.sh と workload.sh。TFTP でボードへ
+│   └── baremetal/       ベアメタルのプログラム: 起動キット、サンプル、Eclipse のプロジェクト(docs/ECLIPSE.md)
 ├── docs/
 │   ├── BRINGUP.md       立ち上げ記録と手順
 │   ├── TIMING.md        タイミング収束の記録
 │   ├── JTAG.md          JTAG / cJTAG デバッグ(ピン、スイッチ、OpenOCD)
+│   ├── ECLIPSE.md       Eclipse によるベアメタルのプログラム開発(JTAG / cJTAG)
 │   ├── BENCH.md         性能測定(シミュレーションと実機、どこでサイクルを失うか)
 │   ├── ROADMAP.md       設計テーマ(最終)
 │   └── TFTP_SERVER.md   Parallels 上の Ubuntu を TFTP サーバにする手順

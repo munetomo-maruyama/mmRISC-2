@@ -20,6 +20,7 @@
 - SoC の DMA も D$ を通し、キャッシュの一貫性をハードウェアで保つ
 - 内蔵の CLINT / PLIC、Sstc(S モードのタイマ)
 - JTAG / cJTAG のオンチップデバッグ(Debug Spec 1.0、ハードウェアトリガ 4 本)
+- **統合開発環境 Eclipse によるベアメタル開発**: C のプログラムをビルドし、JTAG / cJTAG でボード上でデバッグできる(Ubuntu と Windows)
 - 性能カウンタ(Zihpm、Sscofpmf、Smcntrpmf。Linux の `perf` で関数名まで使える)
 
 ## 現状(Rev.02、最終版、2026-10-19)
@@ -35,6 +36,7 @@ Ethernet・SD カードの同時照合)は Rev.02 でも PASS(`LitexSystem/docs/
 | 特権の拡張 | **Sstc**(S モードのタイマ)、**Sscofpmf**(性能カウンタのあふれ割り込み)、**Smcntrpmf**、**Sdtrig**(デバッグのトリガ 4 本)、特権仕様 1.12 |
 | 性能カウンタ | `hpmcounter3`〜`6`、イベント 29 種(キャッシュ・L2・TLB のミス、分岐予測ミス、停止の理由、ページテーブルの探索のサイクル、メモリの待ちの内訳、I$ の先読み)。Linux の `perf stat` / `perf record`、関数ごとの `perf report` で使える |
 | デバッグ | JTAG / cJTAG(Debug Spec 1.0)。OpenOCD / gdb で halt / step / レジスタ / メモリ、ソフトウェアとハードウェアのブレークポイント、ウォッチポイント(動いている Linux カーネルにも置ける) |
+| ソフトウェア開発 | **統合開発環境 Eclipse によるベアメタルのプログラム開発**(Eclipse Embedded CDT、xPack RISC-V GCC): ビルド、JTAG / cJTAG での読み込み、C の 1 行ずつの実行、ブレークポイント、変数とレジスタの表示を Ubuntu と Windows で。UART への printf、タイマ、割り込みを備えた起動キットとサンプルのプロジェクト付き([`LitexSystem/docs/ECLIPSE.md`](LitexSystem/docs/ECLIPSE_J.md)) |
 | FPGA | 50 MHz で WNS +0.140 ns、LUT 50,301 / 63,400(79.3 %)、スライス 92.9 %、ブロック RAM 108.5 / 135 タイル(L2 を含む) |
 
 **コアの構成**
@@ -85,6 +87,7 @@ Ethernet・SD カードの同時照合)は Rev.02 でも PASS(`LitexSystem/docs/
 | [`LitexSystem/docs/BENCH.md`](LitexSystem/docs/BENCH_J.md) | 性能測定(シミュレーションと実機、PMU で見たサイクルの行き先、版ごとの推移) |
 | [`LitexSystem/docs/TIMING.md`](LitexSystem/docs/TIMING_J.md) | 50 MHz のタイミング収束の記録 |
 | [`LitexSystem/docs/JTAG.md`](LitexSystem/docs/JTAG_J.md) | JTAG / cJTAG デバッグ(ピン、スイッチ、OpenOCD) |
+| [`LitexSystem/docs/ECLIPSE.md`](LitexSystem/docs/ECLIPSE_J.md) | Eclipse によるベアメタルのプログラム開発: ツール、設定、ビルド、JTAG / cJTAG でのデバッグ |
 | [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md) | 設計テーマ: 済んだもの、試して取り込まなかったもの、この先に残すもの |
 | [`LitexSystem/software/boot/README.md`](LitexSystem/software/boot/README_J.md) | SD カードの作り方、Ethernet、TFTP ネットブート、負荷試験、配布しているバイナリ |
 | [`LitexSystem/software/bench/README.md`](LitexSystem/software/bench/README_J.md) | 実機のベンチマークと `perf` |
