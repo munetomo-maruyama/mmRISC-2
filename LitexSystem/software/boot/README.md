@@ -28,6 +28,10 @@ The second partition is the BusyBox set of the Rocket configuration (`~/mmlitex_
 `software/rootfs/` of this repository on top (inittab, `sbin/init`, the udhcpc script, the stress test
 `stress.sh`). `scripts/sd_rootfs.sh` writes it.
 
+In place of BusyBox, the second partition can hold **Debian 13 (riscv64)** with gcc, make, gdb and git, for
+compiling on the board itself: `scripts/build_debian.sh` makes it and `scripts/sd_debian.sh` writes it. The first
+partition stays the same (`docs/DEBIAN.md`).
+
 ## Distributed binaries
 
 | File | Source | How it is built | License |

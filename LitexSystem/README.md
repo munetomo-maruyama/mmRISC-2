@@ -67,6 +67,8 @@ LitexSystem/
 │   ├── build_perf_libs.sh  zlib and libelf (static) for perf's function names, in ~/mmlitex_build/perf_libs
 │   ├── build_perf.sh    builds perf (static, with libelf when it is there) and puts it in bench/out
 │   ├── sd_rootfs.sh     writes the root file system of the SD card
+│   ├── build_debian.sh  Debian 13 riscv64 root file system with gcc (docs/DEBIAN.md)
+│   ├── sd_debian.sh     writes it to the second partition of the SD card
 │   ├── timing_paths.tcl / .bat   report of the 300 worst paths (Windows side)
 │   └── jtag_check.tcl   JTAG check on the board (OpenOCD)
 ├── software/
@@ -82,6 +84,7 @@ LitexSystem/
 │   ├── TIMING.md        record of timing closure
 │   ├── JTAG.md          JTAG / cJTAG debugging (pins, switches, OpenOCD)
 │   ├── ECLIPSE.md       bare-metal programs with Eclipse over JTAG / cJTAG
+│   ├── DEBIAN.md        Debian 13 on the board, compiling with gcc on it
 │   ├── BENCH.md         performance measurements (simulation and board, where cycles are lost)
 │   ├── ROADMAP.md       design themes (final)
 │   └── TFTP_SERVER.md   making Ubuntu on Parallels a TFTP server

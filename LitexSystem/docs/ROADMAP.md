@@ -26,6 +26,7 @@ On the board (Arty A7-100T, 50 MHz, Linux 7.2):
 | Resources | LUT 50,301 (79.3 %), FF 29,473 (23.2 %), **slices 92.9 % (about 1,130 left)**, block RAM 108.5 / 135, DSP 32 / 240 | Section 47 of `TIMING.md` |
 | Timing | **WNS +0.140 ns** (50 MHz). The worst paths are the load's value forwarded from MA through EX's address add and the compare of the DTLB's 32 entries into `mr_paddr` / `mr_tr_fault` | Same |
 | Stress | 120 minutes of `stress.sh`, PASS | Round 19 of `BRINGUP.md` |
+| Software development | Bare-metal C in Eclipse, debugged over JTAG / cJTAG; Debian 13 from the SD card with gcc, make, gdb and git on the board (a small C file in about 20 s) | `ECLIPSE.md`, `DEBIAN.md`, round 20 of `BRINGUP.md` |
 
 **Where the time goes** (`perf.sh`, `workload.sh`, `workload.sh profile`, section 28 of `BENCH.md`):
 

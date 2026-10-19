@@ -26,6 +26,7 @@
 | 資源 | LUT 50,301(79.3 %)、FF 29,473(23.2 %)、**スライス 92.9 %(残り約 1,130)**、ブロック RAM 108.5 / 135、DSP 32 / 240 | `TIMING.md` 47 章 |
 | タイミング | **WNS +0.140 ns**(50 MHz)。最悪の経路は MA からフォワーディングされるロードの値が EX のアドレスの加算と DTLB 32 エントリの比較を通って `mr_paddr` / `mr_tr_fault` へ | 同上 |
 | 負荷試験 | `stress.sh` 120 分、PASS | `BRINGUP.md` 19 回目 |
+| ソフトウェア開発 | Eclipse でのベアメタルの C、JTAG / cJTAG でのデバッグ。SD カードからの Debian 13 で、ボードの上の gcc、make、gdb、git(小さな C のファイルで約 20 秒) | `ECLIPSE.md`、`DEBIAN.md`、`BRINGUP.md` 20 回目 |
 
 **時間がどこへ行っているか**(`perf.sh`、`workload.sh`、`workload.sh profile`、`BENCH.md` 28 章):
 

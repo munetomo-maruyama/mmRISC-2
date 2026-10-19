@@ -28,6 +28,10 @@
 このリポジトリの `software/rootfs/`(inittab、`sbin/init`、udhcpc のスクリプト、
 負荷試験 `stress.sh`)を重ねたもの。`scripts/sd_rootfs.sh` が書く。
 
+BusyBox の代わりに、第 2 パーティションに gcc、make、gdb、git 入りの **Debian 13(riscv64)** を置いて、
+ボードの上でコンパイルすることもできる: `scripts/build_debian.sh` が作り、`scripts/sd_debian.sh` が書く。
+第 1 パーティションは同じもの(`docs/DEBIAN.md`)。
+
 ## 配布しているバイナリ
 
 | ファイル | ソース | 作り方 | ライセンス |

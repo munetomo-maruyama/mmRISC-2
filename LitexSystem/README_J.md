@@ -68,6 +68,8 @@ LitexSystem/
 │   ├── build_perf_libs.sh  perf の関数名のための zlib と libelf(静的)を ~/mmlitex_build/perf_libs に作る
 │   ├── build_perf.sh    perf(静的リンク、libelf があれば使う)を作り、bench/out に置く
 │   ├── sd_rootfs.sh     SD カードのルートファイルシステムを書く
+│   ├── build_debian.sh  gcc 入りの Debian 13 riscv64 のルートファイルシステム(docs/DEBIAN.md)
+│   ├── sd_debian.sh     それを SD カードの第 2 パーティションに書く
 │   ├── timing_paths.tcl / .bat   最悪 300 本の経路のレポート(Windows 側)
 │   └── jtag_check.tcl   実機の JTAG 確認(OpenOCD)
 ├── software/
@@ -83,6 +85,7 @@ LitexSystem/
 │   ├── TIMING.md        タイミング収束の記録
 │   ├── JTAG.md          JTAG / cJTAG デバッグ(ピン、スイッチ、OpenOCD)
 │   ├── ECLIPSE.md       Eclipse によるベアメタルのプログラム開発(JTAG / cJTAG)
+│   ├── DEBIAN.md        ボード上の Debian 13、そこでの gcc によるコンパイル
 │   ├── BENCH.md         性能測定(シミュレーションと実機、どこでサイクルを失うか)
 │   ├── ROADMAP.md       設計テーマ(最終)
 │   └── TFTP_SERVER.md   Parallels 上の Ubuntu を TFTP サーバにする手順

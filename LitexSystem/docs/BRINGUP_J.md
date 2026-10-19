@@ -2,7 +2,7 @@
 
 [English](BRINGUP.md)
 
-最終更新: 2026-10-19(19 回目: Rev.02)
+最終更新: 2026-10-20(20 回目: ボード上の Debian 13)
 
 ## 今どこまで確認できているか
 
@@ -21,6 +21,7 @@
 | 実機で BIOS が出るか | **確認済**(2026-09-24) |
 | 実機で Linux が起動するか | **確認済**(2026-09-25、WNS 0.013ns。Ethernet 入りは 2026-09-26、WNS 0.131ns、DHCP・ping・TFTP ネットブートまで。**Rev.01** は 2026-10-12、WNS +0.664 ns。**Rev.02** は 2026-10-19、WNS +0.140 ns)。SD カードの ext4 から BusyBox のプロンプトまで。`cat /proc/cpuinfo` と `uname -a` も動く。最初の起動で出た `kernel/bpf/memalloc.c:186` の WARNING は D$ の 2 つの不具合で、7 回目で直した |
 | 長時間の負荷試験(`stress.sh`、120 分) | **PASS** 5 回: 14・16・17・18 回目(Rev.01)・19 回目(Rev.02) |
+| SD カードからの Debian 13(riscv64)、ボード上の gcc | **確認済み**(2026-10-20、Rev.02。20 回目、`DEBIAN.md`) |
 
 ## キャッシュ外フェッチを先に潰した理由
 
@@ -667,3 +668,34 @@ sd  502 502 0
 ロードアベレージは 3 前後のままで、NG は無し。18 回目(81 / 41 / 517)と比べて mem +4 %、net +10 %、sd −3 %
 (`sd` は SD カードそのものの速さで決まり、CPU の分は小さい)。大きくなった TLB(`SFENCE.VMA` のたびに消す
 エントリが増え、探索の多くがヒットに置き換わる)は、SD カードと Ethernet の DMA の下で 2 時間、食い違いなく動いた。
+
+## 20 回目: ボード上の Debian 13 と gcc(2026-10-20)
+
+Rev.02 のビットストリームと、19 回目と同じ `fw_jump.bin` / `Image`。第 2 パーティションには BusyBox の代わりに、
+ホストで `scripts/build_debian.sh`(mmdebstrap、root なし、sysvinit)が作り `scripts/sd_debian.sh` が書いた
+Debian 13(trixie、riscv64)のツリー。ほかの人のための手順は `DEBIAN.md`。途中で 4 つのことが起き、どれも
+`build_debian.sh` で直した:
+
+| 見えたこと | 原因 | 対処 |
+|---|---|---|
+| `fsck: error 2 ... while executing fsck.ext4 for /dev/mmcblk0p2` の後、保守用シェル | trixie の最小の基本にはもう `e2fsprogs` が無く、`/etc/fstab` はルートの検査(pass 1)を求める | パッケージに `e2fsprogs` を加えた |
+| `Listening on LPF/eth0` の後、`Configuring network interfaces...` で約 2 分 | DHCP がカーネルの乱数生成器を待つ: `crng init done` が 171 秒(ハードウェアの乱数源が無く、割り込みのタイミングからエントロピーを集める) | 対処不要: ボードの性質。ログインは RESET から約 3 分後(`DEBIAN.md` 4 章) |
+| `date` が 2083 年 | ntpsec の `ntpdate` が 1970 年から 2 回(それぞれ 56 年)時計を進めた。Debian の `busybox` には BusyBox の `ntpd` が無い | chrony(Debian の `chrony.conf` の `makestep 1 3`): 一度で正しい時刻に |
+| 初回の起動で長く待つ | `/etc/rc.local` が 512 MB のスワップファイルを `dd` で作っていた | `fallocate`(`dd` は予備として残す) |
+
+最終の tarball では起動はきれいで(`rootfs: clean`、起動後数秒で chrony が時刻を合わせ、スワップ 511 MB)、
+`Linux 7.2.0` の上の Debian 13.7、メモリ 237 MB。ボードの上で:
+
+```
+root@mmrisc2:~# time gcc -O2 -o t t.c && ./t
+
+real    0m20.712s
+user    0m7.682s
+sys     0m6.799s
+build on mmRISC-2
+```
+
+`apt update` と小さなパッケージ 3 つ(tree、chrony、e2fsprogs)の `apt install` で合わせて約 20 分(Debian の
+パッケージの一覧は 50 MHz には大きい)。入れたものも動いた。
+gcc、`cc1`、`as`、`ld`、glibc の動的リンカは、すべて Debian の riscv64 アーカイブのもので、mmRISC-2 の上で
+一度も異常なく動いた: このプロジェクトが書いたのではないコードによる、RV64GC のユーザ ISA 全体の試験になる。
