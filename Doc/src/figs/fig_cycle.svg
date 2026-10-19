@@ -4,7 +4,7 @@
 <rect x="335.0" y="15.0" width="330" height="120" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
 <text x="500.0" y="59.3" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">① 仕様を書く</text>
 <text x="500.0" y="85.0" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">.md の仕様書と</text>
-<text x="500.0" y="108.4" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">設計判断(決定 78 件)</text>
+<text x="500.0" y="108.4" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">設計判断(決定 82 件)</text>
 <rect x="665.0" y="155.0" width="330" height="120" rx="8" fill="#E6E8F3" stroke="#283272" stroke-width="3"/>
 <text x="830.0" y="199.29999999999998" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="22" text-anchor="middle" font-weight="bold" fill="#283272">② RTL を書く</text>
 <text x="830.0" y="224.99999999999997" font-family="'Noto Sans CJK JP', 'Noto Sans', 'Hiragino Sans', sans-serif" font-size="18" text-anchor="middle" font-weight="normal" fill="#222222">SystemVerilog</text>

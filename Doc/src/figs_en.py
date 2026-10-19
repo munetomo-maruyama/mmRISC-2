@@ -17,14 +17,15 @@ NAMES = ['fig_summary', 'fig_env_wp', 'fig_cycle', 'fig_core', 'fig_soc', 'fig_f
 EN = {
     # summary
     '12 日': '12 days', '着手から自作 CPU で Linux 起動': ('Start to Linux on the home-made CPU', 0.9),
-    '30 日': '30 days', 'Rev.01 まで(189 コミット)': 'To Rev.01 (189 commits)',
-    '22,084 行': ('22,084 lines', 0.85), 'RTL(SystemVerilog 46 ファイル)': ('RTL (SystemVerilog, 46 files)', 0.95),
+    '38 日': '38 days', '最終版 Rev.02 まで(212 コミット)': ('To Rev.02, the final version (212 commits)', 0.85),
+    'Rev.01 は 30 日。→ 2026-10-20': 'Rev.01 in 30 days; → 2026-10-20',
+    '22,100 行': ('22,100 lines', 0.85), 'RTL(SystemVerilog 46 ファイル)': ('RTL (SystemVerilog, 46 files)', 0.95),
     '仕様・検証・文書も Claude Code': ('Spec, verification, docs: Claude Code too', 0.85),
-    'SD カードの ext4 から BusyBox まで': ('From the SD card\'s ext4 to BusyBox', 0.9),
-    'Ethernet、perf も動作': 'Ethernet and perf work too',
+    'SD カードから BusyBox か Debian': ('BusyBox or Debian from the SD card', 0.9),
+    'ボードの上で gcc がコンパイル': ('gcc compiles on the board itself', 0.95),
     'CoreMark(最大最適化、Zba/Zbb)': ('CoreMark (fastest options, Zba/Zbb)', 0.9),
-    '-O2: 2.785、DMIPS 1.542': '-O2: 2.785, DMIPS 1.542',
-    '550 種': '550', 'バグ注入をすべて検出': 'Bug injections, all detected',
+    '-O2: 2.794、DMIPS 1.545': '-O2: 2.794, DMIPS 1.545',
+    '554 種': '554', 'バグ注入をすべて検出': 'Bug injections, all detected',
     'テストが壊れた RTL を見つけるか': ('Do the tests find broken RTL?', 0.95),
     # environment
     '● Claude Code(CLI / デスクトップ)': '● Claude Code (CLI / desktop)',
@@ -49,7 +50,7 @@ EN = {
     'モデル': 'Model', 'Sonnet 5 09-13〜14': 'Sonnet 5 09-13 to 14', 'Opus 5  09-15〜22': 'Opus 5  09-15 to 22',
     'Opus 5.5  09-23〜': 'Opus 5.5  from 09-23',
     # cycle
-    '① 仕様を書く': '① Write the spec', '.md の仕様書と': 'Specs in .md and', '設計判断(決定 78 件)': '78 design decisions',
+    '① 仕様を書く': '① Write the spec', '.md の仕様書と': 'Specs in .md and', '設計判断(決定 82 件)': '82 design decisions',
     '② RTL を書く': '② Write the RTL', '(パラメータ化)': '(parameterized)',
     '③ 自作テスト + 参照モデル': ('③ Own tests + reference models', 0.9),
     'ランダム、背圧、掃引': 'random, back pressure, sweeps', 'riscv-tests、Linux 起動': 'riscv-tests, Linux boot',
