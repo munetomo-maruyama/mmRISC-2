@@ -70,12 +70,16 @@ left for the future in [`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP.
 
 | Revision | Date | Contents |
 |---|---|---|
-| **Rev.02** (tag `Rev.02`) | 2026-10-20 | The version this README describes, and the last: Rev.01 plus the ITLB of 16 and the DTLB of 32 entries with the PMU events of the page table walks (decisions 79 to 81) and decision 82 (CoreMark 3.034 /MHz). WNS +0.140 ns, the 120-minute stress test PASS. Bare-metal development in Eclipse over JTAG / cJTAG, and Debian 13 with gcc on the board |
-| **Rev.01** (tag `Rev.01`) | 2026-10-12 | The first release: RV64GC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz, L1 and L2 caches, Linux 7.2 on the Arty A7-100T at 50 MHz (WNS +0.664 ns), the 120-minute stress test PASS |
+| **Rev.02** (tag `Rev.02`, [Release](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/Rev.02)) | 2026-10-20 | The version this README describes, and the last: Rev.01 plus the ITLB of 16 and the DTLB of 32 entries with the PMU events of the page table walks (decisions 79 to 81) and decision 82 (CoreMark 3.034 /MHz). WNS +0.140 ns, the 120-minute stress test PASS. Bare-metal development in Eclipse over JTAG / cJTAG, and Debian 13 with gcc on the board |
+| **Rev.01** (tag `Rev.01`, [Release](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/Rev.01)) | 2026-10-12 | The first release: RV64GC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz, L1 and L2 caches, Linux 7.2 on the Arty A7-100T at 50 MHz (WNS +0.664 ns), the 120-minute stress test PASS |
 
 `main` holds the latest revision for readers outside. **mmRISC-2 closes with Rev.02**: the themes left had
 estimated gains of 1 to 2 % or less, and two of them (W1, W2) were checked on the board and in simulation and not
 taken ([`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP.md), sections 3 and 4).
+
+Each revision has a GitHub Release with its release notes (what changed, the numbers) and the white paper of that
+revision attached: [Rev.02](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/Rev.02), [Rev.01](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/Rev.01). The source of the Linux kernel of the SD card is in
+the Release [`linux-src-4929f78c004e`](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/linux-src-4929f78c004e) (both revisions use the same `Image`).
 
 ## Documents
 

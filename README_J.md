@@ -67,12 +67,16 @@ BusyBox の代わりに **Debian 13(riscv64)** も SD カードから起動し�
 
 | 版 | 日付 | 内容 |
 |---|---|---|
-| **Rev.02**(タグ `Rev.02`) | 2026-10-20 | この README が説明している版で、最後の版: Rev.01 に、ITLB 16・DTLB 32 エントリとページテーブル探索の PMU イベント(決定 79〜81)、決定 82 を加えたもの(CoreMark 3.034 /MHz)。WNS +0.140 ns、120 分の負荷試験 PASS。Eclipse による JTAG / cJTAG でのベアメタル開発と、ボード上の Debian 13 と gcc |
-| **Rev.01**(タグ `Rev.01`) | 2026-10-12 | 最初の公開版: RV64GC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz、L1・L2 キャッシュ、Arty A7-100T の 50 MHz で Linux 7.2(WNS +0.664 ns)、120 分の負荷試験 PASS |
+| **Rev.02**(タグ `Rev.02`、[Release](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/Rev.02)) | 2026-10-20 | この README が説明している版で、最後の版: Rev.01 に、ITLB 16・DTLB 32 エントリとページテーブル探索の PMU イベント(決定 79〜81)、決定 82 を加えたもの(CoreMark 3.034 /MHz)。WNS +0.140 ns、120 分の負荷試験 PASS。Eclipse による JTAG / cJTAG でのベアメタル開発と、ボード上の Debian 13 と gcc |
+| **Rev.01**(タグ `Rev.01`、[Release](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/Rev.01)) | 2026-10-12 | 最初の公開版: RV64GC + Zba / Zbb / Zbs / Zbc / Zicond / Zicboz、L1・L2 キャッシュ、Arty A7-100T の 50 MHz で Linux 7.2(WNS +0.664 ns)、120 分の負荷試験 PASS |
 
 `main` は外部の方が参照する最新の版を保つ。**mmRISC-2 は Rev.02 で閉じる**: 残るテーマは見積もりで 1〜2 % 以下で、
 そのうち 2 つ(W1、W2)は実機とシミュレーションで確かめたうえで取り込まなかった
 ([`LitexSystem/docs/ROADMAP.md`](LitexSystem/docs/ROADMAP_J.md) 3・4 章)。
+
+版ごとに GitHub の Release を作り、リリースノート(変更点、数値)とその版のホワイトペーパーを添付している:
+[Rev.02](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/Rev.02)、[Rev.01](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/Rev.01)。SD カードの Linux カーネルのソースは Release
+[`linux-src-4929f78c004e`](https://github.com/munetomo-maruyama/mmRISC-2/releases/tag/linux-src-4929f78c004e) にある(2 つの版は同じ `Image` を使う)。
 
 ## 文書
 
