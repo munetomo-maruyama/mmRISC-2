@@ -128,4 +128,44 @@ boot reuse its device tree (`docs/BRINGUP.md`). If one of these changes, the dev
 |---|---|
 | Debug bring-up design `FPGA/ARTY_A7_100T` (`RTL/TOP/TOP.sv`) | 64 KB RAM at 0x8000_0000 on the memory bus, 4 KB RAM at 0x1200_0000 on the peripheral bus; reset vector 0x8000_0000 |
 | Simulation `SIM/SIM_SYS`, `SIM_CORE` | Memory at 0x8000_0000, reset vector 0x8000_0000 (`make romboot` of `SIM_SYS` starts below `MEM_BASE` instead, to check the uncached fetch) |
-| `SIM/SIM_BIOS` | The same map as the board, with the real BIOS and models of the UART and the SD card |
+| `SIM/SIM_BIOS` | The same map as the board, reset vector 0x1000_0000. In BIOS mode the ROM holds the real BIOS; in Linux mode a stub that jumps to OpenSBI, with OpenSBI and Linux already in memory (section 9) |
+
+## 9. The ROM in logic simulation (`SIM/SIM_BIOS`)
+
+The simulation of the BIOS and of the Linux boot runs the same `CPU_TOP` as the board, with the reset vector at
+0x1000_0000 like the board (`RESET_ADDR` of `tb_BIOS.sv`), so the first fetches go uncached over the peripheral
+bus as on the board. What answers there is a model in the testbench, not the block RAM of LiteX:
+
+| Region | Model |
+|---|---|
+| ROM 0x1000_0000, 128 KiB | `logic [63:0] rom[0:16383]` in `SIM/SIM_BIOS/LITEX_PERIPH.sv`. A read returns `rom[(addr − 0x1000_0000) >> 3]` (the address aligned to 8 bytes, the 64-bit peripheral bus of `CPU_TOP`); a write is ignored |
+| SRAM 0x1100_0000, 8 KiB | An array in the same file |
+| CSRs 0x1200_0000 | `ctrl`, `timer0` and the UART in `LITEX_PERIPH.sv` (the UART after `litex/soc/cores/uart.py`, a TX FIFO of 16, its interrupt on PLIC source 1 as in the SoC); the `sdcard` CSRs are passed on to `SD_MODEL.sv`; the other CSRs read as zero |
+| DRAM 0x8000_0000, 256 MiB | `AXI4_SLAVE_MEM` (`SIM/SIM_CPU`), an AXI4 memory that answers at once unless a latency is given (`+rlat=` / `+blat=`, the DDR3 of the board) |
+
+What the ROM holds depends on the mode of the run:
+
+| Mode | ROM | DRAM at the start |
+|---|---|---|
+| **BIOS mode** (`make run`, `make check`) | **The real LiteX BIOS**: `LitexSystem/build/software/bios/bios.bin`, the same file as in the bitstream, made into `bios.hex` and read with `$readmemh` | Empty |
+| **Linux mode** (`+linux`: `make linux`, `linux-initrd`, `linux-sd`, `linux-tlb`, `linux-perf`) | **A stub of three double words** written by the testbench instead of the BIOS (below) | `fw_jump.bin` at 0x8000_0000 and `Image` at 0x8020_0000, as the BIOS would have left them after loading `boot.json`; with `linux-initrd`, also the initramfs at 0x8200_0000 |
+
+The stub of Linux mode sets `a0` to hart 0 and jumps to OpenSBI:
+
+```
+addi t0,x0,1 ; slli t0,t0,31     # t0 = 0x8000_0000
+addi a0,x0,0 ; addi a1,x0,0      # a0 = hart 0, a1 = 0
+jalr x0,0(t0) ; nop              # to OpenSBI
+```
+
+Why the Linux runs do not go through the BIOS:
+
+- **The DDR3 training is not modelled.** The BIOS trains the DDR3 through `ddrphy`, and the memory model has nothing
+  to train; even in BIOS mode the training after "Initializing SDRAM" fails. So BIOS mode passes when the BIOS has
+  got that far (the banner and the whole SoC report printed) and has taken at least one UART interrupt, which is
+  what the board lacked at the first bring-up (`docs/BRINGUP.md`).
+- **Time.** Loading about 16 MB from the SD card model through the BIOS would take far longer than the boot itself.
+
+So the work is split: BIOS mode checks the BIOS itself (the uncached fetch from the ROM and its interrupts), Linux
+mode checks the boot from OpenSBI on, and the root file system comes from the SD card model (`SD_MODEL.sv`,
+`linux-sd` and the runs after it) or from an initramfs in memory (`linux-initrd`).

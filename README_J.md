@@ -90,7 +90,7 @@ BusyBox の代わりに **Debian 13(riscv64)** も SD カードから起動し�
 | [`RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`](RTL/CPU/CPU_DBG/CPU_DBG_SPEC_J.md) | デバッグ論理(JTAG/cJTAG DTM、DM、認証) |
 | [`RTL/CPU/CPU_FPU/README.md`](RTL/CPU/CPU_FPU/README_J.md) | FPU(方式、性能、速いコードの書き方) |
 | [`LitexSystem/README.md`](LitexSystem/README_J.md) | LiteX の SoC に載せて Linux を動かす一式 |
-| [`LitexSystem/docs/MEMMAP.md`](LitexSystem/docs/MEMMAP_J.md) | システムのメモリマップ: リセット後の最初の命令の出どころ、各領域とその実装、CSR、割り込み、起動の途中で何がどこで動くか |
+| [`LitexSystem/docs/MEMMAP.md`](LitexSystem/docs/MEMMAP_J.md) | システムのメモリマップ: リセット後の最初の命令の出どころ、各領域とその実装、CSR、割り込み、起動の途中で何がどこで動くか、論理シミュレーションでの ROM のモデル(BIOS モードと Linux モード) |
 | [`LitexSystem/docs/BRINGUP.md`](LitexSystem/docs/BRINGUP_J.md) | 実機の立ち上げ記録(止まった場所、原因、修正)と手順 |
 | [`LitexSystem/docs/BENCH.md`](LitexSystem/docs/BENCH_J.md) | 性能測定(シミュレーションと実機、PMU で見たサイクルの行き先、版ごとの推移) |
 | [`LitexSystem/docs/TIMING.md`](LitexSystem/docs/TIMING_J.md) | 50 MHz のタイミング収束の記録 |

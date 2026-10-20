@@ -93,7 +93,7 @@ Every document has a Japanese version next to it (`XXXX.md` is English, `XXXX_J.
 | [`RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md`](RTL/CPU/CPU_DBG/CPU_DBG_SPEC.md) | Debug logic (JTAG/cJTAG DTM, DM, authentication) |
 | [`RTL/CPU/CPU_FPU/README.md`](RTL/CPU/CPU_FPU/README.md) | FPU (how it works, performance, how to write fast code) |
 | [`LitexSystem/README.md`](LitexSystem/README.md) | Everything to put it in a LiteX SoC and run Linux |
-| [`LitexSystem/docs/MEMMAP.md`](LitexSystem/docs/MEMMAP.md) | Memory map of the system: where the first instruction after reset comes from, the regions and who implements them, CSRs, interrupts, what runs where during the boot |
+| [`LitexSystem/docs/MEMMAP.md`](LitexSystem/docs/MEMMAP.md) | Memory map of the system: where the first instruction after reset comes from, the regions and who implements them, CSRs, interrupts, what runs where during the boot, how the logic simulation models the ROM (BIOS and Linux modes) |
 | [`LitexSystem/docs/BRINGUP.md`](LitexSystem/docs/BRINGUP.md) | Record of the bring-up on the board (where it stopped, why, the fixes) and procedures |
 | [`LitexSystem/docs/BENCH.md`](LitexSystem/docs/BENCH.md) | Performance measurements (simulation and board, where cycles go as seen by the PMU, version by version) |
 | [`LitexSystem/docs/TIMING.md`](LitexSystem/docs/TIMING.md) | Record of timing closure at 50 MHz |

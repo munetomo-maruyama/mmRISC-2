@@ -127,4 +127,44 @@ S モードタイマ(`stimecmp`)で、同じ `mtime` を数える。
 |---|---|
 | デバッグ立ち上げ用の設計 `FPGA/ARTY_A7_100T`(`RTL/TOP/TOP.sv`) | メモリバスの 0x8000_0000 に 64 KB の RAM、周辺バスの 0x1200_0000 に 4 KB の RAM。リセットベクタは 0x8000_0000 |
 | シミュレーション `SIM/SIM_SYS`、`SIM_CORE` | 0x8000_0000 にメモリ、リセットベクタ 0x8000_0000(`SIM_SYS` の `make romboot` は、キャッシュなしのフェッチを確かめるために `MEM_BASE` より下から始める) |
-| `SIM/SIM_BIOS` | 実機と同じマップに、本物の BIOS と UART・SD カードのモデル |
+| `SIM/SIM_BIOS` | 実機と同じマップで、リセットベクタは 0x1000_0000。BIOS モードでは ROM に本物の BIOS、Linux モードでは OpenSBI へ飛ぶスタブを置き、OpenSBI と Linux は最初からメモリにある(9 章) |
+
+## 9. 論理シミュレーションでの ROM(`SIM/SIM_BIOS`)
+
+BIOS と Linux の起動のシミュレーションは、実機と同じ `CPU_TOP` を、実機と同じくリセットベクタ 0x1000_0000 で動かす
+(`tb_BIOS.sv` の `RESET_ADDR`)。そのため最初のフェッチは、実機と同じくキャッシュを通さず周辺バスに出る。そこで応答
+するのは LiteX のブロック RAM ではなく、テストベンチの中のモデル:
+
+| 領域 | モデル |
+|---|---|
+| ROM 0x1000_0000、128 KiB | `SIM/SIM_BIOS/LITEX_PERIPH.sv` の `logic [63:0] rom[0:16383]`。読み出しは `rom[(addr − 0x1000_0000) >> 3]` を返す(アドレスを 8 バイト境界にそろえる。`CPU_TOP` の周辺バスは 64 ビット)。書き込みは捨てる |
+| SRAM 0x1100_0000、8 KiB | 同じファイルの配列 |
+| CSR 0x1200_0000 | `LITEX_PERIPH.sv` の `ctrl`、`timer0`、UART(UART は `litex/soc/cores/uart.py` に沿い、送信 FIFO 16、割り込みは SoC と同じく PLIC のソース 1)。`sdcard` の CSR は `SD_MODEL.sv` に渡す。ほかの CSR は 0 を返す |
+| DRAM 0x8000_0000、256 MiB | `AXI4_SLAVE_MEM`(`SIM/SIM_CPU`)。遅延を与えなければ即答する AXI4 のメモリ(`+rlat=` / `+blat=` で実機の DDR3 の遅れ) |
+
+ROM の中身は、実行のモードで変わる:
+
+| モード | ROM | 開始時の DRAM |
+|---|---|---|
+| **BIOS モード**(`make run`、`make check`) | **本物の LiteX BIOS**: ビットストリームに入るものと同じ `LitexSystem/build/software/bios/bios.bin` を `bios.hex` にして `$readmemh` で読み込む | 空 |
+| **Linux モード**(`+linux`: `make linux`、`linux-initrd`、`linux-sd`、`linux-tlb`、`linux-perf`) | BIOS の代わりにテストベンチが書き込む **3 語のスタブ**(下) | `fw_jump.bin` を 0x8000_0000 に、`Image` を 0x8020_0000 に。BIOS が `boot.json` に従って読み込み終えた状態。`linux-initrd` ではさらに initramfs を 0x8200_0000 に |
+
+Linux モードのスタブは、`a0` をハート 0 にして OpenSBI へ飛ぶ:
+
+```
+addi t0,x0,1 ; slli t0,t0,31     # t0 = 0x8000_0000
+addi a0,x0,0 ; addi a1,x0,0      # a0 = ハート 0、a1 = 0
+jalr x0,0(t0) ; nop              # OpenSBI へ
+```
+
+Linux の実行で BIOS を通さない理由:
+
+- **DDR3 のタイミング調整を模していない。** BIOS は `ddrphy` で DDR3 の調整をするが、メモリのモデルには調整するものが
+  無い。BIOS モードでも "Initializing SDRAM" の後の調整は失敗する。そのため BIOS モードの合格条件は、BIOS がそこまで
+  たどり着き(バナーと SoC の報告をすべて表示し)、UART の割り込みを 1 回以上受けたこと。最初の立ち上げで実機に
+  欠けていたのがこの割り込みだった(`docs/BRINGUP.md`)。
+- **時間。** BIOS で SD カードのモデルから約 16 MB を読み込むと、起動そのものよりはるかに長くかかる。
+
+そこで役割を分けている: BIOS モードは BIOS そのもの(ROM からのキャッシュなしのフェッチと割り込み)を、Linux モードは
+OpenSBI からの起動を確かめる。ルートファイルシステムは SD カードのモデル(`SD_MODEL.sv`、`linux-sd` とそれ以降の実行)か、
+メモリ上の initramfs(`linux-initrd`)から読む。
