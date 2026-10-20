@@ -81,6 +81,7 @@ LitexSystem/
 │   ├── bench/           ベンチマーク(CoreMark、Dhrystone、micro)、perf.sh と workload.sh。TFTP でボードへ
 │   └── baremetal/       ベアメタルのプログラム: 起動キット、サンプル、Eclipse のプロジェクト(docs/ECLIPSE.md)
 ├── docs/
+│   ├── MEMMAP.md        メモリマップ、リセットベクタ、起動時の配置
 │   ├── BRINGUP.md       立ち上げ記録と手順
 │   ├── TIMING.md        タイミング収束の記録
 │   ├── JTAG.md          JTAG / cJTAG デバッグ(ピン、スイッチ、OpenOCD)

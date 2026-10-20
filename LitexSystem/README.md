@@ -80,6 +80,7 @@ LitexSystem/
 │   ├── bench/           benchmarks (CoreMark, Dhrystone, micro), perf.sh and workload.sh; to the board by TFTP
 │   └── baremetal/       bare-metal programs: start-up kit, examples, Eclipse projects (docs/ECLIPSE.md)
 ├── docs/
+│   ├── MEMMAP.md        memory map, reset vector, boot placement
 │   ├── BRINGUP.md       bring-up record and procedure
 │   ├── TIMING.md        record of timing closure
 │   ├── JTAG.md          JTAG / cJTAG debugging (pins, switches, OpenOCD)
